@@ -1,0 +1,88 @@
+# Узел для ХОЛОДИЛЬНОЙ/МОРОЗИЛЬНОЙ камеры (ESPHome).
+#
+# Монтаж (важно): металлическая камера — это клетка Фарадея, радио сквозь
+# закрытую дверь не проходит и питание внутри неудобно. Поэтому:
+#   • контроллер ESP32-C3 с радио (Wi-Fi) и питанием — СНАРУЖИ камеры;
+#   • датчики SHT4x + MLX90614 — ВНУТРИ, на I²C-шлейфе, проложенном через
+#     уплотнитель двери (плоский шлейф не нарушает прилегание уплотнителя).
+# Длину I²C-шлейфа держать минимальной; при длинном шлейфе снизить частоту шины.
+#
+# Калибровка ИК (MLX90614): корректная бесконтактная температура зависит от
+# излучательной способности поверхности (эмиссивность ε). Для матовых
+# поверхностей ε≈0,95 (значение по умолчанию подходит). По блестящему металлу
+# показания занижены — поверхность матировать (краска/лента) или вводить
+# поправку. Наводить ИК-датчик на контролируемую поверхность (продукт/полку),
+# а не на воздух.
+#
+# Публикация показаний — тот же MQTT-формат, что и у обычного узла
+# (docs/08_MQTT_CONTRACT.md): monitoring/<node_id>/<metric>, JSON {value, unit}.
+# Помещение помечается is_cold=true в справочнике rooms.
+
+substitutions:
+  node_id: node-02          # узел холодильной камеры (sensor_nodes.id)
+  topic_base: monitoring/node-02
+
+esphome:
+  name: ${node_id}
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+mqtt:
+  broker: !secret mqtt_broker
+  port: 1883
+  discovery: false
+
+# I²C-шлейф внутрь камеры. Частоту при длинном шлейфе можно понизить (frequency).
+i2c:
+  sda: GPIO5
+  scl: GPIO6
+  scan: true
+  frequency: 50kHz
+
+sensor:
+  - platform: sht4x
+    temperature:
+      id: air_temp
+      internal: true
+      on_value:
+        then:
+          - mqtt.publish:
+              topic: ${topic_base}/air_temp
+              payload: !lambda |-
+                return "{\"value\": " + to_string(x) + ", \"unit\": \"C\"}";
+    humidity:
+      id: humidity
+      internal: true
+      on_value:
+        then:
+          - mqtt.publish:
+              topic: ${topic_base}/humidity
+              payload: !lambda |-
+                return "{\"value\": " + to_string(x) + ", \"unit\": \"%\"}";
+    update_interval: 60s
+
+  # ИК-температура поверхности (продукт/полка). См. заметку про эмиссивность.
+  - platform: mlx90614
+    object:
+      id: surface_ir
+      internal: true
+      on_value:
+        then:
+          - mqtt.publish:
+              topic: ${topic_base}/surface_ir
+              payload: !lambda |-
+                return "{\"value\": " + to_string(x) + ", \"unit\": \"C\"}";
+    update_interval: 60s
