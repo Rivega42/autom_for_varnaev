@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 460" font-family="'Segoe UI','PT Sans',Arial,sans-serif">
+  <defs>
+    <marker id="s3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#3d5266"/></marker>
+    <style>
+      .t{fill:#1f2a36;} .lbl-s{font-size:11px;} .muted{fill:#6a7a89;font-size:11px;}
+      .task{fill:#f3fbf6;stroke:#54a777;}
+      .task2{fill:#eef6ff;stroke:#5b8fcc;}
+      .seq{stroke:#3d5266;stroke-width:1.6;fill:none;marker-end:url(#s3);}
+      .gw{fill:#fff7e6;stroke:#d8a23a;}
+      .evs{fill:#fff;stroke:#5a8f5f;stroke-width:2;}
+      .eve{fill:#fff;stroke:#444;stroke-width:3;}
+    </style>
+  </defs>
+  <text x="20" y="30" class="t" font-size="17" font-weight="700">05 · Поток события в единый журнал (BPMN 2.0)</text>
+  <text x="20" y="50" class="muted">Два источника (датчик / аналитика) сходятся в один путь: отправка → валидация → запись в events → доступно потребителям.</text>
+
+  <circle cx="70" cy="220" r="18" class="evs"/><text x="34" y="262" class="muted">Источник:</text><text x="30" y="276" class="muted">датчик/аналитика</text>
+
+  <polygon points="150,220 178,192 206,220 178,248" class="gw"/><text x="138" y="182" class="muted">Откуда?</text>
+
+  <rect x="250" y="120" width="190" height="60" rx="8" class="task"/><text x="266" y="146" class="t lbl-s">ingest-sensors:</text><text x="266" y="163" class="t lbl-s">показание ↔ порог</text>
+  <rect x="250" y="270" width="190" height="60" rx="8" class="task"/><text x="266" y="296" class="t lbl-s">video-analytics:</text><text x="266" y="313" class="t lbl-s">скриншот на том</text>
+
+  <rect x="500" y="190" width="170" height="60" rx="8" class="task2"/><text x="516" y="216" class="t lbl-s">Отправка в</text><text x="516" y="233" class="t lbl-s">log-service (REST)</text>
+  <rect x="720" y="190" width="160" height="60" rx="8" class="task2"/><text x="736" y="216" class="t lbl-s">log-service:</text><text x="736" y="233" class="t lbl-s">валидация типа</text>
+  <rect x="930" y="190" width="180" height="60" rx="8" class="task2"/><text x="946" y="216" class="t lbl-s">Запись в events</text><text x="946" y="233" class="t lbl-s">(+ ссылка на артефакт)</text>
+
+  <circle cx="1150" cy="220" r="18" class="eve"/><text x="1095" y="285" class="muted">Доступно: Grafana,</text><text x="1095" y="299" class="muted">GET /events, АУРА(v2)</text>
+
+  <path class="seq" d="M88,220 L150,220"/>
+  <path class="seq" d="M178,192 L178,150 L250,150"/><text x="186" y="170" class="muted">датчик</text>
+  <path class="seq" d="M178,248 L178,300 L250,300"/><text x="186" y="290" class="muted">аналитика</text>
+  <path class="seq" d="M440,150 L585,150 L585,190"/>
+  <path class="seq" d="M440,300 L585,300 L585,250"/>
+  <path class="seq" d="M670,220 L720,220"/>
+  <path class="seq" d="M880,220 L930,220"/>
+  <path class="seq" d="M1110,220 L1132,220"/>
+</svg>
