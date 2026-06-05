@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import Engine
 
 from log_service.db import build_engine
 from log_service.envelope import error, ok
-from log_service.repository import insert_event
+from log_service.repository import insert_event, list_events
 from monitoring_shared import Event
 
 
@@ -39,6 +40,29 @@ def create_app(engine: Engine | None = None) -> FastAPI:
         """Принять событие и записать его в журнал."""
         insert_event(engine, event)
         return ok({"id": str(event.id)})
+
+    @app.get("/events")
+    def get_events(
+        from_: str | None = Query(default=None, alias="from"),
+        to: str | None = None,
+        type: str | None = None,
+        room: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Лента событий с фильтрами по времени/типу/помещению."""
+        from_ts = datetime.fromisoformat(from_) if from_ else None
+        to_ts = datetime.fromisoformat(to) if to else None
+        items, total = list_events(
+            engine,
+            from_ts=from_ts,
+            to_ts=to_ts,
+            type_=type,
+            room=room,
+            limit=limit,
+            offset=offset,
+        )
+        return ok({"items": items, "total": total})
 
     return app
 
