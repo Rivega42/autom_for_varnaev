@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from api_gateway.errors import register_error_handlers
 from monitoring_shared import ok
 
 # Базовый префикс контракта (docs/03_API_CONTRACT.md §1).
@@ -15,6 +16,7 @@ API_PREFIX = "/api/v1"
 def create_app() -> FastAPI:
     """Создать приложение api-gateway."""
     app = FastAPI(title="api-gateway")
+    register_error_handlers(app)
 
     @app.get(f"{API_PREFIX}/health")
     def health() -> dict[str, Any]:
