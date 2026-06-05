@@ -35,3 +35,18 @@ camera_zones = sa.Table(
     sa.Column("polygon", sa.JSON, nullable=False),
     sa.Column("note", sa.Text),
 )
+
+
+artifacts = sa.Table(
+    "artifacts",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("kind", sa.Text, nullable=False),
+    sa.Column("path", sa.Text, nullable=False),
+    sa.Column("mime", sa.Text),
+    sa.Column("room_id", sa.Text),
+    sa.Column("camera_id", sa.Uuid),
+    sa.Column("task_id", sa.Uuid),
+    sa.Column("meta", sa.JSON),
+)
