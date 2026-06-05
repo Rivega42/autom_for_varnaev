@@ -1,0 +1,28 @@
+# Корневой конфиг инструментов монорепо (единый для всех сервисов).
+# Здесь нет таблицы [project]: это не пакет, а общая конфигурация ruff/mypy/pytest.
+# Сами сервисы и shared/ — отдельные пакеты со своими pyproject.toml.
+
+# ───────────────────────────── ruff (линт + формат) ─────────────────────────
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+# Где искать наш код (для сортировки импортов и пр.)
+src = ["services", "shared", "scripts"]
+# Эталонный PoC видеоаналитики не трогаем линтером — это референс, не наш код.
+extend-exclude = ["services/video-analytics/reference"]
+
+[tool.ruff.lint]
+select = [
+  "E", "W",   # pycodestyle
+  "F",        # pyflakes
+  "I",        # isort (порядок импортов)
+  "N",        # pep8-naming
+  "UP",       # pyupgrade
+  "B",        # flake8-bugbear
+  "C4",       # flake8-comprehensions
+  "SIM",      # flake8-simplify
+  "RUF",      # правила ruff
+]
+
+[tool.ruff.format]
+quote-style = "double"
