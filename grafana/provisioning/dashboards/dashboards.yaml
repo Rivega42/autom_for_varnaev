@@ -1,0 +1,14 @@
+# Провайдер дашбордов Grafana как код: подхватывает JSON из каталога ниже.
+apiVersion: 1
+
+providers:
+  - name: monitoring
+    orgId: 1
+    folder: "Мониторинг"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

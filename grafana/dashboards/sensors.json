@@ -1,0 +1,78 @@
+{
+  "uid": "sensors-env",
+  "title": "Среда помещений — датчики",
+  "tags": ["мониторинг", "датчики"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_TIMESCALEDB",
+        "type": "datasource",
+        "query": "postgres",
+        "current": { "text": "TimescaleDB", "value": "TimescaleDB" },
+        "hide": 0
+      },
+      {
+        "name": "room",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "${DS_TIMESCALEDB}" },
+        "definition": "SELECT DISTINCT room_id FROM sensor_readings ORDER BY 1",
+        "query": "SELECT DISTINCT room_id FROM sensor_readings ORDER BY 1",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Температура воздуха (air_temp), °C",
+      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "${DS_TIMESCALEDB}" },
+      "fieldConfig": { "defaults": { "unit": "celsius" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT ts AS \"time\", room_id AS metric, value FROM sensor_readings WHERE metric = 'air_temp' AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) ORDER BY ts"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Влажность (humidity), %",
+      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "${DS_TIMESCALEDB}" },
+      "fieldConfig": { "defaults": { "unit": "humidity" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT ts AS \"time\", room_id AS metric, value FROM sensor_readings WHERE metric = 'humidity' AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) ORDER BY ts"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "ИК-температура поверхности (surface_ir), °C",
+      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "${DS_TIMESCALEDB}" },
+      "fieldConfig": { "defaults": { "unit": "celsius" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT ts AS \"time\", room_id AS metric, value FROM sensor_readings WHERE metric = 'surface_ir' AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) ORDER BY ts"
+        }
+      ]
+    }
+  ]
+}
