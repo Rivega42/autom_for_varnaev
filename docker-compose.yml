@@ -1,0 +1,30 @@
+# Каркас оркестрации контура мониторинга.
+# Здесь — только база (db), сетевая сегментация и общий том. Прикладные сервисы
+# (ingest-sensors, video-analytics, log-service, api-gateway, scheduler,
+# media-gateway, grafana, mqtt-broker) добавляются своими задачами эпиков E2–E9.
+#
+# Сети (см. docs/02_NETWORK.md §3):
+#   internal    — внутренняя сеть наших сервисов, наружу не видна;
+#   integration — общая с АУРА; в v1 СОЗДАЁТСЯ, но обмена по ней нет (СТЫК-АУРА v2).
+# Общий том:
+#   artifacts   — скриншоты-доказательства (v1) и видеофайлы от АУРА (v2).
+
+services:
+  db:
+    # TimescaleDB = PostgreSQL 16 + расширение timescaledb.
+    # Полная конфигурация (env, healthcheck, init-скрипты) — задача E0.9.
+    image: timescale/timescaledb:2.17.2-pg16
+    networks:
+      - internal
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+networks:
+  internal:
+    driver: bridge
+  integration:
+    driver: bridge
+
+volumes:
+  artifacts:
+  db_data:
