@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from datetime import datetime
 from typing import Protocol
 from uuid import uuid4
 
@@ -112,4 +113,25 @@ def build_back_to_normal(
         severity=Severity.INFO,
         message=message,
         payload={"metric": reading.metric.value},
+    )
+
+
+def build_sensor_silent(
+    node_id: str,
+    room_id: str | None,
+    silent_for_min: int,
+    ts: datetime,
+    describe_room: RoomDescriber = default_room_describer,
+) -> Event:
+    """Сформировать событие «узел молчит» с человекочитаемым message."""
+    message = _capitalize(f"датчик в {describe_room(room_id)} молчит {silent_for_min} мин")
+    return Event(
+        id=uuid4(),
+        ts=ts,
+        source=EventSource.SENSORS,
+        type=EventType.SENSOR_SILENT,
+        room_id=room_id,
+        severity=Severity.WARNING,
+        message=message,
+        payload={"node_id": node_id, "silent_for_min": silent_for_min},
     )
