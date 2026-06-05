@@ -13,6 +13,7 @@ from api_gateway.config import Settings
 from api_gateway.db import build_engine
 from api_gateway.errors import api_error, register_error_handlers
 from api_gateway.events_client import EventsClient, HttpEventsClient
+from api_gateway.integration import register_integration_routes
 from api_gateway.readings_repository import list_readings
 from api_gateway.schemas import AnalysisTaskCreate
 from api_gateway.tasks_repository import create_task, get_task, list_tasks
@@ -128,6 +129,9 @@ def create_app(
             limit=limit,
         )
         return ok({"items": items, "total": len(items)})
+
+    # СТЫК-АУРА (v2): заглушённые разъёмы /integration/* (501 при выключенном флаге).
+    register_integration_routes(app, settings)
 
     return app
 
