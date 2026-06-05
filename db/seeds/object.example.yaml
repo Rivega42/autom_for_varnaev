@@ -1,0 +1,26 @@
+# Пример конфигурации объекта для сидов справочников.
+# Реальный конфиг (адреса камер и т.п.) кладётся рядом как object.yaml (не в репо).
+rooms:
+  - id: room-01
+    name: "Помещение для приготовления пищи"
+    is_cold: false
+  - id: room-02
+    name: "Холодильная камера"
+    is_cold: true
+
+sensor_nodes:
+  - id: node-01
+    room_id: room-01
+    placement: "внутри (I2C)"
+    power: mains
+  - id: node-02
+    room_id: room-02
+    placement: "снаружи камеры (радио), датчики внутри на I2C-шлейфе"
+    power: mains
+
+cameras:
+  - id: "11111111-1111-1111-1111-111111111111"
+    room_id: room-01
+    name: cam-01
+    rtsp_url: "rtsp://camera.local/stream"
+    enabled: true
