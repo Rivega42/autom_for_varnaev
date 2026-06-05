@@ -26,3 +26,23 @@ select = [
 
 [tool.ruff.format]
 quote-style = "double"
+
+# ───────────────────────────── mypy (проверка типов) ────────────────────────
+[tool.mypy]
+python_version = "3.12"
+strict = true
+# Эталонный PoC и тесты под строгую типизацию не загоняем.
+exclude = ['services/video-analytics/reference/']
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+pretty = true
+
+# Сторонние пакеты без аннотаций типов — не считаем ошибкой отсутствие stubs.
+[[tool.mypy.overrides]]
+module = [
+  "mediapipe.*",
+  "cv2.*",
+  "paho.*",
+]
+ignore_missing_imports = true
