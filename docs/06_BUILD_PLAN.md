@@ -77,7 +77,7 @@ epic:E# · type:* · area:* · prio:* [· stub-aura]
 6. Миграция: индекс `(room_id, metric, ts DESC)` на `sensor_readings`.
 7. Миграция: `artifacts`.
 8. Миграция: `analysis_tasks`.
-9. Миграция: `events`.
+9. Миграция: `events` (включая колонку `message` — человекочитаемый текст события, RU).
 10. Миграция: `thresholds`.
 11. Миграция: `cameras`.
 12. Миграция: `camera_zones`.
@@ -88,7 +88,10 @@ epic:E# · type:* · area:* · prio:* [· stub-aura]
 
 ## E2 · Контур датчиков
 
-Цель: показания доходят от MQTT до БД, пороги дают события.
+Цель: показания доходят от MQTT до БД, пороги дают события. **Принцип:** показания
+в v1 в АУРА не передаются — контур выводит из них события по критериям (симметрично
+видео, см. `01_ARCHITECTURE.md` §5). Каждое событие несёт человекочитаемое
+сообщение `message` (RU, с контекстом помещения).
 1. Поднять `mqtt-broker` (Mosquitto) в compose (только сеть `internal` + публикация на LAN).
 2. Определить формат MQTT-топиков и payload ESPHome (документировать в `docs`).
 3. `ingest-sensors`: каркас воркера, подключение к брокеру.
@@ -96,9 +99,9 @@ epic:E# · type:* · area:* · prio:* [· stub-aura]
 5. `ingest-sensors`: парсинг payload → модель `Reading` (+ тест парсинга).
 6. `ingest-sensors`: запись показания в `sensor_readings`.
 7. `ingest-sensors`: загрузка `thresholds` и сверка показаний.
-8. `ingest-sensors`: генерация события `threshold_exceeded` → `log-service` (внутр. REST).
-9. `ingest-sensors`: генерация `back_to_normal`.
-10. `ingest-sensors`: контроль «тишины» узла → событие `sensor_silent`.
+8. `ingest-sensors`: генерация события `threshold_exceeded` (с `message` на русском) → `log-service` (внутр. REST).
+9. `ingest-sensors`: генерация `back_to_normal` (с `message`).
+10. `ingest-sensors`: контроль «тишины» узла → событие `sensor_silent` (с `message`).
 11. `firmware/esphome`: эталонный YAML узла по решению проекта — **ESP32-C3 (SuperMini) + SHT41/SHT40 (или BME280) + MLX90614/GY-906** на I²C, Wi-Fi, deep_sleep, OTA.
 12. `firmware/esphome`: вариант для холодильной камеры (контроллер с радио/питанием снаружи, SHT4x+MLX90614 внутри на I²C-шлейфе через уплотнитель) — конфиг + заметка по монтажу и калибровке ИК (эмиссивность ε≈0,95 для матовых; по блестящему металлу — матировать/поправка).
 13. Интеграционный тест: эмулятор MQTT-сообщения → запись в БД появилась.
