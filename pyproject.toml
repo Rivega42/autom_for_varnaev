@@ -34,7 +34,7 @@ quote-style = "double"
 [tool.mypy]
 python_version = "3.12"
 strict = true
-mypy_path = "shared:scripts"
+mypy_path = "shared:scripts:services/ingest-sensors"
 # Эталонный PoC и тесты под строгую типизацию не загоняем.
 exclude = ['services/video-analytics/reference/', 'db/migrations/']
 warn_unused_configs = true
@@ -57,7 +57,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 # Прогон по корневым тестам и тестам всех сервисов.
 testpaths = ["tests", "services", "shared"]
-pythonpath = ["shared", "scripts"]
+pythonpath = ["shared", "scripts", "services/ingest-sensors"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
