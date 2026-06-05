@@ -32,6 +32,19 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  mqtt-broker:
+    # Брокер MQTT (Mosquitto): приём показаний от узлов датчиков (ESPHome).
+    image: eclipse-mosquitto:2
+    networks:
+      - internal
+    ports:
+      # публикация на LAN объекта — узлы датчиков вне Docker
+      - "1883:1883"
+    volumes:
+      - ./mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt_data:/mosquitto/data
+    restart: unless-stopped
+
 networks:
   internal:
     driver: bridge
@@ -41,3 +54,4 @@ networks:
 volumes:
   artifacts:
   db_data:
+  mqtt_data:
