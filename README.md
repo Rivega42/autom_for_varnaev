@@ -73,6 +73,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) прогоняет `
 | 05 | [`docs/05_SECURITY_CODE_PROTECTION.md`](docs/05_SECURITY_CODE_PROTECTION.md) | Защита кода в контейнере: пределы и меры по уровням | заказчик · DevOps |
 | 06 | [`docs/06_BUILD_PLAN.md`](docs/06_BUILD_PLAN.md) | Эпики → атомарные задачи → шаблон issue → метки | планирование |
 | 07 | [`docs/07_VIDEO_ANALYTICS.md`](docs/07_VIDEO_ANALYTICS.md) | Спецификация движка аналитики (перенос рабочего PoC) | аналитика |
+| 08 | [`docs/08_MQTT_CONTRACT.md`](docs/08_MQTT_CONTRACT.md) | Контракт MQTT: топики и payload показаний датчиков | датчики · firmware |
 | — | [`docs/diagrams/`](docs/diagrams/README.md) | Диаграммы (BPMN 2.0 для процессов + SVG для топологии/сети) | все |
 
 ---
@@ -140,7 +141,7 @@ Camunda Modeler / bpmn.io) с SVG-превью. Топология и сетев
 ├─ CLAUDE.md                  # постоянные инструкции для Claude Code
 ├─ README.md                  # этот файл
 └─ docs/                      # документация — источник истины
-   ├─ 00…07_*.md              # практики, архитектура, контракты, план работ
+   ├─ 00…08_*.md              # практики, архитектура, контракты, план работ, MQTT
    └─ diagrams/               # BPMN 2.0 (.bpmn + .svg) и архитектурные SVG
 ```
 
