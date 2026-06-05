@@ -36,7 +36,7 @@ python_version = "3.12"
 strict = true
 mypy_path = "shared"
 # Эталонный PoC и тесты под строгую типизацию не загоняем.
-exclude = ['services/video-analytics/reference/']
+exclude = ['services/video-analytics/reference/', 'db/migrations/']
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
@@ -48,6 +48,7 @@ module = [
   "mediapipe.*",
   "cv2.*",
   "paho.*",
+  "alembic.*",
 ]
 ignore_missing_imports = true
 
