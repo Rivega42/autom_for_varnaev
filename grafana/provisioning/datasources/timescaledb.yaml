@@ -1,0 +1,20 @@
+# Datasource Grafana как код: TimescaleDB (PostgreSQL 16 + timescaledb).
+# Grafana подставляет ${VAR} из окружения контейнера (см. db env в compose).
+# Используется read-only пользователь grafana_ro — дашборды только читают.
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB
+    type: postgres
+    access: proxy
+    url: db:5432
+    database: ${POSTGRES_DB}
+    user: ${POSTGRES_RO_USER}
+    isDefault: true
+    editable: false
+    secureJsonData:
+      password: ${POSTGRES_RO_PASSWORD}
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: true
