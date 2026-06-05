@@ -73,22 +73,28 @@ source        text NOT NULL        -- "sensors" | "analytics"
 type          text NOT NULL        -- см. ниже
 room_id       text REFERENCES rooms(id)
 severity      text NOT NULL        -- "info" | "warning" | "critical"
-payload       jsonb NOT NULL       -- детали, зависят от type
+message       text NOT NULL        -- человекочитаемый текст для оператора (RU)
+payload       jsonb NOT NULL       -- машинные детали, зависят от type
 artifact_id   uuid REFERENCES artifacts(id)   -- NULL, если артефакта нет
 task_id       uuid REFERENCES analysis_tasks(id) -- если событие от задания
 ```
 
+`message` — готовая фраза на русском с контекстом помещения, которую формирует
+источник события (`ingest-sensors`/`video-analytics`) в момент создания. Адресована
+оператору (журнал, дашборд, API) и **не подменяет** машинный `payload`. Миграция
+таблицы `events` (E1.9) включает колонку `message`.
+
 **Типы событий (стартовый набор):**
 
-| source | type | payload (пример) |
-|---|---|---|
-| sensors | `threshold_exceeded` | `{"metric":"air_temp","value":8.7,"threshold":8.0}` |
-| sensors | `sensor_silent` | `{"node_id":"node-03","silent_for_min":12}` |
-| sensors | `back_to_normal` | `{"metric":"humidity"}` |
-| analytics | `pose_event` | `{"pose":"right_arm_up","limb":"right_arm"}` |
-| analytics | `action_detected` | `{"action":"surface_wiped","hands":"both","duration_s":4.2}` |
-| analytics | `coverage_report` | `{"zone":"table","zone_id":7,"coverage_pct":63}` |
-| analytics | `condition_flagged` | `{"flag":"no_uniform","brightness":0.4,"saturation":0.5}` |
+| source | type | payload (пример) | message (пример, RU) |
+|---|---|---|---|
+| sensors | `threshold_exceeded` | `{"metric":"air_temp","value":8.7,"threshold":8.0}` | «В холодильной камере температура выше нормы» |
+| sensors | `sensor_silent` | `{"node_id":"node-03","silent_for_min":12}` | «Датчик в холодильной камере молчит 12 минут» |
+| sensors | `back_to_normal` | `{"metric":"humidity"}` | «В помещении для приготовления пищи влажность вернулась к норме» |
+| analytics | `pose_event` | `{"pose":"right_arm_up","limb":"right_arm"}` | «Поднята правая рука» |
+| analytics | `action_detected` | `{"action":"surface_wiped","hands":"both","duration_s":4.2}` | «Протирание поверхности двумя руками, 4 с» |
+| analytics | `coverage_report` | `{"zone":"table","zone_id":7,"coverage_pct":63}` | «Покрытие зоны стола — 63%» |
+| analytics | `condition_flagged` | `{"flag":"no_uniform","brightness":0.4,"saturation":0.5}` | «Не распознана спецодежда (белый халат)» |
 
 Типы аналитики соответствуют движку PoC (`07_VIDEO_ANALYTICS.md`): `pose_event` —
 простые позы (рука/колено/голова/корпус); `action_detected` — составные действия
