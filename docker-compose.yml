@@ -12,12 +12,25 @@
 services:
   db:
     # TimescaleDB = PostgreSQL 16 + расширение timescaledb.
-    # Полная конфигурация (env, healthcheck, init-скрипты) — задача E0.9.
     image: timescale/timescaledb:2.17.2-pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
     networks:
       - internal
     volumes:
       - db_data:/var/lib/postgresql/data
+      # Init-скрипты выполняются при первой инициализации БД
+      # (включение расширения timescaledb — задача E1.2).
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-monitoring} -d ${POSTGRES_DB:-monitoring}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
 networks:
   internal:
