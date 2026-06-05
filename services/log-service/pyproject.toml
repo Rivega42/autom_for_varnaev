@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "log-service"
+version = "0.1.0"
+description = "Единый журнал событий: приём от ingest/analytics и чтение по REST"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+  "sqlalchemy>=2",
+  "psycopg2-binary>=2.9",
+  "monitoring-shared",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["log_service"]
