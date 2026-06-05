@@ -13,6 +13,7 @@ from api_gateway.config import Settings
 from api_gateway.db import build_engine
 from api_gateway.errors import api_error, register_error_handlers
 from api_gateway.events_client import EventsClient, HttpEventsClient
+from api_gateway.readings_repository import list_readings
 from api_gateway.schemas import AnalysisTaskCreate
 from api_gateway.tasks_repository import create_task, get_task, list_tasks
 from monitoring_shared import ErrorCode, ok
@@ -106,6 +107,27 @@ def create_app(
         if item is None:
             raise api_error(ErrorCode.TASK_NOT_FOUND, "Задание не найдено")
         return ok(item)
+
+    @app.get(f"{API_PREFIX}/readings")
+    def get_readings(
+        room: str | None = None,
+        metric: str | None = None,
+        from_: str | None = Query(default=None, alias="from"),
+        to: str | None = None,
+        limit: int = 500,
+    ) -> dict[str, Any]:
+        """Показания датчиков (проверочный путь; основной — Grafana)."""
+        from_ts = datetime.fromisoformat(from_) if from_ else None
+        to_ts = datetime.fromisoformat(to) if to else None
+        items = list_readings(
+            engine,
+            room=room,
+            metric=metric,
+            from_ts=from_ts,
+            to_ts=to_ts,
+            limit=limit,
+        )
+        return ok({"items": items, "total": len(items)})
 
     return app
 

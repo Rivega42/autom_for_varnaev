@@ -24,3 +24,15 @@ analysis_tasks = sa.Table(
     sa.Column("error", sa.Text),
     sa.Column("callback_url", sa.Text),
 )
+
+
+sensor_readings = sa.Table(
+    "sensor_readings",
+    metadata,
+    sa.Column("ts", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("node_id", sa.Text),
+    sa.Column("room_id", sa.Text),
+    sa.Column("metric", sa.Text, nullable=False),
+    sa.Column("value", sa.Float, nullable=False),
+    sa.Column("unit", sa.Text, nullable=False),
+)
