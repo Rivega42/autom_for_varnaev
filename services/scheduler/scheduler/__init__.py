@@ -6,7 +6,15 @@
 """
 
 from scheduler.config import Settings
+from scheduler.dedup import create_task_if_absent, slot_window
 from scheduler.repository import create_task
 from scheduler.schedules import ScheduleEntry, load_schedules
 
-__all__ = ["ScheduleEntry", "Settings", "create_task", "load_schedules"]
+__all__ = [
+    "ScheduleEntry",
+    "Settings",
+    "create_task",
+    "create_task_if_absent",
+    "load_schedules",
+    "slot_window",
+]
