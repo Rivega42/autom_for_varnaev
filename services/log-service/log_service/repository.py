@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import Engine, and_, func, select
 from sqlalchemy.engine import RowMapping
@@ -80,3 +81,11 @@ def list_events(
         rows = conn.execute(items_stmt).mappings().all()
         total = conn.execute(count_stmt).scalar_one()
     return [_to_item(r) for r in rows], total
+
+
+def get_event(engine: Engine, event_id: UUID) -> dict[str, Any] | None:
+    """Вернуть одно событие по id или None, если не найдено."""
+    stmt = select(events).where(events.c.id == event_id)
+    with engine.connect() as conn:
+        row = conn.execute(stmt).mappings().first()
+    return _to_item(row) if row is not None else None
