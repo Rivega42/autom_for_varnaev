@@ -1,0 +1,36 @@
+# Секреты и локальная конфигурация (CLAUDE.md §5: в репо только .env.example).
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker / runtime
+*.pid
+*.log
+
+# Артефакты видеоаналитики (пишутся в рантайме на общий том)
+/data/artifacts/
+
+# IDE и ОС
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

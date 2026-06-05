@@ -1,0 +1,17 @@
+# Нормализация переводов строк: всё текстовое — LF (CLAUDE.md §2).
+* text=auto eol=lf
+
+# Явно текстовые форматы.
+*.md       text eol=lf
+*.svg      text eol=lf
+*.bpmn     text eol=lf
+*.html     text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.py       text eol=lf
+*.toml     text eol=lf
+
+# Бинарные артефакты (на будущее) — без нормализации.
+*.png      binary
+*.jpg      binary
+*.pdf      binary

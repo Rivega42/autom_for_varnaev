@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 640" font-family="'Segoe UI','PT Sans',Arial,sans-serif">
+  <defs>
+    <marker id="a2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#5b6b7a"/>
+    </marker>
+    <style>
+      .t{fill:#1f2a36;} .muted{fill:#5b6b7a;}
+      .h{font-size:15px;font-weight:700;} .lbl{font-size:13px;} .lbl-s{font-size:11px;}
+      .box{fill:#ffffff;stroke:#3d5266;}
+      .net-int{fill:#eaf2fb;stroke:#5b8fcc;}
+      .net-itg{fill:#f4eef9;stroke:#9b6dc4;}
+      .gw{fill:#dff0e7;stroke:#2f7a4f;}
+      .vol{fill:#fff6e6;stroke:#d8a23a;}
+      .flow{stroke:#5b6b7a;stroke-width:1.6;fill:none;marker-end:url(#a2);}
+      .flowd{stroke:#9a6f1e;stroke-width:1.6;fill:none;stroke-dasharray:5 4;marker-end:url(#a2);}
+    </style>
+  </defs>
+
+  <text x="24" y="34" class="t" font-size="18" font-weight="700">02 · Сетевая модель (один хост, две сети + общий том)</text>
+  <text x="24" y="54" class="muted lbl">Наружу контура смотрит только api-gateway. Файлы — через том, не по HTTP.</text>
+
+  <rect x="20" y="70" width="940" height="500" rx="12" fill="#fbfdff" stroke="#3d5266" stroke-width="1.5"/>
+  <text x="38" y="94" class="t h">Физический хост (Docker)</text>
+
+  <!-- internal network -->
+  <rect x="40" y="108" width="600" height="320" rx="10" class="net-int"/>
+  <text x="56" y="130" class="t h" fill="#3a6bb0">Сеть internal (internal: true — нет выхода наружу)</text>
+
+  <rect x="60" y="146" width="130" height="42" rx="6" class="box"/><text x="74" y="172" class="t lbl-s">ingest-sensors</text>
+  <rect x="210" y="146" width="130" height="42" rx="6" class="box"/><text x="224" y="172" class="t lbl-s">video-analytics</text>
+  <rect x="360" y="146" width="120" height="42" rx="6" class="box"/><text x="378" y="172" class="t lbl-s">scheduler</text>
+  <rect x="60" y="206" width="130" height="42" rx="6" class="box"/><text x="84" y="232" class="t lbl-s">log-service</text>
+  <rect x="210" y="206" width="130" height="42" rx="6" class="box"/><text x="226" y="232" class="t lbl-s">mqtt-broker</text>
+  <rect x="360" y="206" width="120" height="42" rx="6" class="box"/><text x="386" y="232" class="t lbl-s">grafana</text>
+  <rect x="60" y="266" width="180" height="56" rx="6" class="box"/>
+  <text x="78" y="290" class="t lbl-s">db (TimescaleDB)</text>
+  <text x="78" y="308" class="muted lbl-s">ряды · события · задания</text>
+
+  <text x="56" y="360" class="muted lbl-s">Видны только внутри: БД, брокер, лог, аналитика, планировщик не доступны снаружи.</text>
+  <text x="56" y="380" class="muted lbl-s">Общение между сервисами — по именам контейнеров внутри сети.</text>
+  <text x="56" y="404" class="muted lbl-s">network_mode: host НЕ используется (он ломает изоляцию портов).</text>
+
+  <!-- api-gateway bridges both -->
+  <rect x="404" y="266" width="216" height="56" rx="8" class="gw"/>
+  <text x="420" y="290" class="t h" fill="#2f7a4f">api-gateway</text>
+  <text x="420" y="310" class="muted lbl-s">единственный мост между сетями</text>
+
+  <!-- integration network -->
+  <rect x="40" y="444" width="600" height="106" rx="10" class="net-itg"/>
+  <text x="56" y="466" class="t h" fill="#7b46a8">Сеть integration (общая с АУРА)</text>
+  <rect x="60" y="478" width="240" height="56" rx="6" class="box"/>
+  <text x="76" y="502" class="t lbl-s">контейнеры АУРА</text>
+  <text x="76" y="520" class="muted lbl-s">v1: обмена нет · v2: REST к api-gateway</text>
+
+  <!-- gw connects down to integration -->
+  <path class="flow" d="M512,322 L512,478"/>
+  <text x="520" y="410" class="muted lbl-s">api-gateway</text>
+  <text x="520" y="426" class="muted lbl-s">в обеих сетях</text>
+
+  <!-- shared volume -->
+  <rect x="664" y="108" width="276" height="220" rx="10" class="vol"/>
+  <text x="680" y="130" class="t h" fill="#9a6f1e">Общий том artifacts</text>
+  <text x="680" y="156" class="muted lbl-s">video-analytics — пишет (rw)</text>
+  <text x="680" y="176" class="muted lbl-s">api-gateway — отдаёт пути (ro)</text>
+  <text x="680" y="196" class="muted lbl-s">АУРА — читает / кладёт файлы (v2)</text>
+  <path class="flowd" d="M340,167 C560,167 560,200 664,200"/>
+  <text x="700" y="232" class="muted lbl-s">по REST ходят только</text>
+  <text x="700" y="250" class="muted lbl-s">метаданные и пути,</text>
+  <text x="700" y="268" class="muted lbl-s">бинарь — через том</text>
+
+  <!-- outward ports -->
+  <rect x="664" y="346" width="276" height="82" rx="10" fill="#eef3f8" stroke="#c3d2e0"/>
+  <text x="680" y="368" class="t lbl">Порты наружу хоста — только:</text>
+  <text x="680" y="390" class="muted lbl-s">• api-gateway (REST)</text>
+  <text x="680" y="408" class="muted lbl-s">• grafana (дашборд)</text>
+
+  <rect x="664" y="444" width="276" height="106" rx="10" fill="#f7faff" stroke="#c3d2e0"/>
+  <text x="680" y="466" class="t h">Почему так</text>
+  <text x="680" y="488" class="muted lbl-s">изоляция (АУРА не видит БД) ·</text>
+  <text x="680" y="506" class="muted lbl-s">нет коллизий портов ·</text>
+  <text x="680" y="524" class="muted lbl-s">переносимо (вынос АУРА не ломает</text>
+  <text x="680" y="540" class="muted lbl-s">контракт) · v1→v2 без переписывания</text>
+
+  <text x="24" y="600" class="muted lbl-s">Сегментация стоит несколько строк в compose сейчас. Свести сети в одну потом — легко; расцепить сросшиеся продукты — дорого.</text>
+</svg>

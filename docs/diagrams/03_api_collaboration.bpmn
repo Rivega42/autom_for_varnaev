@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Defs_api_collab"
+                  targetNamespace="http://monitoring/spec">
+
+  <bpmn:collaboration id="Collab_API">
+    <bpmn:participant id="Part_Cam" name="Камера (помещение)" processRef="Proc_Cam"/>
+    <bpmn:participant id="Part_Our" name="Наш контур (api-gateway + сервисы)" processRef="Proc_Our"/>
+    <bpmn:participant id="Part_Aura" name="АУРА (заказчик) — обмен только в v2" processRef="Proc_Aura"/>
+
+    <bpmn:messageFlow id="MF_RtspOur" name="RTSP-поток (v1)" sourceRef="Task_CamStream" targetRef="Task_Analytics"/>
+    <bpmn:messageFlow id="MF_RtspAura" name="RTSP-поток (v1)" sourceRef="Task_CamStream" targetRef="Task_Record"/>
+    <bpmn:messageFlow id="MF_AuraTask" name="POST /integration/analysis-tasks (v2)" sourceRef="Task_AuraOrder" targetRef="Task_Gateway"/>
+    <bpmn:messageFlow id="MF_Callback" name="callback: задание готово (v2)" sourceRef="Task_Gateway" targetRef="Task_AuraRecv"/>
+  </bpmn:collaboration>
+
+  <bpmn:process id="Proc_Cam" isExecutable="false">
+    <bpmn:startEvent id="Start_Cam" name="Камера включена">
+      <bpmn:outgoing>SF_Cam1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="Task_CamStream" name="Отдаёт RTSP-поток">
+      <bpmn:incoming>SF_Cam1</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:sequenceFlow id="SF_Cam1" sourceRef="Start_Cam" targetRef="Task_CamStream"/>
+  </bpmn:process>
+
+  <bpmn:process id="Proc_Our" isExecutable="false">
+    <bpmn:startEvent id="Start_Our" name="Триггер по расписанию (v1)">
+      <bpmn:outgoing>SF_Our1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="Task_Analytics" name="video-analytics: анализ источника">
+      <bpmn:incoming>SF_Our1</bpmn:incoming>
+      <bpmn:outgoing>SF_Our2</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_Log" name="log-service: запись события + ссылка на артефакт">
+      <bpmn:incoming>SF_Our2</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="Task_Gateway" name="api-gateway: /integration/* (501 в v1)"/>
+    <bpmn:sequenceFlow id="SF_Our1" sourceRef="Start_Our" targetRef="Task_Analytics"/>
+    <bpmn:sequenceFlow id="SF_Our2" sourceRef="Task_Analytics" targetRef="Task_Log"/>
+  </bpmn:process>
+
+  <bpmn:process id="Proc_Aura" isExecutable="false">
+    <bpmn:task id="Task_Record" name="Видеозапись (функция АУРА)"/>
+    <bpmn:task id="Task_AuraOrder" name="Ставит задание на анализ файла (v2)">
+      <bpmn:outgoing>SF_Aura1</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_AuraRecv" name="Принимает уведомление о готовности (v2)">
+      <bpmn:incoming>SF_Aura1</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:sequenceFlow id="SF_Aura1" sourceRef="Task_AuraOrder" targetRef="Task_AuraRecv"/>
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="Diag_API">
+    <bpmndi:BPMNPlane id="Plane_API" bpmnElement="Collab_API">
+
+      <bpmndi:BPMNShape id="S_Cam" bpmnElement="Part_Cam" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="680" height="120"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_StartCam" bpmnElement="Start_Cam">
+        <dc:Bounds x="232" y="122" width="36" height="36"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="210" y="160" width="82" height="27"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_CamStream" bpmnElement="Task_CamStream">
+        <dc:Bounds x="340" y="105" width="150" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="E_SFCam1" bpmnElement="SF_Cam1">
+        <di:waypoint x="268" y="140"/><di:waypoint x="340" y="140"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNShape id="S_Our" bpmnElement="Part_Our" isHorizontal="true">
+        <dc:Bounds x="160" y="230" width="680" height="160"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_StartOur" bpmnElement="Start_Our">
+        <dc:Bounds x="192" y="292" width="36" height="36"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="172" y="330" width="92" height="27"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_Analytics" bpmnElement="Task_Analytics">
+        <dc:Bounds x="290" y="275" width="150" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_Log" bpmnElement="Task_Log">
+        <dc:Bounds x="470" y="275" width="160" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_Gateway" bpmnElement="Task_Gateway">
+        <dc:Bounds x="660" y="275" width="160" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="E_SFOur1" bpmnElement="SF_Our1">
+        <di:waypoint x="228" y="310"/><di:waypoint x="290" y="310"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="E_SFOur2" bpmnElement="SF_Our2">
+        <di:waypoint x="440" y="310"/><di:waypoint x="470" y="310"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNShape id="S_Aura" bpmnElement="Part_Aura" isHorizontal="true">
+        <dc:Bounds x="160" y="420" width="680" height="150"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_Record" bpmnElement="Task_Record">
+        <dc:Bounds x="290" y="460" width="150" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_AuraOrder" bpmnElement="Task_AuraOrder">
+        <dc:Bounds x="540" y="460" width="150" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_AuraRecv" bpmnElement="Task_AuraRecv">
+        <dc:Bounds x="720" y="460" width="100" height="70"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="E_SFAura1" bpmnElement="SF_Aura1">
+        <di:waypoint x="690" y="495"/><di:waypoint x="720" y="495"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="E_MF_RtspOur" bpmnElement="MF_RtspOur">
+        <di:waypoint x="380" y="175"/><di:waypoint x="365" y="275"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="E_MF_RtspAura" bpmnElement="MF_RtspAura">
+        <di:waypoint x="440" y="175"/><di:waypoint x="360" y="460"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="E_MF_AuraTask" bpmnElement="MF_AuraTask">
+        <di:waypoint x="610" y="460"/><di:waypoint x="720" y="345"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="E_MF_Callback" bpmnElement="MF_Callback">
+        <di:waypoint x="760" y="345"/><di:waypoint x="765" y="460"/>
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
