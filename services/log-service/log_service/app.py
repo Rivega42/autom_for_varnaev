@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI
 
 from log_service.db import build_engine
+from log_service.envelope import ok
+from monitoring_shared import Event
 
 
 def create_app() -> FastAPI:
@@ -17,13 +18,17 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     def health() -> dict[str, Any]:
-        """Проверка живости сервиса (формат — единый конверт ответа)."""
-        return {
-            "status": "ok",
-            "data": {"service": "log-service", "up": True},
-            "error": None,
-            "ts": datetime.now(UTC).isoformat(),
-        }
+        """Проверка живости сервиса."""
+        return ok({"service": "log-service", "up": True})
+
+    @app.post("/events")
+    def receive_event(event: Event) -> dict[str, Any]:
+        """Принять событие от ingest-sensors/video-analytics.
+
+        Валидация типов/полей выполняется моделью Event (Pydantic). Запись в БД
+        добавляется в E3.3; пока возвращаем подтверждение с id события.
+        """
+        return ok({"id": str(event.id)})
 
     return app
 
