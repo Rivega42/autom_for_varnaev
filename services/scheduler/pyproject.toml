@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "scheduler"
+version = "0.1.0"
+description = "Планировщик: создание заданий на видеоанализ по расписанию"
+requires-python = ">=3.12"
+dependencies = [
+  "monitoring-shared",
+  "pydantic>=2",
+  "sqlalchemy>=2",
+  "psycopg2-binary>=2.9",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["scheduler"]
