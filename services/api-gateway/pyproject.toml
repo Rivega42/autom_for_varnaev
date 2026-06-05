@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "api-gateway"
+version = "0.1.0"
+description = "Единственный внешний вход контура: REST v1 и разъёмы АУРА (заглушены в v1)"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+  "httpx>=0.27",
+  "monitoring-shared",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["api_gateway"]

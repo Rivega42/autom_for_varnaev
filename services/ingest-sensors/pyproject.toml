@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ingest-sensors"
+version = "0.1.0"
+description = "Воркер приёма показаний датчиков по MQTT и записи в БД"
+requires-python = ">=3.12"
+dependencies = [
+  "paho-mqtt>=2",
+  "monitoring-shared",
+  "sqlalchemy>=2",
+  "psycopg2-binary>=2.9",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["ingest_sensors"]

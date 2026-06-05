@@ -57,6 +57,7 @@
 | code | HTTP | смысл |
 |---|---|---|
 | `VALIDATION_ERROR` | 422 | тело запроса не прошло валидацию |
+| `UNAUTHORIZED` | 401 | отсутствует или неверен `X-API-Key` |
 | `TASK_NOT_FOUND` | 404 | задание с таким id отсутствует |
 | `EVENT_NOT_FOUND` | 404 | событие отсутствует |
 | `NOT_IMPLEMENTED` | 501 | эндпойнт-разъём АУРА выключен в v1 |
@@ -106,6 +107,7 @@ GET /api/v1/events?from=&to=&type=&room=&limit=&offset=
       "type": "threshold_exceeded",
       "room": "room-01",
       "severity": "warning",
+      "message": "В холодильной камере температура выше нормы",
       "payload": { "metric": "air_temp", "value": 8.7, "threshold": 8.0 },
       "artifact_path": null
     }
@@ -113,6 +115,11 @@ GET /api/v1/events?from=&to=&type=&room=&limit=&offset=
   "total": 1
 }
 ```
+
+Поле `message` — готовая фраза на русском для оператора (с контекстом помещения),
+`payload` — машинные детали. Источник события формирует `message` при создании
+(см. `docs/04_DATA_MODEL.md` §4). В v1 события датчиков выводятся из показаний по
+критериям (пороги/«тишина»); сами показания в АУРА не передаются.
 
 ```
 GET /api/v1/events/{id} → одно событие

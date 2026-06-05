@@ -1,0 +1,36 @@
+name: CI
+
+# Прогон линта, типов и тестов на каждый PR и на push в main.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint-type-test:
+    name: ruff + mypy + pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установка Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Установка зависимостей
+        run: pip install -r requirements-dev.txt
+
+      - name: ruff (линт)
+        run: ruff check .
+
+      - name: ruff (формат)
+        run: ruff format --check .
+
+      - name: mypy (типы)
+        run: mypy .
+
+      - name: pytest (тесты)
+        run: pytest

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "video-analytics"
+version = "0.1.0"
+description = "Видеоаналитика: порт PoC на MediaPipe PoseLandmarker"
+requires-python = ">=3.12"
+dependencies = [
+  "sqlalchemy>=2",
+  "psycopg2-binary>=2.9",
+  "monitoring-shared",
+  "numpy>=1.26",
+  "opencv-python-headless>=4.9",
+  "mediapipe>=0.10",
+  "httpx>=0.27",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["video_analytics"]

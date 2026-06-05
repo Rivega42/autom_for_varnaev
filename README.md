@@ -35,6 +35,31 @@ CLAUDE.md  →  docs/00_BEST_PRACTICES_CODE.md  →  docs/01…05  →  docs/06_
 
 ---
 
+## Локальный запуск (dev)
+
+**Требования:** Docker + Docker Compose, Python 3.12.
+
+```bash
+# 1. Конфигурация окружения (секреты — только локально, .env в .gitignore)
+cp .env.example .env
+#    отредактируй .env: задай POSTGRES_PASSWORD, API_KEY и прочие пароли
+
+# 2. Поднять базу (TimescaleDB; healthcheck по pg_isready)
+docker compose up -d db
+#    прикладные сервисы (ingest-sensors, log-service, video-analytics,
+#    api-gateway, scheduler, media-gateway, grafana, mqtt-broker)
+#    добавляются по мере эпиков E2–E9
+
+# 3. Проверки кода — тот же набор, что и в CI
+pip install -r requirements-dev.txt
+scripts/check.sh        # ruff (линт+формат) → mypy (типы) → pytest (тесты)
+```
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) прогоняет `ruff` +
+`mypy` + `pytest` на каждый PR и push в `main`.
+
+---
+
 ## Карта документации
 
 | № | Документ | О чём | Кому полезно |
@@ -48,6 +73,7 @@ CLAUDE.md  →  docs/00_BEST_PRACTICES_CODE.md  →  docs/01…05  →  docs/06_
 | 05 | [`docs/05_SECURITY_CODE_PROTECTION.md`](docs/05_SECURITY_CODE_PROTECTION.md) | Защита кода в контейнере: пределы и меры по уровням | заказчик · DevOps |
 | 06 | [`docs/06_BUILD_PLAN.md`](docs/06_BUILD_PLAN.md) | Эпики → атомарные задачи → шаблон issue → метки | планирование |
 | 07 | [`docs/07_VIDEO_ANALYTICS.md`](docs/07_VIDEO_ANALYTICS.md) | Спецификация движка аналитики (перенос рабочего PoC) | аналитика |
+| 08 | [`docs/08_MQTT_CONTRACT.md`](docs/08_MQTT_CONTRACT.md) | Контракт MQTT: топики и payload показаний датчиков | датчики · firmware |
 | — | [`docs/diagrams/`](docs/diagrams/README.md) | Диаграммы (BPMN 2.0 для процессов + SVG для топологии/сети) | все |
 
 ---
@@ -115,7 +141,7 @@ Camunda Modeler / bpmn.io) с SVG-превью. Топология и сетев
 ├─ CLAUDE.md                  # постоянные инструкции для Claude Code
 ├─ README.md                  # этот файл
 └─ docs/                      # документация — источник истины
-   ├─ 00…07_*.md              # практики, архитектура, контракты, план работ
+   ├─ 00…08_*.md              # практики, архитектура, контракты, план работ, MQTT
    └─ diagrams/               # BPMN 2.0 (.bpmn + .svg) и архитектурные SVG
 ```
 

@@ -1,0 +1,87 @@
+# Эталонный узел датчиков (ESPHome, без кода).
+# Железо: ESP32-C3 (SuperMini) + SHT41/SHT40 (воздух: t°/влажность) +
+# MLX90614/GY-906 (бесконтактная ИК-температура поверхности) на одной шине I²C.
+# Узел САМ публикует показания по MQTT в формате docs/08_MQTT_CONTRACT.md:
+#   топик   monitoring/<node_id>/<metric>
+#   payload {"value": <число>, "unit": "<C|%>"}
+#
+# Секреты (Wi-Fi, MQTT, OTA) — в secrets.yaml рядом (через !secret); в репозиторий
+# кладётся только этот пример без реальных значений.
+
+substitutions:
+  node_id: node-01          # идентификатор узла (совпадает с sensor_nodes.id)
+  topic_base: monitoring/node-01
+
+esphome:
+  name: ${node_id}
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+logger:
+
+# Радио v1 — Wi-Fi (Zigbee/LoRa — точечно для «трудных» точек).
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# Обновление прошивки по воздуху.
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+mqtt:
+  broker: !secret mqtt_broker
+  port: 1883
+  # Discovery Home Assistant не используем — публикуем свои топики вручную.
+  discovery: false
+
+# Шина I²C: SHT4x и MLX90614 на общих линиях.
+i2c:
+  sda: GPIO5
+  scl: GPIO6
+  scan: true
+
+sensor:
+  # Воздух: температура и влажность (SHT41/SHT40).
+  - platform: sht4x
+    temperature:
+      id: air_temp
+      internal: true        # подавляем дефолтные топики — публикуем свой JSON ниже
+      on_value:
+        then:
+          - mqtt.publish:
+              topic: ${topic_base}/air_temp
+              payload: !lambda |-
+                return "{\"value\": " + to_string(x) + ", \"unit\": \"C\"}";
+    humidity:
+      id: humidity
+      internal: true
+      on_value:
+        then:
+          - mqtt.publish:
+              topic: ${topic_base}/humidity
+              payload: !lambda |-
+                return "{\"value\": " + to_string(x) + ", \"unit\": \"%\"}";
+    update_interval: 60s
+
+  # Поверхность: бесконтактная ИК-температура (MLX90614, объектный канал).
+  - platform: mlx90614
+    object:
+      id: surface_ir
+      internal: true
+      on_value:
+        then:
+          - mqtt.publish:
+              topic: ${topic_base}/surface_ir
+              payload: !lambda |-
+                return "{\"value\": " + to_string(x) + ", \"unit\": \"C\"}";
+    update_interval: 60s
+
+# Пример secrets.yaml (НЕ коммитить реальные значения):
+#   wifi_ssid: "..."
+#   wifi_password: "..."
+#   ota_password: "..."
+#   mqtt_broker: "192.168.0.10"

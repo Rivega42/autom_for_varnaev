@@ -1,0 +1,66 @@
+# Каркас оркестрации контура мониторинга.
+# Здесь — только база (db), сетевая сегментация и общий том. Прикладные сервисы
+# (ingest-sensors, video-analytics, log-service, api-gateway, scheduler,
+# media-gateway, grafana, mqtt-broker) добавляются своими задачами эпиков E2–E9.
+#
+# Сети (см. docs/02_NETWORK.md §3):
+#   internal    — внутренняя сеть наших сервисов, наружу не видна;
+#   integration — общая с АУРА; в v1 СОЗДАЁТСЯ, но обмена по ней нет (СТЫК-АУРА v2).
+# Общий том:
+#   artifacts   — скриншоты-доказательства (v1) и видеофайлы от АУРА (v2).
+
+services:
+  db:
+    # TimescaleDB = PostgreSQL 16 + расширение timescaledb.
+    image: timescale/timescaledb:2.17.2-pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+    networks:
+      - internal
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      # Init-скрипты выполняются при первой инициализации БД
+      # (включение расширения timescaledb — задача E1.2).
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-monitoring} -d ${POSTGRES_DB:-monitoring}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  mqtt-broker:
+    # Брокер MQTT (Mosquitto): приём показаний от узлов датчиков (ESPHome).
+    image: eclipse-mosquitto:2
+    networks:
+      - internal
+    ports:
+      # публикация на LAN объекта — узлы датчиков вне Docker
+      - "1883:1883"
+    volumes:
+      - ./mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt_data:/mosquitto/data
+    restart: unless-stopped
+
+  media-gateway:
+    # Медиа-шлюз камер (go2rtc): RTSP/ONVIF → воркер аналитики + превью WebRTC.
+    image: alexxit/go2rtc:latest
+    networks:
+      - internal
+    volumes:
+      - ./media-gateway/go2rtc.yaml:/config/go2rtc.yaml:ro
+    restart: unless-stopped
+
+networks:
+  internal:
+    driver: bridge
+  integration:
+    driver: bridge
+
+volumes:
+  artifacts:
+  db_data:
+  mqtt_data:
