@@ -2,7 +2,11 @@
 
 from datetime import UTC, datetime
 
-from ingest_sensors.events import LoggingEventSink, build_threshold_exceeded
+from ingest_sensors.events import (
+    LoggingEventSink,
+    build_back_to_normal,
+    build_threshold_exceeded,
+)
 
 from monitoring_shared import (
     Event,
@@ -55,3 +59,19 @@ def test_logging_sink_emits() -> None:
     event = build_threshold_exceeded(_READING, _THRESHOLD)
     assert isinstance(event, Event)
     LoggingEventSink().emit(event)  # не должно бросать
+
+
+def test_build_back_to_normal_message() -> None:
+    """Событие back_to_normal: severity=info, русский message о возврате к норме."""
+    humidity_reading = Reading(
+        ts=datetime(2026, 6, 5, 11, 0, tzinfo=UTC),
+        node_id="node-01",
+        room_id="room-01",
+        metric=Metric.HUMIDITY,
+        value=45.0,
+        unit="%",
+    )
+    event = build_back_to_normal(humidity_reading, lambda _r: "помещении для приготовления пищи")
+    assert event.type is EventType.BACK_TO_NORMAL
+    assert event.severity is Severity.INFO
+    assert event.message == "В помещении для приготовления пищи влажность вернулась к норме"

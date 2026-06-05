@@ -19,6 +19,7 @@ from monitoring_shared import (
     EventType,
     Metric,
     Reading,
+    Severity,
     Threshold,
     ThresholdOp,
 )
@@ -91,4 +92,24 @@ def build_threshold_exceeded(
             "threshold": threshold.value,
             "op": threshold.op.value,
         },
+    )
+
+
+def build_back_to_normal(
+    reading: Reading,
+    describe_room: RoomDescriber = default_room_describer,
+) -> Event:
+    """Сформировать событие возврата метрики к норме (severity=info)."""
+    message = _capitalize(
+        f"в {describe_room(reading.room_id)} {_metric_human(reading.metric)} вернулась к норме"
+    )
+    return Event(
+        id=uuid4(),
+        ts=reading.ts,
+        source=EventSource.SENSORS,
+        type=EventType.BACK_TO_NORMAL,
+        room_id=reading.room_id,
+        severity=Severity.INFO,
+        message=message,
+        payload={"metric": reading.metric.value},
     )
