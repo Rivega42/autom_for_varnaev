@@ -45,6 +45,15 @@ services:
       - mqtt_data:/mosquitto/data
     restart: unless-stopped
 
+  media-gateway:
+    # Медиа-шлюз камер (go2rtc): RTSP/ONVIF → воркер аналитики + превью WebRTC.
+    image: alexxit/go2rtc:latest
+    networks:
+      - internal
+    volumes:
+      - ./media-gateway/go2rtc.yaml:/config/go2rtc.yaml:ro
+    restart: unless-stopped
+
 networks:
   internal:
     driver: bridge
