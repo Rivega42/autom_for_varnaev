@@ -23,6 +23,9 @@ select = [
   "SIM",      # flake8-simplify
   "RUF",      # правила ruff
 ]
+# Проект русскоязычный (CLAUDE.md §2) — правила «неоднозначного юникода»
+# (кириллица, похожая на латиницу) выключаем: иначе они шумят на каждой строке.
+ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -46,3 +49,12 @@ module = [
   "paho.*",
 ]
 ignore_missing_imports = true
+
+# ───────────────────────────── pytest (тесты) ───────────────────────────────
+[tool.pytest.ini_options]
+# Прогон по корневым тестам и тестам всех сервисов.
+testpaths = ["tests", "services"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-ra -q"
