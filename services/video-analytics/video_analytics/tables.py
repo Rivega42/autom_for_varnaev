@@ -24,3 +24,14 @@ analysis_tasks = sa.Table(
     sa.Column("error", sa.Text),
     sa.Column("callback_url", sa.Text),
 )
+
+
+camera_zones = sa.Table(
+    "camera_zones",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True),
+    sa.Column("camera_id", sa.Uuid, nullable=False),
+    sa.Column("zone_type", sa.Text, nullable=False),
+    sa.Column("polygon", sa.JSON, nullable=False),
+    sa.Column("note", sa.Text),
+)
