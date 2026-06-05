@@ -35,6 +35,31 @@ CLAUDE.md  →  docs/00_BEST_PRACTICES_CODE.md  →  docs/01…05  →  docs/06_
 
 ---
 
+## Локальный запуск (dev)
+
+**Требования:** Docker + Docker Compose, Python 3.12.
+
+```bash
+# 1. Конфигурация окружения (секреты — только локально, .env в .gitignore)
+cp .env.example .env
+#    отредактируй .env: задай POSTGRES_PASSWORD, API_KEY и прочие пароли
+
+# 2. Поднять базу (TimescaleDB; healthcheck по pg_isready)
+docker compose up -d db
+#    прикладные сервисы (ingest-sensors, log-service, video-analytics,
+#    api-gateway, scheduler, media-gateway, grafana, mqtt-broker)
+#    добавляются по мере эпиков E2–E9
+
+# 3. Проверки кода — тот же набор, что и в CI
+pip install -r requirements-dev.txt
+scripts/check.sh        # ruff (линт+формат) → mypy (типы) → pytest (тесты)
+```
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) прогоняет `ruff` +
+`mypy` + `pytest` на каждый PR и push в `main`.
+
+---
+
 ## Карта документации
 
 | № | Документ | О чём | Кому полезно |
