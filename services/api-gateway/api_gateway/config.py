@@ -1,0 +1,28 @@
+"""Конфигурация api-gateway из переменных окружения (.env)."""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Settings:
+    """Параметры внешнего шлюза."""
+
+    # Базовый URL внутреннего log-service (источник событий).
+    log_service_url: str
+    # API-ключ для публичных и /integration/* эндпойнтов (X-API-Key).
+    api_key: str | None
+    # СТЫК-АУРА (v2): фичефлаг интеграции; в v1 всегда False (разъёмы отдают 501).
+    aura_integration_enabled: bool
+
+    @classmethod
+    def from_env(cls) -> Settings:
+        """Собрать настройки из окружения (значения по умолчанию — как в compose)."""
+        return cls(
+            log_service_url=os.getenv("LOG_SERVICE_URL", "http://log-service:8000"),
+            api_key=os.getenv("API_KEY") or None,
+            aura_integration_enabled=os.getenv("AURA_INTEGRATION_ENABLED", "false").lower()
+            == "true",
+        )
