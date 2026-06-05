@@ -34,7 +34,7 @@ quote-style = "double"
 [tool.mypy]
 python_version = "3.12"
 strict = true
-mypy_path = "shared:scripts:services/ingest-sensors:services/log-service:services/video-analytics:services/scheduler"
+mypy_path = "shared:scripts:services/ingest-sensors:services/log-service:services/video-analytics:services/scheduler:services/api-gateway"
 # Эталонный PoC и тесты под строгую типизацию не загоняем.
 exclude = ['services/video-analytics/reference/', 'db/migrations/']
 warn_unused_configs = true
@@ -57,7 +57,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 # Прогон по корневым тестам и тестам всех сервисов.
 testpaths = ["tests", "services", "shared"]
-pythonpath = ["shared", "scripts", "services/ingest-sensors", "services/log-service", "services/video-analytics", "services/scheduler"]
+pythonpath = ["shared", "scripts", "services/ingest-sensors", "services/log-service", "services/video-analytics", "services/scheduler", "services/api-gateway"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
