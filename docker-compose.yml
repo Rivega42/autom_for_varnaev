@@ -54,6 +54,27 @@ services:
       - ./media-gateway/go2rtc.yaml:/config/go2rtc.yaml:ro
     restart: unless-stopped
 
+  grafana:
+    # Дашборды поверх TimescaleDB: ряды датчиков и лента событий (эпик E7).
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?GF_SECURITY_ADMIN_PASSWORD должен быть задан в .env}
+    networks:
+      - internal
+    ports:
+      # дашборд публикуется на хост (единственный наружу, кроме api-gateway)
+      - "3000:3000"
+    volumes:
+      # provisioning и дашборды как код (datasource/дашборды — задачи E7.2–E7.5)
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 networks:
   internal:
     driver: bridge
@@ -64,3 +85,4 @@ volumes:
   artifacts:
   db_data:
   mqtt_data:
+  grafana_data:
