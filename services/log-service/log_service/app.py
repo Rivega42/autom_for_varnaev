@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
@@ -12,7 +13,7 @@ from sqlalchemy import Engine
 
 from log_service.db import build_engine
 from log_service.envelope import error, ok
-from log_service.repository import insert_event, list_events
+from log_service.repository import get_event, insert_event, list_events
 from monitoring_shared import Event
 
 
@@ -63,6 +64,17 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             offset=offset,
         )
         return ok({"items": items, "total": total})
+
+    @app.get("/events/{event_id}", response_model=None)
+    def get_event_by_id(event_id: UUID) -> dict[str, Any] | JSONResponse:
+        """Одно событие по id или 404 (EVENT_NOT_FOUND)."""
+        item = get_event(engine, event_id)
+        if item is None:
+            return JSONResponse(
+                status_code=404,
+                content=error("EVENT_NOT_FOUND", "Событие не найдено"),
+            )
+        return ok(item)
 
     return app
 
