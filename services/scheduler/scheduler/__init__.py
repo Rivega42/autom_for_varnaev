@@ -6,6 +6,7 @@
 """
 
 from scheduler.config import Settings
+from scheduler.repository import create_task
 from scheduler.schedules import ScheduleEntry, load_schedules
 
-__all__ = ["ScheduleEntry", "Settings", "load_schedules"]
+__all__ = ["ScheduleEntry", "Settings", "create_task", "load_schedules"]
