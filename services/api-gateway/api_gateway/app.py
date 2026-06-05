@@ -6,9 +6,10 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from fastapi import FastAPI, Query
+from fastapi import Depends, FastAPI, Query
 from sqlalchemy import Engine
 
+from api_gateway.auth import make_require_api_key
 from api_gateway.config import Settings
 from api_gateway.db import build_engine
 from api_gateway.errors import api_error, register_error_handlers
@@ -40,12 +41,15 @@ def create_app(
     app = FastAPI(title="api-gateway")
     register_error_handlers(app)
 
+    # Зависимость X-API-Key для публичных и /integration/* (docs/03_API_CONTRACT.md §1).
+    auth = Depends(make_require_api_key(settings))
+
     @app.get(f"{API_PREFIX}/health")
     def health() -> dict[str, Any]:
-        """Проверка живости сервиса (конверт ok)."""
+        """Проверка живости сервиса (конверт ok; ключ не требуется)."""
         return ok({"service": "api-gateway", "up": True})
 
-    @app.get(f"{API_PREFIX}/events")
+    @app.get(f"{API_PREFIX}/events", dependencies=[auth])
     def get_events(
         from_: str | None = Query(default=None, alias="from"),
         to: str | None = None,
@@ -67,7 +71,7 @@ def create_app(
         )
         return ok(data)
 
-    @app.get(f"{API_PREFIX}/events/{{event_id}}")
+    @app.get(f"{API_PREFIX}/events/{{event_id}}", dependencies=[auth])
     def get_event(event_id: UUID) -> dict[str, Any]:
         """Одно событие по id или 404 EVENT_NOT_FOUND."""
         item = events.get_event(event_id)
@@ -75,12 +79,12 @@ def create_app(
             raise api_error(ErrorCode.EVENT_NOT_FOUND, "Событие не найдено")
         return ok(item)
 
-    @app.post(f"{API_PREFIX}/analysis-tasks")
+    @app.post(f"{API_PREFIX}/analysis-tasks", dependencies=[auth])
     def post_analysis_task(body: AnalysisTaskCreate) -> dict[str, Any]:
         """Поставить задание на анализ (status=queued, trigger=manual)."""
         return ok(create_task(engine, body))
 
-    @app.get(f"{API_PREFIX}/analysis-tasks")
+    @app.get(f"{API_PREFIX}/analysis-tasks", dependencies=[auth])
     def get_analysis_tasks(
         status: str | None = None,
         from_: str | None = Query(default=None, alias="from"),
@@ -101,7 +105,7 @@ def create_app(
         )
         return ok({"items": items, "total": total})
 
-    @app.get(f"{API_PREFIX}/analysis-tasks/{{task_id}}")
+    @app.get(f"{API_PREFIX}/analysis-tasks/{{task_id}}", dependencies=[auth])
     def get_analysis_task(task_id: UUID) -> dict[str, Any]:
         """Статус/результат задания по id или 404 TASK_NOT_FOUND."""
         item = get_task(engine, task_id)
@@ -109,7 +113,7 @@ def create_app(
             raise api_error(ErrorCode.TASK_NOT_FOUND, "Задание не найдено")
         return ok(item)
 
-    @app.get(f"{API_PREFIX}/readings")
+    @app.get(f"{API_PREFIX}/readings", dependencies=[auth])
     def get_readings(
         room: str | None = None,
         metric: str | None = None,
@@ -131,7 +135,7 @@ def create_app(
         return ok({"items": items, "total": len(items)})
 
     # СТЫК-АУРА (v2): заглушённые разъёмы /integration/* (501 при выключенном флаге).
-    register_integration_routes(app, settings)
+    register_integration_routes(app, settings, dependencies=[auth])
 
     return app
 

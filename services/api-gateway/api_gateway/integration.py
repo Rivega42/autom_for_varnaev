@@ -7,9 +7,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.params import Depends
 
 from api_gateway.config import Settings
 from api_gateway.errors import api_error
@@ -33,22 +35,28 @@ def _not_implemented_in_v2() -> dict[str, Any]:
     raise api_error(ErrorCode.NOT_IMPLEMENTED, "Разъём АУРА ещё не реализован")
 
 
-def register_integration_routes(app: FastAPI, settings: Settings) -> None:
-    """Зарегистрировать заглушённые разъёмы АУРА на приложении."""
+def register_integration_routes(
+    app: FastAPI, settings: Settings, dependencies: Sequence[Depends] | None = None
+) -> None:
+    """Зарегистрировать заглушённые разъёмы АУРА на приложении.
 
-    @app.post(f"{INTEGRATION_PREFIX}/analysis-tasks")
+    `dependencies` (например, проверка X-API-Key) применяются ко всем разъёмам.
+    """
+    deps = list(dependencies) if dependencies else None
+
+    @app.post(f"{INTEGRATION_PREFIX}/analysis-tasks", dependencies=deps)
     def integration_post_task() -> dict[str, Any]:
         """§4.1 АУРА ставит задание на анализ файла (v2). v1 → 501."""
         require_aura_enabled(settings)
         return _not_implemented_in_v2()
 
-    @app.get(f"{INTEGRATION_PREFIX}/events")
+    @app.get(f"{INTEGRATION_PREFIX}/events", dependencies=deps)
     def integration_get_events() -> dict[str, Any]:
         """§4.2 АУРА читает события (v2). v1 → 501."""
         require_aura_enabled(settings)
         return _not_implemented_in_v2()
 
-    @app.put(f"{INTEGRATION_PREFIX}/settings")
+    @app.put(f"{INTEGRATION_PREFIX}/settings", dependencies=deps)
     def integration_put_settings() -> dict[str, Any]:
         """§4.3 АУРА передаёт настройки (v2). v1 → 501."""
         require_aura_enabled(settings)
