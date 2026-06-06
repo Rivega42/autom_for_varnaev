@@ -1,0 +1,133 @@
+# Алерты Grafana как код (E7.5): визуальный дубль БД-логики датчиков.
+# Эти правила НЕ заменяют события в БД (их пишет ingest-sensors в таблицу events),
+# а дают оператору визуальный сигнал прямо в Grafana. Контактные точки и
+# маршруты уведомлений здесь не настраиваем — для визуального сигнала достаточно
+# состояния Firing в интерфейсе (и никаких секретов в репозитории).
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Датчики — пороги и тишина
+    folder: Мониторинг
+    interval: 1m
+    rules:
+      # Превышение порога: визуальный дубль события threshold_exceeded.
+      # Берём последнее показание по каждой паре (помещение, метрика) за 15 минут
+      # и сверяем с активными порогами из thresholds (как это делает ingest-sensors).
+      - uid: sensors-threshold-exceeded
+        title: Превышение порога датчика
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          subsystem: sensors
+          kind: threshold
+        annotations:
+          summary: Свежие показания датчиков нарушают пороги (thresholds)
+          description: >-
+            Хотя бы одно последнее показание (за 15 минут) нарушает активный порог
+            из таблицы thresholds. Визуальный дубль события threshold_exceeded.
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: timescaledb
+            model:
+              refId: A
+              datasource: { type: postgres, uid: timescaledb }
+              format: table
+              rawSql: |
+                SELECT count(*)::float AS value
+                FROM (
+                  SELECT DISTINCT ON (r.room_id, r.metric)
+                         r.room_id, r.metric, r.value
+                  FROM sensor_readings r
+                  WHERE r.ts > now() - interval '15 minutes'
+                  ORDER BY r.room_id, r.metric, r.ts DESC
+                ) last
+                JOIN thresholds t
+                  ON t.metric = last.metric
+                 AND (t.room_id = last.room_id OR t.room_id IS NULL)
+                 AND t.enabled
+                WHERE (t.op = '>'  AND last.value >  t.value)
+                   OR (t.op = '>=' AND last.value >= t.value)
+                   OR (t.op = '<'  AND last.value <  t.value)
+                   OR (t.op = '<=' AND last.value <= t.value)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+
+      # Тишина узла: визуальный дубль события sensor_silent.
+      # Узел считается молчащим, если нет показаний дольше silent_min (thresholds);
+      # если порог тишины для помещения не задан — берём дефолт 10 минут.
+      - uid: sensors-node-silent
+        title: Датчик молчит
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          subsystem: sensors
+          kind: silence
+        annotations:
+          summary: Узел датчиков не присылает показания дольше порога тишины
+          description: >-
+            Для узла нет показаний дольше silent_min (thresholds) — или дольше
+            дефолтных 10 минут, если порог тишины не задан. Дубль sensor_silent.
+        data:
+          - refId: A
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: timescaledb
+            model:
+              refId: A
+              datasource: { type: postgres, uid: timescaledb }
+              format: table
+              rawSql: |
+                SELECT count(*)::float AS value
+                FROM sensor_nodes n
+                LEFT JOIN LATERAL (
+                  SELECT max(r.ts) AS last_ts
+                  FROM sensor_readings r
+                  WHERE r.node_id = n.id
+                ) lr ON true
+                LEFT JOIN LATERAL (
+                  SELECT min(t.silent_min) AS silent_min
+                  FROM thresholds t
+                  WHERE t.silent_min IS NOT NULL
+                    AND t.enabled
+                    AND (t.room_id = n.room_id OR t.room_id IS NULL)
+                ) s ON true
+                WHERE lr.last_ts IS NULL
+                   OR lr.last_ts < now() - make_interval(
+                        mins => coalesce(s.silent_min, 10))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              datasource: { type: __expr__, uid: __expr__ }
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
