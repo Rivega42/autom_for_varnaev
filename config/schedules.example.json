@@ -1,0 +1,11 @@
+[
+  {
+    "name": "room-01-pose",
+    "source_type": "stream",
+    "source_ref": "rtsp://media-gateway:8554/room-01",
+    "pipeline": "pose_v1",
+    "room_id": "room-01",
+    "interval_min": 30,
+    "params": { "fps": 5 }
+  }
+]

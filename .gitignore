@@ -29,6 +29,10 @@ htmlcov/
 # Артефакты видеоаналитики (пишутся в рантайме на общий том)
 /data/artifacts/
 
+# Рантайм-ассеты контура (объектные, не в репозитории)
+models/*.task
+config/schedules.json
+
 # IDE и ОС
 .idea/
 .vscode/
