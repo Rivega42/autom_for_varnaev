@@ -1,0 +1,53 @@
+# Release-образ video-analytics (E9.3): закрытая сборка НАШЕГО кода через Nuitka.
+#
+# Подход (решение по issue): защищаем только наш код. Nuitka компилирует наши
+# пакеты (video_analytics, monitoring_shared) в нативные расширения (.so) —
+# в образе НЕТ .py нашей логики. Тяжёлые сторонние библиотеки (MediaPipe/OpenCV/
+# numpy) остаются обычными вхелами (их защищать не нужно), поэтому runtime —
+# slim Python (не distroless: MediaPipe требует полноценное окружение).
+# Контекст сборки — корень репозитория. Собирать под профилем release:
+#   docker build -f services/video-analytics/Dockerfile.release -t video-analytics:release .
+
+# ── Стадия сборки: ставим зависимости и компилируем наши пакеты в .so ──
+FROM python:3.12-slim AS builder
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y \
+        build-essential patchelf libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY shared/ ./shared/
+COPY services/video-analytics/ ./video-analytics/
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir ./shared ./video-analytics nuitka
+# Компилируем ТОЛЬКО наши пакеты в модули-расширения (.so). Сторонние импорты
+# (mediapipe/cv2/numpy) Nuitka в module-режиме не тянет — они остаются вхелами.
+RUN /opt/venv/bin/python -m nuitka --module monitoring_shared \
+        --include-package=monitoring_shared --output-dir=/out \
+ && /opt/venv/bin/python -m nuitka --module video_analytics \
+        --include-package=video_analytics --output-dir=/out
+# Подменяем установленные исходники компилированными .so и удаляем все .py
+# нашей логики из site-packages.
+RUN SP="$(/opt/venv/bin/python -c 'import site; print(site.getsitepackages()[0])')" \
+ && rm -rf "$SP/monitoring_shared" "$SP/video_analytics" \
+ && cp -r /out/monitoring_shared* "$SP/" \
+ && cp -r /out/video_analytics* "$SP/" \
+ && find "$SP" -path '*monitoring_shared*' -name '*.py' -delete \
+ && find "$SP" -path '*video_analytics*' -name '*.py' -delete
+# Тонкий лаунчер (без бизнес-логики): запускает скомпилированный воркер.
+RUN printf 'from video_analytics.main import main\nmain()\n' > /opt/venv/run.py
+# Проверка: компилированные модули импортируются (ловит проблемы сборки сразу).
+RUN /opt/venv/bin/python -c "import monitoring_shared, video_analytics.main, video_analytics.worker; print('compiled import OK')"
+
+# ── Стадия запуска: slim Python со сторонними вхелами и нашими .so ──
+FROM python:3.12-slim AS runtime
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 appuser
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+USER appuser
+# Запуск воркера через лаунчер (наша логика — в скомпилированных .so).
+CMD ["python", "/opt/venv/run.py"]
