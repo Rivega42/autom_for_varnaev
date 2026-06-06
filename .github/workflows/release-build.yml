@@ -31,5 +31,29 @@ jobs:
           context: .
           file: services/${{ matrix.service }}/Dockerfile.release
           push: false
+          load: true
+          tags: ${{ matrix.service }}:release
           cache-from: type=gha,scope=release-${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=release-${{ matrix.service }}
+
+      # E9.5: проверяем состав release-образа — нет .py нашей логики, а у
+      # distroless-образа (api-gateway) нет ещё и шелла.
+      - name: Проверка состава release-образа ${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          img="${{ matrix.service }}:release"
+          cid="$(docker create "$img")"
+          docker export "$cid" > /tmp/img.tar
+          docker rm "$cid" >/dev/null
+          files="$(tar -tf /tmp/img.tar)"
+          # 1) В образе нет исходников нашей логики (.py)
+          if echo "$files" | grep -Eq '(^|/)(api_gateway|monitoring_shared|video_analytics)/.*\.py$'; then
+            echo "ОШИБКА: в release-образе найдены .py нашей логики"; exit 1
+          fi
+          # 2) distroless (api-gateway) — без шелла
+          if [ "${{ matrix.service }}" = "api-gateway" ]; then
+            if echo "$files" | grep -Eq '(^|/)(bin/sh|bin/bash|bin/dash|bin/busybox)$'; then
+              echo "ОШИБКА: в distroless-образе найден шелл"; exit 1
+            fi
+          fi
+          echo "Состав release-образа ${{ matrix.service }} корректен"
