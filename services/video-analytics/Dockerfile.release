@@ -21,9 +21,9 @@ RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir ./shared ./video-analytics nuitka
 # Компилируем ТОЛЬКО наши пакеты в модули-расширения (.so). Сторонние импорты
 # (mediapipe/cv2/numpy) Nuitka в module-режиме не тянет — они остаются вхелами.
-RUN /opt/venv/bin/python -m nuitka --module monitoring_shared \
-        --include-package=monitoring_shared --output-dir=/out \
- && /opt/venv/bin/python -m nuitka --module video_analytics \
+RUN cd /build/shared && /opt/venv/bin/python -m nuitka --module monitoring_shared \
+        --include-package=monitoring_shared --output-dir=/out
+RUN cd /build/video-analytics && /opt/venv/bin/python -m nuitka --module video_analytics \
         --include-package=video_analytics --output-dir=/out
 # Подменяем установленные исходники компилированными .so и удаляем все .py
 # нашей логики из site-packages.
