@@ -16,8 +16,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # video-analytics добавится своей задачей (#167), если Nuitka поедет с MediaPipe.
-        service: [api-gateway]
+        # api-gateway — полный Nuitka (distroless); video-analytics — компиляция
+        # только нашего кода в .so (сторонние MediaPipe/OpenCV остаются вхелами).
+        service: [api-gateway, video-analytics]
     steps:
       - uses: actions/checkout@v4
 
