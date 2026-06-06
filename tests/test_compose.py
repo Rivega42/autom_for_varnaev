@@ -81,3 +81,25 @@ def test_video_analytics_mounts_artifacts() -> None:
     """video-analytics монтирует общий том artifacts."""
     va = _compose()["services"]["video-analytics"]
     assert any("artifacts:/data/artifacts" in v for v in va["volumes"])
+
+
+# ── Профили dev/release (E9.7) ──
+
+
+def test_dev_services_have_no_profile() -> None:
+    """dev-сервисы работают по умолчанию (без profiles)."""
+    services = _compose()["services"]
+    for name in ("api-gateway", "log-service", "ingest-sensors", "scheduler", "video-analytics"):
+        assert "profiles" not in services[name], f"{name} не должен иметь профиль (он дефолтный)"
+
+
+def test_release_variants_under_release_profile() -> None:
+    """Release-варианты — под профилем release и собираются из Dockerfile.release."""
+    services = _compose()["services"]
+    for name, df in (
+        ("api-gateway-release", "services/api-gateway/Dockerfile.release"),
+        ("video-analytics-release", "services/video-analytics/Dockerfile.release"),
+    ):
+        svc = services[name]
+        assert svc["profiles"] == ["release"], f"{name} должен быть под профилем release"
+        assert svc["build"]["dockerfile"] == df
