@@ -83,6 +83,40 @@ def test_video_analytics_mounts_artifacts() -> None:
     assert any("artifacts:/data/artifacts" in v for v in va["volumes"])
 
 
+# ── Применение миграций Alembic (migrate-сервис) ──
+
+# Сервисы, которым нужна готовая схема БД до старта (зависят от migrate).
+_NEEDS_SCHEMA = (
+    "log-service",
+    "api-gateway",
+    "ingest-sensors",
+    "scheduler",
+    "video-analytics",
+    "grafana",
+)
+
+
+def test_migrate_service_present() -> None:
+    """Сервис migrate собирается из db/Dockerfile, в internal, ждёт healthy БД."""
+    migrate = _compose()["services"].get("migrate")
+    assert migrate is not None, "Сервис migrate отсутствует в compose"
+    assert migrate["build"]["dockerfile"] == "db/Dockerfile"
+    assert migrate["build"]["context"] == "."
+    assert migrate["networks"] == ["internal"]
+    assert migrate["depends_on"]["db"]["condition"] == "service_healthy"
+    # Одноразовая задача: не перезапускается после успешного завершения.
+    assert str(migrate["restart"]) == "no"
+
+
+def test_schema_consumers_wait_for_migrate() -> None:
+    """Сервисы, читающие/пишущие таблицы, стартуют после успешных миграций."""
+    services = _compose()["services"]
+    for name in _NEEDS_SCHEMA:
+        depends = services[name]["depends_on"]
+        assert "migrate" in depends, f"{name} должен зависеть от migrate"
+        assert depends["migrate"]["condition"] == "service_completed_successfully"
+
+
 # ── Профили dev/release (E9.7) ──
 
 

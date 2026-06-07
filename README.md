@@ -44,11 +44,13 @@ CLAUDE.md  →  docs/00_BEST_PRACTICES_CODE.md  →  docs/01…05  →  docs/06_
 cp .env.example .env
 #    отредактируй .env: задай POSTGRES_PASSWORD, API_KEY и прочие пароли
 
-# 2. Поднять базу (TimescaleDB; healthcheck по pg_isready)
-docker compose up -d db
-#    прикладные сервисы (ingest-sensors, log-service, video-analytics,
-#    api-gateway, scheduler, media-gateway, grafana, mqtt-broker)
-#    добавляются по мере эпиков E2–E9
+# 2. Поднять весь контур. Порядок выдержит compose сам:
+#    db (healthy) → migrate (alembic upgrade head) → прикладные сервисы.
+docker compose up -d
+#    Сервис `migrate` — одноразовый: приводит схему БД к последней ревизии
+#    ДО старта сервисов (ingest-sensors, log-service, video-analytics,
+#    api-gateway, scheduler, grafana). Без него таблиц в БД не будет.
+#    Только база, если нужно отдельно:  docker compose up -d db migrate
 
 # 3. Проверки кода — тот же набор, что и в CI
 pip install -r requirements-dev.txt

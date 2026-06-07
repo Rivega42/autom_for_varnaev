@@ -35,6 +35,28 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  migrate:
+    # Применение миграций Alembic (one-shot) ДО старта прикладных сервисов.
+    # Завершается после `alembic upgrade head`; зависимые сервисы ждут его
+    # успешного завершения (service_completed_successfully) и стартуют на готовой
+    # схеме. Без этого шага БД поднимается без прикладных таблиц и сервисы падают.
+    build:
+      context: .
+      dockerfile: db/Dockerfile
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+    # Одноразовая задача: после успешного завершения не перезапускаем.
+    restart: "no"
+
   mqtt-broker:
     # Брокер MQTT (Mosquitto): приём показаний от узлов датчиков (ESPHome).
     image: eclipse-mosquitto:2
@@ -80,6 +102,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   log-service:
@@ -98,6 +122,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 15s
@@ -125,6 +151,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       log-service:
         condition: service_healthy
     healthcheck:
@@ -155,6 +183,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       mqtt-broker:
         condition: service_started
     restart: unless-stopped
@@ -181,6 +211,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   video-analytics:
@@ -208,6 +240,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       log-service:
         condition: service_started
       media-gateway:
@@ -236,6 +270,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       log-service:
         condition: service_healthy
     # healthcheck не задаём: distroless-образ без python и шелла.
@@ -264,6 +300,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       log-service:
         condition: service_started
       media-gateway:
