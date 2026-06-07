@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -115,6 +116,34 @@ def test_schema_consumers_wait_for_migrate() -> None:
         depends = services[name]["depends_on"]
         assert "migrate" in depends, f"{name} должен зависеть от migrate"
         assert depends["migrate"]["condition"] == "service_completed_successfully"
+
+
+# ── Полнота .env.example относительно docker-compose ──
+
+
+def _compose_env_vars() -> set[str]:
+    """Имена переменных, на которые ссылается compose через ${VAR...}."""
+    lines = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8").splitlines()
+    # Отбрасываем комментарии (в них встречаются литералы вроде «через ${VAR}»).
+    body = "\n".join(line.split("#", 1)[0] for line in lines)
+    # ${VAR}, ${VAR:-default}, ${VAR:?msg} — берём только имя.
+    return set(re.findall(r"\$\{([A-Z0-9_]+)[}:]", body))
+
+
+def _env_example_keys() -> set[str]:
+    """Ключи, объявленные в .env.example (строки вида KEY=...)."""
+    keys: set[str] = set()
+    for line in (REPO_ROOT / ".env.example").read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            keys.add(stripped.split("=", 1)[0].strip())
+    return keys
+
+
+def test_env_example_documents_all_compose_vars() -> None:
+    """Каждая переменная из docker-compose описана в .env.example (E0.3)."""
+    missing = _compose_env_vars() - _env_example_keys()
+    assert not missing, f".env.example не содержит переменных compose: {sorted(missing)}"
 
 
 # ── Профили dev/release (E9.7) ──
