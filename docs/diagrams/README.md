@@ -54,12 +54,25 @@
 ![Поток события](05_event_flow.svg)
 
 ### 06 · Состав продукта
-Контейнеры, сети (`internal`/`integration`), тома и опубликованные порты —
-[`06_components.md`](06_components.md) (Mermaid, рендер на GitHub).
+Контейнеры, сети (`internal`/`integration`), тома и опубликованные порты.
+Источник (правится): [`06_components.md`](06_components.md) (Mermaid).
+
+![Состав продукта](06_components.svg)
 
 ### 07 · Взаимодействие компонентов
-Sequence-диаграммы основных сценариев (датчики, видеоаналитика, REST/Grafana,
-старт стека) — [`07_interactions.md`](07_interactions.md).
+Sequence-диаграммы основных сценариев. Источник: [`07_interactions.md`](07_interactions.md).
+
+**A. Поток датчиков**
+![Поток датчиков](07a_sensors.svg)
+
+**B. Видеоаналитика по расписанию**
+![Видеоаналитика](07b_analytics.svg)
+
+**C. Внешний доступ: REST и Grafana**
+![REST и Grafana](07c_rest.svg)
+
+**D. Старт стека**
+![Старт стека](07d_startup.svg)
 
 ---
 
