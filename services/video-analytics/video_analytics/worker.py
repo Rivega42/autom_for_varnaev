@@ -21,11 +21,26 @@ from video_analytics.actions import CompositeActionAnalyzer, build_action_event
 from video_analytics.config import Settings
 from video_analytics.detector import PoseDetector
 from video_analytics.event_sink import EventSink
+from video_analytics.landmarks import PoseLandmark
 from video_analytics.pose_events import SimplePoseAnalyzer, build_pose_event
 from video_analytics.repository import claim_next_task, mark_done, mark_failed
 from video_analytics.sources import FrameSource
+from video_analytics.uniform import (
+    build_condition_flagged,
+    is_white_coat,
+    mean_brightness_saturation,
+    torso_polygon,
+)
 
 logger = logging.getLogger(__name__)
+
+# Точки торса для эвристики «белого халата» (плечи и бёдра).
+_TORSO_LANDMARKS = (
+    PoseLandmark.LEFT_SHOULDER,
+    PoseLandmark.RIGHT_SHOULDER,
+    PoseLandmark.LEFT_HIP,
+    PoseLandmark.RIGHT_HIP,
+)
 
 # Фабрика источника кадров по (тип, ссылка, целевой fps) — для подмены в тестах.
 SourceFactory = Callable[[SourceType, str, int], FrameSource]
@@ -54,6 +69,8 @@ def process_task(
     frames = 0
     poses_found = 0
     events_sent = 0
+    # Флаг «нет спецодежды» эмитим однократно на задание (антиспам).
+    uniform_flagged = False
     try:
         for frame in source.frames():
             frames += 1
@@ -68,6 +85,14 @@ def process_task(
             for action in actions.process(pose, ts):
                 sink.emit(build_action_event(action, task.room_id, ts))
                 events_sent += 1
+            # Эвристика «белого халата»: при видимом торсе и отсутствии халата —
+            # одно событие condition_flagged на задание.
+            if not uniform_flagged and all(pose.visible(lm) for lm in _TORSO_LANDMARKS):
+                brightness, saturation = mean_brightness_saturation(frame, torso_polygon(pose))
+                if not is_white_coat(brightness, saturation):
+                    sink.emit(build_condition_flagged(brightness, saturation, task.room_id, ts))
+                    events_sent += 1
+                    uniform_flagged = True
     finally:
         source.close()
     return {"frames": frames, "poses": poses_found, "events": events_sent}
