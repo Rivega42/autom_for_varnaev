@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from scheduler.repository import create_task
 from scheduler.schedules import ScheduleEntry
@@ -58,6 +59,22 @@ def test_create_task_fields() -> None:
     if created.tzinfo is None:
         created = created.replace(tzinfo=UTC)
     assert created == now
+
+
+def test_create_task_persists_camera_id() -> None:
+    """camera_id из расписания сохраняется в задании (для ROI-зон и покрытия)."""
+    engine = _engine()
+    camera_id = uuid4()
+    entry = _entry().model_copy(update={"camera_id": camera_id})
+    task_id = create_task(engine, entry, datetime(2026, 6, 5, 10, 0, tzinfo=UTC))
+
+    with engine.connect() as conn:
+        row = (
+            conn.execute(select(analysis_tasks).where(analysis_tasks.c.id == task_id))
+            .mappings()
+            .one()
+        )
+    assert row["camera_id"] == camera_id
 
 
 def test_create_task_returns_unique_ids() -> None:

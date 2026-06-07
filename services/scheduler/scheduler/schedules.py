@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -26,6 +27,8 @@ class ScheduleEntry(BaseModel):
     source_ref: str = Field(min_length=1)
     pipeline: str = Field(min_length=1)
     room_id: str | None = None
+    # Камера задания: по ней видеоаналитика берёт ROI-зоны для % покрытия.
+    camera_id: UUID | None = None
     # Период повторения, минут (> 0).
     interval_min: int = Field(gt=0)
     # Параметры пайплайна (fps и пр.), попадают в analysis_tasks.params.

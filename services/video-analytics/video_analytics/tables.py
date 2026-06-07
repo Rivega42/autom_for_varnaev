@@ -14,6 +14,7 @@ analysis_tasks = sa.Table(
     sa.Column("source_type", sa.Text, nullable=False),
     sa.Column("source_ref", sa.Text, nullable=False),
     sa.Column("room_id", sa.Text),
+    sa.Column("camera_id", sa.Uuid),
     sa.Column("pipeline", sa.Text, nullable=False),
     sa.Column("params", sa.JSON),
     sa.Column("status", sa.Text, nullable=False),

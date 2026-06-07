@@ -129,6 +129,8 @@ class AnalysisTask(BaseModel):
     source_type: SourceType
     source_ref: str
     room_id: str | None = None
+    # камера задания: по ней берутся ROI-зоны для % покрытия (None = без покрытия)
+    camera_id: UUID | None = None
     pipeline: str
     params: dict[str, Any] | None = None
     status: TaskStatus
