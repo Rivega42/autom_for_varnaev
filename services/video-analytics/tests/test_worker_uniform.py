@@ -76,6 +76,7 @@ def _run(engine: Engine, frame: Frame) -> CollectingEventSink:
         sink=sink,
         source_factory=lambda *_: source,
         now_fn=lambda: datetime(2026, 6, 6, 10, 1, tzinfo=UTC),
+        save_frame=lambda *_: None,
     )
     return sink
 
