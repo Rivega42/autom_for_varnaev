@@ -13,12 +13,14 @@ import logging
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 import numpy as np
 from sqlalchemy import Engine
 
-from monitoring_shared import AnalysisTask, CameraZone, SourceType
+from monitoring_shared import AnalysisTask, Artifact, ArtifactKind, CameraZone, SourceType
 from video_analytics.actions import CompositeActionAnalyzer, build_action_event
+from video_analytics.artifacts import build_artifact_path, insert_artifact, save_screenshot
 from video_analytics.config import Settings
 from video_analytics.coverage import BoolMask, build_coverage_event, zone_coverage_pct
 from video_analytics.detector import PoseDetector
@@ -84,14 +86,19 @@ def process_task(
     detector: PoseDetector,
     sink: EventSink,
     zones: Sequence[CameraZone] = (),
+    engine: Engine | None = None,
+    artifacts_dir: str = "",
+    save_frame: Callable[[Frame, str], None] = save_screenshot,
     now_fn: Callable[[], datetime] = _now_utc,
 ) -> dict[str, Any]:
     """Прогнать кадры задания через детектор и анализаторы, отправить события.
 
     Если переданы ROI-зоны камеры (`zones`), по накопленной heat-маске движения
     считается % покрытия каждой зоны и эмитится `coverage_report` (один на зону).
-    Возвращает сводку (frames/poses/events/coverage_zones) для
-    `analysis_tasks.result`. Источник кадров закрывается в любом случае.
+    Для первого кадра, породившего события, сохраняется скриншот-доказательство
+    на общий том (один артефакт на задание; запись метаданных в `artifacts`).
+    Сохранение кадра инъектируется (`save_frame`), запись в БД — при заданном
+    `engine`. Возвращает сводку для `analysis_tasks.result`; источник закрывается.
     """
     poses = SimplePoseAnalyzer()
     actions = CompositeActionAnalyzer()
@@ -104,6 +111,9 @@ def process_task(
     # heat-маска движения для расчёта покрытия зон (только если зоны заданы).
     heat: BoolMask | None = None
     prev_frame: Frame | None = None
+    # Кадр-доказательство: первый кадр, породивший события (для скриншота).
+    evidence_frame: Frame | None = None
+    artifact_path: str | None = None
     try:
         for frame in source.frames():
             frames += 1
@@ -115,6 +125,7 @@ def process_task(
                 continue
             poses_found += 1
             ts = now_fn()
+            events_before = events_sent
             for detection in poses.process(pose):
                 sink.emit(build_pose_event(detection, task.room_id, ts))
                 events_sent += 1
@@ -129,6 +140,9 @@ def process_task(
                     sink.emit(build_condition_flagged(brightness, saturation, task.room_id, ts))
                     events_sent += 1
                     uniform_flagged = True
+            # Запомнить первый кадр, на котором появились события (для скриншота).
+            if evidence_frame is None and events_sent > events_before:
+                evidence_frame = frame
         # После прохода кадров — отчёт о покрытии каждой ROI-зоны (один на зону).
         if zones and heat is not None:
             ts = now_fn()
@@ -138,6 +152,24 @@ def process_task(
                 sink.emit(event)
                 events_sent += 1
                 coverage_zones += 1
+        # Скриншот-доказательство: один артефакт на задание при наличии событий.
+        if evidence_frame is not None and engine is not None:
+            artifact_id = uuid4()
+            ats = now_fn()
+            artifact_path = build_artifact_path(artifacts_dir, ats, artifact_id, "jpg")
+            save_frame(evidence_frame, artifact_path)
+            insert_artifact(
+                engine,
+                Artifact(
+                    id=artifact_id,
+                    created_at=ats,
+                    kind=ArtifactKind.SCREENSHOT,
+                    path=artifact_path,
+                    room_id=task.room_id,
+                    camera_id=task.camera_id,
+                    task_id=task.id,
+                ),
+            )
     finally:
         source.close()
     return {
@@ -145,6 +177,7 @@ def process_task(
         "poses": poses_found,
         "events": events_sent,
         "coverage_zones": coverage_zones,
+        "artifact": artifact_path,
     }
 
 
@@ -155,6 +188,7 @@ def run_once(
     detector: PoseDetector,
     sink: EventSink,
     source_factory: SourceFactory,
+    save_frame: Callable[[Frame, str], None] = save_screenshot,
     now_fn: Callable[[], datetime] = _now_utc,
 ) -> bool:
     """Взять одно задание из очереди и обработать его.
@@ -171,7 +205,15 @@ def run_once(
         # ROI-зоны берём по камере задания; без камеры покрытие не считаем.
         zones = load_camera_zones(engine, task.camera_id) if task.camera_id else []
         result = process_task(
-            task, source=source, detector=detector, sink=sink, zones=zones, now_fn=now_fn
+            task,
+            source=source,
+            detector=detector,
+            sink=sink,
+            zones=zones,
+            engine=engine,
+            artifacts_dir=settings.artifacts_dir,
+            save_frame=save_frame,
+            now_fn=now_fn,
         )
     except Exception as exc:
         logger.exception("Видеоаналитика: задание %s завершилось ошибкой", task.id)

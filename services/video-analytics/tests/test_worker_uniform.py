@@ -75,6 +75,7 @@ def _run(engine: Engine, frame: Frame) -> CollectingEventSink:
         detector=_FakeDetector(_pose_with_torso()),
         sink=sink,
         source_factory=lambda *_: source,
+        save_frame=lambda *_: None,  # не трогаем cv2 в тестах
         now_fn=lambda: datetime(2026, 6, 6, 10, 1, tzinfo=UTC),
     )
     return sink
