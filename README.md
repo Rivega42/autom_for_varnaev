@@ -76,6 +76,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) прогоняет `
 | 06 | [`docs/06_BUILD_PLAN.md`](docs/06_BUILD_PLAN.md) | Эпики → атомарные задачи → шаблон issue → метки | планирование |
 | 07 | [`docs/07_VIDEO_ANALYTICS.md`](docs/07_VIDEO_ANALYTICS.md) | Спецификация движка аналитики (перенос рабочего PoC) | аналитика |
 | 08 | [`docs/08_MQTT_CONTRACT.md`](docs/08_MQTT_CONTRACT.md) | Контракт MQTT: топики и payload показаний датчиков | датчики · firmware |
+| 09 | [`docs/09_OPERATIONS.md`](docs/09_OPERATIONS.md) | Эксплуатация: запуск, миграции, бэкап БД, артефакты, логи | DevOps · дежурный |
 | — | [`docs/diagrams/`](docs/diagrams/README.md) | Диаграммы (BPMN 2.0 для процессов + SVG для топологии/сети) | все |
 
 ---
