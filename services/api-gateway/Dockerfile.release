@@ -1,0 +1,40 @@
+# Release-образ api-gateway (E9.4): закрытая сборка через Nuitka.
+# В финальном образе НЕТ .py нашей логики и НЕТ шелла (distroless). Контекст
+# сборки — корень репозитория. Собирать под профилем release (не по умолчанию):
+#   docker build -f services/api-gateway/Dockerfile.release -t api-gateway:release .
+
+# ── Стадия компиляции: Nuitka компилирует точку входа в нативный бинарь ──
+FROM python:3.12-slim AS builder
+# Инструменты для Nuitka: C-компилятор и patchelf (правка RPATH в standalone).
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y build-essential patchelf \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY shared/ ./shared/
+COPY services/api-gateway/ ./api-gateway/
+# Ставим сам сервис (с зависимостями) и Nuitka.
+RUN pip install --no-cache-dir ./shared ./api-gateway nuitka
+# Компилируем api_gateway/__main__.py в standalone-дистрибутив.
+# --include-package целиком тянет пакеты с динамическими импортами
+# (uvicorn выбирает протоколы по строке — статического анализа мало).
+RUN python -m nuitka \
+    --standalone \
+    --assume-yes-for-downloads \
+    --no-progressbar \
+    --include-package=api_gateway \
+    --include-package=monitoring_shared \
+    --include-package=uvicorn \
+    --include-package=fastapi \
+    --include-package=starlette \
+    --include-package=pydantic \
+    --include-package=anyio \
+    --output-dir=/out \
+    ./api-gateway/api_gateway/__main__.py
+
+# ── Стадия запуска: distroless (без шелла, без пакетного менеджера) ──
+FROM gcr.io/distroless/cc-debian12 AS runtime
+# Только скомпилированный дистрибутив — никаких .py нашей логики.
+COPY --from=builder /out/__main__.dist /app
+EXPOSE 8000
+# Нативный бинарь Nuitka (имя — по входному файлу __main__.py).
+ENTRYPOINT ["/app/__main__.bin"]

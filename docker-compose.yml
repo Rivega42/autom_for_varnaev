@@ -17,6 +17,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-monitoring}
       POSTGRES_USER: ${POSTGRES_USER:-monitoring}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+      # Read-only пользователь для Grafana (создаётся init-скриптом 02_grafana_ro.sh).
+      POSTGRES_RO_USER: ${POSTGRES_RO_USER:-grafana_ro}
+      POSTGRES_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:-}
     networks:
       - internal
     volumes:
@@ -54,6 +57,219 @@ services:
       - ./media-gateway/go2rtc.yaml:/config/go2rtc.yaml:ro
     restart: unless-stopped
 
+  grafana:
+    # Дашборды поверх TimescaleDB: ряды датчиков и лента событий (эпик E7).
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?GF_SECURITY_ADMIN_PASSWORD должен быть задан в .env}
+      # Передаются в provisioning datasource (timescaledb.yaml) через ${VAR}.
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_RO_USER: ${POSTGRES_RO_USER:-grafana_ro}
+      POSTGRES_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:-}
+    networks:
+      - internal
+    ports:
+      # дашборд публикуется на хост (единственный наружу, кроме api-gateway)
+      - "3000:3000"
+    volumes:
+      # provisioning и дашборды как код (datasource/дашборды — задачи E7.2–E7.5)
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  log-service:
+    # Единый журнал событий: приём от ingest/analytics, чтение по REST (внутр.).
+    build:
+      context: .
+      dockerfile: services/log-service/Dockerfile
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  api-gateway:
+    # Единственный внешний REST-вход контура; разъёмы АУРА заглушены в v1.
+    # Включён в ОБЕ сети (internal + integration) — мост к АУРА (обмена нет в v1).
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    environment:
+      LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
+      API_KEY: ${API_KEY:-}
+      AURA_INTEGRATION_ENABLED: ${AURA_INTEGRATION_ENABLED:-false}
+    networks:
+      - internal
+      - integration
+    ports:
+      # единственный (кроме Grafana) опубликованный наружу REST-вход
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      log-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  ingest-sensors:
+    # Воркер приёма показаний по MQTT и записи в БД (внутр., без порта наружу).
+    build:
+      context: .
+      dockerfile: services/ingest-sensors/Dockerfile
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+      MQTT_HOST: ${MQTT_HOST:-mqtt-broker}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-monitoring}
+      LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+      mqtt-broker:
+        condition: service_started
+    restart: unless-stopped
+
+  scheduler:
+    # Демон планировщика: создаёт задания на анализ по расписаниям (внутр.).
+    build:
+      context: .
+      dockerfile: services/scheduler/Dockerfile
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+      SCHEDULER_CONFIG: ${SCHEDULER_CONFIG:-/config/schedules.json}
+      SCHEDULER_TICK_S: ${SCHEDULER_TICK_S:-60}
+    networks:
+      - internal
+    volumes:
+      # Расписания планировщика. Файла schedules.json может не быть —
+      # тогда заданий не создаётся (см. config/README.md).
+      - ./config:/config:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  video-analytics:
+    # Воркер видеоаналитики: задания из очереди → события в log-service (внутр.).
+    build:
+      context: .
+      dockerfile: services/video-analytics/Dockerfile
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+      LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
+      ARTIFACTS_DIR: ${ARTIFACTS_DIR:-/data/artifacts}
+      ANALYTICS_FPS: ${ANALYTICS_FPS:-5}
+      ANALYTICS_MODEL_PATH: ${ANALYTICS_MODEL_PATH:-/models/pose_landmarker.task}
+    networks:
+      - internal
+    volumes:
+      - artifacts:/data/artifacts
+      # Модель MediaPipe PoseLandmarker — бинарный ассет; положить в ./models
+      # (см. models/README.md). Без модели воркер не стартует.
+      - ./models:/models:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      log-service:
+        condition: service_started
+      media-gateway:
+        condition: service_started
+    restart: unless-stopped
+
+  # ── Профиль release (E9.7): закрытые сборки через Nuitka ──
+  # dev-сервисы выше работают ПО УМОЛЧАНИЮ. Release-варианты ниже поднимаются
+  # ТОЛЬКО под профилем release (не дефолт), прежде всего для СБОРКИ закрытых
+  # образов:  docker compose --profile release build
+  # Не запускайте release-вариант одновременно с его dev-двойником (один порт).
+  api-gateway-release:
+    profiles: ["release"]
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile.release
+    environment:
+      LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
+      API_KEY: ${API_KEY:-}
+      AURA_INTEGRATION_ENABLED: ${AURA_INTEGRATION_ENABLED:-false}
+    networks:
+      - internal
+      - integration
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      log-service:
+        condition: service_healthy
+    # healthcheck не задаём: distroless-образ без python и шелла.
+    restart: unless-stopped
+
+  video-analytics-release:
+    profiles: ["release"]
+    build:
+      context: .
+      dockerfile: services/video-analytics/Dockerfile.release
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+      LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
+      ARTIFACTS_DIR: ${ARTIFACTS_DIR:-/data/artifacts}
+      ANALYTICS_FPS: ${ANALYTICS_FPS:-5}
+      ANALYTICS_MODEL_PATH: ${ANALYTICS_MODEL_PATH:-/models/pose_landmarker.task}
+    networks:
+      - internal
+    volumes:
+      - artifacts:/data/artifacts
+      - ./models:/models:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      log-service:
+        condition: service_started
+      media-gateway:
+        condition: service_started
+    restart: unless-stopped
+
 networks:
   internal:
     driver: bridge
@@ -64,3 +280,4 @@ volumes:
   artifacts:
   db_data:
   mqtt_data:
+  grafana_data:
