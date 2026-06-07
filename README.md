@@ -1,22 +1,23 @@
 # Система мониторинга помещений · спецификация для разработки
 
 <p align="center">
-  <img alt="Статус: спецификация" src="https://img.shields.io/badge/%D1%81%D1%82%D0%B0%D1%82%D1%83%D1%81-%D1%81%D0%BF%D0%B5%D1%86%D0%B8%D1%84%D0%B8%D0%BA%D0%B0%D1%86%D0%B8%D1%8F-blue">
+  <img alt="Статус: v1 реализован" src="https://img.shields.io/badge/status-v1%20ready-success">
   <img alt="Версия: v1 standalone" src="https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-v1%20standalone-success">
   <img alt="Стек: Python 3.12 · FastAPI · TimescaleDB" src="https://img.shields.io/badge/%D1%81%D1%82%D0%B5%D0%BA-Python%203.12%20%C2%B7%20FastAPI%20%C2%B7%20TimescaleDB-3776AB">
   <img alt="Аналитика: MediaPipe PoseLandmarker" src="https://img.shields.io/badge/%D0%B0%D0%BD%D0%B0%D0%BB%D0%B8%D1%82%D0%B8%D0%BA%D0%B0-MediaPipe%20PoseLandmarker-FF6F00">
   <img alt="Документация: на русском" src="https://img.shields.io/badge/%D0%B4%D0%BE%D0%BA%D1%83%D0%BC%D0%B5%D0%BD%D1%82%D0%B0%D1%86%D0%B8%D1%8F-%D1%80%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-informational">
 </p>
 
-Пакет проектной документации и плана работ для развёртывания комплекса силами
-Claude Code. Заказчик — владелец продукта **АУРА**; мы разрабатываем подсистему
-**датчиков и видеоаналитики**, которая работает на одном сервере с АУРА.
+Комплекс мониторинга помещений: датчики (t°/влажность/ИК) и видеоаналитика на
+одном сервере с продуктом заказчика **АУРА**. Заказчик — владелец АУРА; мы
+разрабатываем **подсистему датчиков и видеоаналитики**.
 
 > [!NOTE]
-> **Это репозиторий-спецификация.** Здесь нет прикладного кода — здесь
-> архитектура, контракты, диаграммы и план работ. Код создаётся по этому плану
-> (Claude Code разворачивает рабочий репозиторий по
-> [`docs/06_BUILD_PLAN.md`](docs/06_BUILD_PLAN.md)).
+> **v1 реализован** и работает как standalone (без интеграции с АУРА, но с
+> заглушёнными разъёмами для неё). В репозитории — рабочий код всех сервисов,
+> миграции БД, контейнеризация и документация. Как развернуть —
+> [`docs/10_DEPLOYMENT.md`](docs/10_DEPLOYMENT.md); из чего состоит —
+> [`docs/diagrams/06_components.md`](docs/diagrams/06_components.md).
 
 ---
 
@@ -77,7 +78,8 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) прогоняет `
 | 07 | [`docs/07_VIDEO_ANALYTICS.md`](docs/07_VIDEO_ANALYTICS.md) | Спецификация движка аналитики (перенос рабочего PoC) | аналитика |
 | 08 | [`docs/08_MQTT_CONTRACT.md`](docs/08_MQTT_CONTRACT.md) | Контракт MQTT: топики и payload показаний датчиков | датчики · firmware |
 | 09 | [`docs/09_OPERATIONS.md`](docs/09_OPERATIONS.md) | Эксплуатация: запуск, миграции, бэкап БД, артефакты, логи | DevOps · дежурный |
-| — | [`docs/diagrams/`](docs/diagrams/README.md) | Диаграммы (BPMN 2.0 для процессов + SVG для топологии/сети) | все |
+| 10 | [`docs/10_DEPLOYMENT.md`](docs/10_DEPLOYMENT.md) | Развёртывание с нуля: .env, ассеты, миграции, сиды, проверка | DevOps |
+| — | [`docs/diagrams/`](docs/diagrams/README.md) | Схемы: состав продукта и взаимодействие (Mermaid) + BPMN/SVG | все |
 
 ---
 
@@ -143,11 +145,27 @@ Camunda Modeler / bpmn.io) с SVG-превью. Топология и сетев
 .
 ├─ CLAUDE.md                  # постоянные инструкции для Claude Code
 ├─ README.md                  # этот файл
+├─ docker-compose.yml         # оркестрация: все сервисы, сети, тома
+├─ .env.example               # пример переменных окружения (без секретов)
+├─ services/                  # наши сервисы (Python 3.12 / FastAPI)
+│  ├─ api-gateway/            # внешний REST-вход + разъёмы АУРА (заглушены)
+│  ├─ ingest-sensors/         # MQTT → БД, события по порогам/«тишине»
+│  ├─ video-analytics/        # MediaPipe: позы, действия, покрытие зон, скриншоты
+│  ├─ scheduler/              # задания на анализ по расписанию
+│  └─ log-service/            # единый журнал событий
+├─ shared/                    # общие Pydantic-модели и конверт API
+├─ db/                        # Alembic-миграции, init-скрипты, Dockerfile миграций
+├─ media-gateway/             # go2rtc.yaml (RTSP/ONVIF → воркер + превью)
+├─ mqtt/                      # конфиг Mosquitto
+├─ grafana/                   # provisioning datasource + дашборды + алерты
+├─ firmware/esphome/          # эталонные YAML узлов ESP32-C3
+├─ models/                    # бинарная модель MediaPipe (внешний ассет)
+├─ config/                    # расписания планировщика
+├─ scripts/                   # утилиты (проверки, сиды)
+├─ tests/                     # корневые тесты (структура, миграции, compose)
 └─ docs/                      # документация — источник истины
-   ├─ 00…08_*.md              # практики, архитектура, контракты, план работ, MQTT
-   └─ diagrams/               # BPMN 2.0 (.bpmn + .svg) и архитектурные SVG
+   ├─ 00…10_*.md              # практики, архитектура, контракты, эксплуатация, деплой
+   └─ diagrams/               # схемы состава/взаимодействия (Mermaid) + BPMN/SVG
 ```
 
-Целевая структура рабочего монорепо (сервисы, БД, прошивки, Grafana) описана в
-[`docs/01_ARCHITECTURE.md` §8](docs/01_ARCHITECTURE.md) — её Claude Code разворачивает
-по плану работ.
+Подробно компоненты и обоснование стека — [`docs/01_ARCHITECTURE.md`](docs/01_ARCHITECTURE.md).

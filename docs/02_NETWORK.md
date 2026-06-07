@@ -56,7 +56,9 @@
 | Контейнер | `internal` | `integration` | Порт наружу хоста |
 |---|:---:|:---:|---|
 | `db` (TimescaleDB) | ✅ | — | нет |
+| `migrate` (one-shot, миграции) | ✅ | — | нет |
 | `mqtt-broker` | ✅ | — | только если узлы датчиков в отдельной физ. сети* |
+| `media-gateway` (go2rtc) | ✅ | — | нет |
 | `ingest-sensors` | ✅ | — | нет |
 | `video-analytics` | ✅ | — | нет |
 | `scheduler` | ✅ | — | нет |
