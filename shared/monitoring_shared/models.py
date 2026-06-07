@@ -197,6 +197,9 @@ class Camera(BaseModel):
     rtsp_url: str
     viewpoint: dict[str, Any] | None = None
     enabled: bool = True
+    # Пофункциональные тумблеры видеоаналитики камеры: {"pose","actions","uniform",
+    # "coverage": bool}. None или отсутствие ключа = функция включена (по умолчанию).
+    analytics: dict[str, bool] | None = None
 
 
 class ZoneType(StrEnum):

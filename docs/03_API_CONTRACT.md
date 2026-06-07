@@ -60,6 +60,8 @@
 | `UNAUTHORIZED` | 401 | отсутствует или неверен `X-API-Key` |
 | `TASK_NOT_FOUND` | 404 | задание с таким id отсутствует |
 | `EVENT_NOT_FOUND` | 404 | событие отсутствует |
+| `CAMERA_NOT_FOUND` | 404 | камера с таким id отсутствует |
+| `ZONE_NOT_FOUND` | 404 | ROI-зона с таким id отсутствует |
 | `NOT_IMPLEMENTED` | 501 | эндпойнт-разъём АУРА выключен в v1 |
 | `INTERNAL` | 500 | прочая внутренняя ошибка |
 
@@ -151,6 +153,34 @@ GET /api/v1/analysis-tasks?status=&from=&to=  → список
 ```
 GET /api/v1/readings?room=&metric=&from=&to=&limit=
 ```
+
+### 3.5 Настройка видеоаналитики: камеры и ROI-зоны
+
+Интерфейс настройки контура под объект: включение камеры и её функций аналитики,
+управление ROI-зонами для расчёта % покрытия. Все эндпойнты требуют `X-API-Key`.
+
+```
+GET   /api/v1/cameras                         # список камер
+GET   /api/v1/cameras/{camera_id}             # камера или 404 CAMERA_NOT_FOUND
+PATCH /api/v1/cameras/{camera_id}             # enabled и/или тумблеры analytics
+GET   /api/v1/cameras/{camera_id}/zones       # ROI-зоны камеры
+POST  /api/v1/cameras/{camera_id}/zones       # создать ROI-зону
+PATCH /api/v1/zones/{zone_id}                 # изменить зону или 404 ZONE_NOT_FOUND
+DELETE /api/v1/zones/{zone_id}                # удалить зону или 404 ZONE_NOT_FOUND
+```
+
+**Тело `PATCH /cameras/{id}`** (поля необязательны; `analytics` сливается с текущим):
+```json
+{ "enabled": true, "analytics": { "pose": true, "actions": true, "uniform": true, "coverage": false } }
+```
+Функции аналитики: `pose`, `actions`, `uniform`, `coverage`. Отсутствие ключа или
+`analytics=null` = функция включена. `enabled=false` отключает всю аналитику камеры.
+
+**Тело `POST /cameras/{id}/zones`** (полигон — ≥3 вершин, координаты нормированы [0..1]):
+```json
+{ "zone_type": "table", "polygon": [[0.1,0.1],[0.5,0.1],[0.5,0.5]], "note": "стол" }
+```
+`zone_type`: `table` | `floor` | `window`. Типы зон и модель — `docs/04_DATA_MODEL.md`.
 
 ---
 

@@ -18,7 +18,14 @@ from uuid import uuid4
 import numpy as np
 from sqlalchemy import Engine
 
-from monitoring_shared import AnalysisTask, Artifact, ArtifactKind, CameraZone, SourceType
+from monitoring_shared import (
+    AnalysisTask,
+    Artifact,
+    ArtifactKind,
+    Camera,
+    CameraZone,
+    SourceType,
+)
 from video_analytics.actions import CompositeActionAnalyzer, build_action_event
 from video_analytics.artifacts import build_artifact_path, insert_artifact, save_screenshot
 from video_analytics.config import Settings
@@ -29,6 +36,7 @@ from video_analytics.landmarks import PoseLandmark
 from video_analytics.pose_events import SimplePoseAnalyzer, build_pose_event
 from video_analytics.repository import (
     claim_next_task,
+    load_camera,
     load_camera_zones,
     mark_done,
     mark_failed,
@@ -54,6 +62,9 @@ _TORSO_LANDMARKS = (
 # Порог межкадровой разницы (по любому каналу), выше которого пиксель — «движение».
 _MOTION_THRESHOLD = 25
 
+# Все функции аналитики выключены (для камеры с enabled=false).
+_ALL_OFF = {"pose": False, "actions": False, "uniform": False, "coverage": False}
+
 # Фабрика источника кадров по (тип, ссылка, целевой fps) — для подмены в тестах.
 SourceFactory = Callable[[SourceType, str, int], FrameSource]
 
@@ -61,6 +72,21 @@ SourceFactory = Callable[[SourceType, str, int], FrameSource]
 def _now_utc() -> datetime:
     """Текущее время в UTC (вынесено для подмены в тестах)."""
     return datetime.now(UTC)
+
+
+def _feature_on(flags: dict[str, bool] | None, name: str) -> bool:
+    """Включена ли функция аналитики. None/отсутствие ключа = включена."""
+    return True if flags is None else flags.get(name, True)
+
+
+def _resolve_analytics(camera: Camera | None) -> dict[str, bool] | None:
+    """Свести тумблеры аналитики камеры. Нет камеры = всё включено;
+    камера выключена (enabled=false) = всё выключено; иначе — её флаги."""
+    if camera is None:
+        return None
+    if not camera.enabled:
+        return dict(_ALL_OFF)
+    return camera.analytics
 
 
 def _accumulate_motion(heat: BoolMask | None, prev: Frame | None, frame: Frame) -> BoolMask:
@@ -86,6 +112,7 @@ def process_task(
     detector: PoseDetector,
     sink: EventSink,
     zones: Sequence[CameraZone] = (),
+    analytics: dict[str, bool] | None = None,
     engine: Engine | None = None,
     artifacts_dir: str = "",
     save_frame: Callable[[Frame, str], None] = save_screenshot,
@@ -93,13 +120,17 @@ def process_task(
 ) -> dict[str, Any]:
     """Прогнать кадры задания через детектор и анализаторы, отправить события.
 
-    Если переданы ROI-зоны камеры (`zones`), по накопленной heat-маске движения
-    считается % покрытия каждой зоны и эмитится `coverage_report` (один на зону).
-    Для первого кадра, породившего события, сохраняется скриншот-доказательство
-    на общий том (один артефакт на задание; запись метаданных в `artifacts`).
-    Сохранение кадра инъектируется (`save_frame`), запись в БД — при заданном
-    `engine`. Возвращает сводку для `analysis_tasks.result`; источник закрывается.
+    Функции аналитики включаются пофункционально через `analytics` (тумблеры
+    камеры: pose/actions/uniform/coverage; None = все включены). Если переданы
+    ROI-зоны (`zones`) и покрытие включено — по heat-маске движения считается %
+    покрытия и эмитится `coverage_report` (один на зону). Для первого кадра с
+    событиями сохраняется скриншот-доказательство (инъекция `save_frame`, запись
+    в `artifacts` при заданном `engine`). Возвращает сводку; источник закрывается.
     """
+    pose_on = _feature_on(analytics, "pose")
+    actions_on = _feature_on(analytics, "actions")
+    uniform_on = _feature_on(analytics, "uniform")
+    coverage_on = _feature_on(analytics, "coverage")
     poses = SimplePoseAnalyzer()
     actions = CompositeActionAnalyzer()
     frames = 0
@@ -117,7 +148,7 @@ def process_task(
     try:
         for frame in source.frames():
             frames += 1
-            if zones:
+            if zones and coverage_on:
                 heat = _accumulate_motion(heat, prev_frame, frame)
                 prev_frame = frame
             pose = detector.detect(frame)
@@ -126,15 +157,21 @@ def process_task(
             poses_found += 1
             ts = now_fn()
             events_before = events_sent
-            for detection in poses.process(pose):
-                sink.emit(build_pose_event(detection, task.room_id, ts))
-                events_sent += 1
-            for action in actions.process(pose, ts):
-                sink.emit(build_action_event(action, task.room_id, ts))
-                events_sent += 1
+            if pose_on:
+                for detection in poses.process(pose):
+                    sink.emit(build_pose_event(detection, task.room_id, ts))
+                    events_sent += 1
+            if actions_on:
+                for action in actions.process(pose, ts):
+                    sink.emit(build_action_event(action, task.room_id, ts))
+                    events_sent += 1
             # Эвристика «белого халата»: при видимом торсе и отсутствии халата —
             # одно событие condition_flagged на задание.
-            if not uniform_flagged and all(pose.visible(lm) for lm in _TORSO_LANDMARKS):
+            if (
+                uniform_on
+                and not uniform_flagged
+                and all(pose.visible(lm) for lm in _TORSO_LANDMARKS)
+            ):
                 brightness, saturation = mean_brightness_saturation(frame, torso_polygon(pose))
                 if not is_white_coat(brightness, saturation):
                     sink.emit(build_condition_flagged(brightness, saturation, task.room_id, ts))
@@ -144,7 +181,7 @@ def process_task(
             if evidence_frame is None and events_sent > events_before:
                 evidence_frame = frame
         # После прохода кадров — отчёт о покрытии каждой ROI-зоны (один на зону).
-        if zones and heat is not None:
+        if zones and coverage_on and heat is not None:
             ts = now_fn()
             for zone in zones:
                 cov = zone_coverage_pct(heat, zone.polygon)
@@ -202,14 +239,21 @@ def run_once(
     logger.info("Видеоаналитика: взято задание %s (%s)", task.id, task.source_ref)
     try:
         source = source_factory(task.source_type, task.source_ref, settings.fps)
-        # ROI-зоны берём по камере задания; без камеры покрытие не считаем.
-        zones = load_camera_zones(engine, task.camera_id) if task.camera_id else []
+        # Тумблеры аналитики и ROI-зоны берём по камере задания.
+        camera = load_camera(engine, task.camera_id) if task.camera_id else None
+        analytics = _resolve_analytics(camera)
+        zones = (
+            load_camera_zones(engine, task.camera_id)
+            if task.camera_id and _feature_on(analytics, "coverage")
+            else []
+        )
         result = process_task(
             task,
             source=source,
             detector=detector,
             sink=sink,
             zones=zones,
+            analytics=analytics,
             engine=engine,
             artifacts_dir=settings.artifacts_dir,
             save_frame=save_frame,

@@ -10,14 +10,21 @@ from fastapi import Depends, FastAPI, Query
 from sqlalchemy import Engine
 
 from api_gateway.auth import make_require_api_key
+from api_gateway.cameras_repository import get_camera, list_cameras, update_camera
 from api_gateway.config import Settings
 from api_gateway.db import build_engine
 from api_gateway.errors import api_error, register_error_handlers
 from api_gateway.events_client import EventsClient, HttpEventsClient
 from api_gateway.integration import register_integration_routes
 from api_gateway.readings_repository import list_readings
-from api_gateway.schemas import AnalysisTaskCreate
+from api_gateway.schemas import (
+    AnalysisTaskCreate,
+    CameraUpdate,
+    CameraZoneCreate,
+    CameraZoneUpdate,
+)
 from api_gateway.tasks_repository import create_task, get_task, list_tasks
+from api_gateway.zones_repository import create_zone, delete_zone, list_zones, update_zone
 from monitoring_shared import ErrorCode, ok
 
 # Базовый префикс контракта (docs/03_API_CONTRACT.md §1).
@@ -133,6 +140,60 @@ def create_app(
             limit=limit,
         )
         return ok({"items": items, "total": len(items)})
+
+    # ── Настройка видеоаналитики: камеры и ROI-зоны (docs/03_API_CONTRACT.md §3.4) ──
+
+    @app.get(f"{API_PREFIX}/cameras", dependencies=[auth])
+    def get_cameras() -> dict[str, Any]:
+        """Список камер с состоянием (enabled) и тумблерами аналитики."""
+        items = list_cameras(engine)
+        return ok({"items": items, "total": len(items)})
+
+    @app.get(f"{API_PREFIX}/cameras/{{camera_id}}", dependencies=[auth])
+    def get_one_camera(camera_id: UUID) -> dict[str, Any]:
+        """Камера по id или 404 CAMERA_NOT_FOUND."""
+        item = get_camera(engine, camera_id)
+        if item is None:
+            raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
+        return ok(item)
+
+    @app.patch(f"{API_PREFIX}/cameras/{{camera_id}}", dependencies=[auth])
+    def patch_camera(camera_id: UUID, body: CameraUpdate) -> dict[str, Any]:
+        """Включить/выключить камеру и функции её видеоаналитики."""
+        item = update_camera(engine, camera_id, body)
+        if item is None:
+            raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
+        return ok(item)
+
+    @app.get(f"{API_PREFIX}/cameras/{{camera_id}}/zones", dependencies=[auth])
+    def get_camera_zones(camera_id: UUID) -> dict[str, Any]:
+        """ROI-зоны камеры (для % покрытия)."""
+        if get_camera(engine, camera_id) is None:
+            raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
+        items = list_zones(engine, camera_id)
+        return ok({"items": items, "total": len(items)})
+
+    @app.post(f"{API_PREFIX}/cameras/{{camera_id}}/zones", dependencies=[auth])
+    def post_camera_zone(camera_id: UUID, body: CameraZoneCreate) -> dict[str, Any]:
+        """Создать ROI-зону камеры."""
+        if get_camera(engine, camera_id) is None:
+            raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
+        return ok(create_zone(engine, camera_id, body))
+
+    @app.patch(f"{API_PREFIX}/zones/{{zone_id}}", dependencies=[auth])
+    def patch_zone(zone_id: int, body: CameraZoneUpdate) -> dict[str, Any]:
+        """Изменить ROI-зону или 404 ZONE_NOT_FOUND."""
+        item = update_zone(engine, zone_id, body)
+        if item is None:
+            raise api_error(ErrorCode.ZONE_NOT_FOUND, "Зона не найдена")
+        return ok(item)
+
+    @app.delete(f"{API_PREFIX}/zones/{{zone_id}}", dependencies=[auth])
+    def remove_zone(zone_id: int) -> dict[str, Any]:
+        """Удалить ROI-зону или 404 ZONE_NOT_FOUND."""
+        if not delete_zone(engine, zone_id):
+            raise api_error(ErrorCode.ZONE_NOT_FOUND, "Зона не найдена")
+        return ok({"deleted": zone_id})
 
     # СТЫК-АУРА (v2): заглушённые разъёмы /integration/* (501 при выключенном флаге).
     register_integration_routes(app, settings, dependencies=[auth])

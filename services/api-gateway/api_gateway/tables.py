@@ -36,3 +36,27 @@ sensor_readings = sa.Table(
     sa.Column("value", sa.Float, nullable=False),
     sa.Column("unit", sa.Text, nullable=False),
 )
+
+
+cameras = sa.Table(
+    "cameras",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("room_id", sa.Text, nullable=False),
+    sa.Column("name", sa.Text, nullable=False),
+    sa.Column("rtsp_url", sa.Text, nullable=False),
+    sa.Column("viewpoint", sa.JSON),
+    sa.Column("enabled", sa.Boolean, nullable=False),
+    sa.Column("analytics", sa.JSON),
+)
+
+
+camera_zones = sa.Table(
+    "camera_zones",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column("camera_id", sa.Uuid, nullable=False),
+    sa.Column("zone_type", sa.Text, nullable=False),
+    sa.Column("polygon", sa.JSON, nullable=False),
+    sa.Column("note", sa.Text),
+)

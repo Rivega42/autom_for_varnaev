@@ -103,9 +103,11 @@ DATABASE_URL=postgresql+psycopg2://monitoring:$POSTGRES_PASSWORD@localhost:5432/
 DATABASE_URL=... python scripts/seed.py db/seeds/object.yaml --apply
 ```
 
-> **ROI-зоны (`camera_zones`)** для расчёта % покрытия заполняются отдельно
-> (нормированные полигоны на камеру) — пока вставляются SQL-ом в таблицу
-> `camera_zones`. Без зон видеоаналитика работает, просто не эмитит `coverage_report`.
+> **ROI-зоны и тумблеры аналитики** настраиваются по REST через `api-gateway`
+> (`docs/03_API_CONTRACT.md` §3.5): `POST /api/v1/cameras/{id}/zones` — добавить
+> зону покрытия; `PATCH /api/v1/cameras/{id}` — включить/выключить камеру и
+> отдельные функции (`pose`/`actions`/`uniform`/`coverage`). Без зон аналитика
+> работает, просто не эмитит `coverage_report`.
 
 ---
 

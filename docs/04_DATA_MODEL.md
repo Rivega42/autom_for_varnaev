@@ -176,8 +176,12 @@ room_id       text REFERENCES rooms(id)
 name          text NOT NULL
 rtsp_url      text NOT NULL        -- источник для media-gateway
 viewpoint     jsonb                -- пресет ракурса из PoC
-enabled       boolean DEFAULT true
+enabled       boolean DEFAULT true  -- камера активна; false = аналитика выключена
+analytics     jsonb                -- тумблеры функций {pose,actions,uniform,coverage}; null = все вкл.
 ```
+
+> Управление `enabled`/`analytics` и ROI-зонами — через REST `api-gateway`
+> (`docs/03_API_CONTRACT.md` §3.5); воркер видеоаналитики учитывает тумблеры.
 
 ### camera_zones
 ```
