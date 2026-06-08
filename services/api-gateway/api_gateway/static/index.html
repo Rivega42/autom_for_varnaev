@@ -44,6 +44,19 @@
     <section id="cameras" class="panel">
       <strong>Камеры</strong>
       <ul id="camlist"></ul>
+      <p id="emptyhint" class="hint" hidden>
+        Камер нет. Заведите камеру в форме ниже или через сид-конфиг
+        (<code>db/seeds/object.yaml</code> + <code>scripts/seed.py --apply</code>).
+      </p>
+
+      <details id="addcam">
+        <summary>Добавить камеру</summary>
+        <div class="row"><input id="nc_room" placeholder="помещение (room id)" /></div>
+        <div class="row"><input id="nc_name" placeholder="имя = поток в go2rtc" /></div>
+        <div class="row"><input id="nc_rtsp" placeholder="rtsp://…" /></div>
+        <div class="row"><button id="nc_save">Создать</button></div>
+        <p class="hint">Имя должно совпадать с именем потока в go2rtc.yaml.</p>
+      </details>
     </section>
 
     <section class="editor panel" id="editor" hidden>

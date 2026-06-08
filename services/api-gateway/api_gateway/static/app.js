@@ -55,6 +55,7 @@ async function loadCameras() {
 function renderCamList() {
   const ul = $("camlist");
   ul.innerHTML = "";
+  $("emptyhint").hidden = cameras.length > 0;
   for (const cam of cameras) {
     const li = document.createElement("li");
     li.textContent = cam.name + (cam.enabled ? "" : " (выкл)");
@@ -215,7 +216,31 @@ async function deleteZone(id) {
   }
 }
 
+async function createCamera() {
+  const body = {
+    room: $("nc_room").value.trim(),
+    name: $("nc_name").value.trim(),
+    rtsp_url: $("nc_rtsp").value.trim(),
+  };
+  if (!body.room || !body.name || !body.rtsp_url) {
+    msg("Заполните помещение, имя и rtsp_url", false);
+    return;
+  }
+  try {
+    const cam = await api("/cameras", { method: "POST", body: JSON.stringify(body) });
+    $("nc_room").value = $("nc_name").value = $("nc_rtsp").value = "";
+    $("addcam").open = false;
+    await loadCameras();
+    const created = cameras.find((c) => c.id === cam.id);
+    if (created) selectCamera(created);
+    msg("Камера заведена");
+  } catch (e) {
+    msg("Ошибка создания камеры: " + e.message, false);
+  }
+}
+
 $("reload").onclick = loadCameras;
+$("nc_save").onclick = createCamera;
 $("saveCam").onclick = saveCamera;
 $("loadFrame").onclick = loadFrame;
 $("saveZone").onclick = saveZone;

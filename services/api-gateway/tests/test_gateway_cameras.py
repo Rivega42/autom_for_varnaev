@@ -70,6 +70,29 @@ def test_get_camera_missing() -> None:
     assert resp.json()["error"]["code"] == "CAMERA_NOT_FOUND"
 
 
+def test_create_camera() -> None:
+    """POST /cameras заводит камеру, и она появляется в списке."""
+    client = _client(_engine())
+    body = {"room": "room-01", "name": "cam-09", "rtsp_url": "rtsp://cam-09/stream"}
+    created = client.post("/api/v1/cameras", json=body)
+    assert created.status_code == 200
+    data = created.json()["data"]
+    assert data["name"] == "cam-09"
+    assert data["room"] == "room-01"
+    assert data["enabled"] is True
+    assert data["analytics"] is None
+    # видна в списке и читается по выданному id
+    assert client.get(f"/api/v1/cameras/{data['id']}").status_code == 200
+    assert client.get("/api/v1/cameras").json()["data"]["total"] == 1
+
+
+def test_create_camera_validation() -> None:
+    """Пустые обязательные поля → 422 VALIDATION_ERROR."""
+    body = {"room": "", "name": "x", "rtsp_url": "y"}
+    resp = _client(_engine()).post("/api/v1/cameras", json=body)
+    assert resp.status_code == 422
+
+
 def test_patch_camera_toggles() -> None:
     """PATCH выключает функцию аналитики и камеру; флаги analytics сливаются."""
     engine = _engine()

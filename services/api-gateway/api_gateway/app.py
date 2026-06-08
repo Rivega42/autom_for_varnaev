@@ -12,7 +12,12 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Engine
 
 from api_gateway.auth import make_require_api_key
-from api_gateway.cameras_repository import get_camera, list_cameras, update_camera
+from api_gateway.cameras_repository import (
+    create_camera,
+    get_camera,
+    list_cameras,
+    update_camera,
+)
 from api_gateway.config import Settings
 from api_gateway.db import build_engine
 from api_gateway.errors import api_error, register_error_handlers
@@ -21,6 +26,7 @@ from api_gateway.integration import register_integration_routes
 from api_gateway.readings_repository import list_readings
 from api_gateway.schemas import (
     AnalysisTaskCreate,
+    CameraCreate,
     CameraUpdate,
     CameraZoneCreate,
     CameraZoneUpdate,
@@ -157,6 +163,11 @@ def create_app(
         """Список камер с состоянием (enabled) и тумблерами аналитики."""
         items = list_cameras(engine)
         return ok({"items": items, "total": len(items)})
+
+    @app.post(f"{API_PREFIX}/cameras", dependencies=[auth])
+    def post_camera(body: CameraCreate) -> dict[str, Any]:
+        """Завести камеру в справочнике объекта (альтернатива сид-конфигу)."""
+        return ok(create_camera(engine, body))
 
     @app.get(f"{API_PREFIX}/cameras/{{camera_id}}", dependencies=[auth])
     def get_one_camera(camera_id: UUID) -> dict[str, Any]:

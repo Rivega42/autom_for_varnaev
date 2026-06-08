@@ -164,6 +164,7 @@ GET /api/v1/readings?room=&metric=&from=&to=&limit=
 
 ```
 GET   /api/v1/cameras                         # список камер
+POST  /api/v1/cameras                         # завести камеру в справочнике
 GET   /api/v1/cameras/{camera_id}             # камера или 404 CAMERA_NOT_FOUND
 PATCH /api/v1/cameras/{camera_id}             # enabled и/или тумблеры analytics
 GET   /api/v1/cameras/{camera_id}/snapshot    # JPEG-кадр от go2rtc (фон для ROI)
@@ -179,6 +180,14 @@ DELETE /api/v1/zones/{zone_id}                # удалить зону или 4
 **Веб-GUI настройки** видеоаналитики отдаётся api-gateway по адресу **`/ui/`**
 (статический SPA): список камер, тумблеры функций, разметка ROI-зон мышью поверх
 кадра-превью. Сам GUI без ключа, его запросы к API несут `X-API-Key`.
+
+**Тело `POST /cameras`** (заводит камеру; альтернатива сид-конфигу `db/seeds/object.yaml`):
+```json
+{ "room": "room-01", "name": "cam-01", "rtsp_url": "rtsp://camera.local/stream", "enabled": true }
+```
+`name` обязано совпадать с именем потока в `media-gateway/go2rtc.yaml` (по нему
+берётся кадр-превью). `room` — id существующего помещения. Ответ `data` — созданная
+камера (с выданным `id`); `analytics=null` (все функции включены).
 
 **Тело `PATCH /cameras/{id}`** (поля необязательны; `analytics` сливается с текущим):
 ```json

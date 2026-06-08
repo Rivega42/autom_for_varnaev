@@ -7,11 +7,11 @@
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from sqlalchemy import Engine, select, update
+from sqlalchemy import Engine, insert, select, update
 
-from api_gateway.schemas import CameraUpdate
+from api_gateway.schemas import CameraCreate, CameraUpdate
 from api_gateway.tables import cameras
 
 
@@ -32,6 +32,27 @@ def list_cameras(engine: Engine) -> list[dict[str, Any]]:
     """Список всех камер."""
     with engine.connect() as conn:
         return [camera_to_api(dict(r)) for r in conn.execute(select(cameras)).mappings()]
+
+
+def create_camera(engine: Engine, body: CameraCreate) -> dict[str, Any]:
+    """Завести камеру в справочнике; вернуть её в форме API.
+
+    Аналитика по умолчанию не задаётся (None = все функции включены). Камера
+    появляется в веб-GUI, где настраиваются тумблеры функций и ROI-зоны.
+    """
+    camera_id = uuid4()
+    values = {
+        "id": camera_id,
+        "room_id": body.room,
+        "name": body.name,
+        "rtsp_url": body.rtsp_url,
+        "viewpoint": body.viewpoint,
+        "enabled": body.enabled,
+        "analytics": None,
+    }
+    with engine.begin() as conn:
+        conn.execute(insert(cameras).values(**values))
+    return camera_to_api(values)
 
 
 def get_camera(engine: Engine, camera_id: UUID) -> dict[str, Any] | None:

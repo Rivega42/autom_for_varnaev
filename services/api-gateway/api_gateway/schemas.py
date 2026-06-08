@@ -39,6 +39,20 @@ def _validate_polygon(polygon: list[list[float]]) -> list[list[float]]:
     return polygon
 
 
+class CameraCreate(BaseModel):
+    """Тело POST /cameras: завести камеру в справочнике объекта.
+
+    `room` — id помещения (должно существовать в справочнике). `name` обязано
+    совпадать с именем потока в go2rtc.yaml (по нему берётся кадр-превью).
+    """
+
+    room: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    rtsp_url: str = Field(min_length=1)
+    enabled: bool = True
+    viewpoint: dict[str, Any] | None = None
+
+
 class CameraUpdate(BaseModel):
     """Тело PATCH /cameras/{id}: включение камеры и тумблеры функций аналитики."""
 
