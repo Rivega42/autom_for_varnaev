@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import Engine, insert, select
+from sqlalchemy.exc import IntegrityError
 
 from api_gateway.schemas import RoomCreate
 from api_gateway.tables import rooms
@@ -46,5 +47,10 @@ def create_room(engine: Engine, body: RoomCreate) -> dict[str, Any]:
         clash = conn.execute(select(rooms.c.id).where(rooms.c.id == body.id)).first()
         if clash is not None:
             raise RoomAlreadyExistsError(body.id)
-        conn.execute(insert(rooms).values(**values))
+        try:
+            conn.execute(insert(rooms).values(**values))
+        except IntegrityError as exc:
+            # Подстраховка от гонки: дубль id между проверкой и вставкой при
+            # одновременных запросах (FastAPI выполняет sync-эндпойнты в пуле).
+            raise RoomAlreadyExistsError(body.id) from exc
     return room_to_api(values)

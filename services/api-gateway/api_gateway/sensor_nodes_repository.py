@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import Engine, insert, select
+from sqlalchemy.exc import IntegrityError
 
 from api_gateway.rooms_repository import room_exists
 from api_gateway.schemas import SensorNodeCreate
@@ -59,5 +60,10 @@ def create_node(engine: Engine, body: SensorNodeCreate) -> dict[str, Any]:
         clash = conn.execute(select(sensor_nodes.c.id).where(sensor_nodes.c.id == body.id)).first()
         if clash is not None:
             raise NodeAlreadyExistsError(body.id)
-        conn.execute(insert(sensor_nodes).values(**values))
+        try:
+            conn.execute(insert(sensor_nodes).values(**values))
+        except IntegrityError as exc:
+            # Подстраховка от гонки: дубль id между проверкой и вставкой при
+            # одновременных запросах (FastAPI выполняет sync-эндпойнты в пуле).
+            raise NodeAlreadyExistsError(body.id) from exc
     return node_to_api(values)
