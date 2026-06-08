@@ -114,3 +114,27 @@ def test_schedule_validation() -> None:
         json={"name": "x", "source_ref": "rtsp://x", "interval_min": 0},
     )
     assert resp.status_code == 422
+
+
+def test_schedule_duplicate_name_returns_409() -> None:
+    """Создание расписания с уже занятым именем → 409 SCHEDULE_DUPLICATE_NAME."""
+    client = _client()
+    body = {"name": "повтор", "source_ref": "rtsp://x", "interval_min": 15}
+    assert client.post("/api/v1/schedules", json=body).status_code == 200
+    resp = client.post("/api/v1/schedules", json=body)
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "SCHEDULE_DUPLICATE_NAME"
+
+
+def test_schedule_rename_to_existing_returns_409() -> None:
+    """Переименование расписания в уже занятое имя → 409."""
+    client = _client()
+    client.post(
+        "/api/v1/schedules", json={"name": "a", "source_ref": "rtsp://a", "interval_min": 5}
+    )
+    second = client.post(
+        "/api/v1/schedules", json={"name": "b", "source_ref": "rtsp://b", "interval_min": 5}
+    ).json()["data"]
+    resp = client.patch(f"/api/v1/schedules/{second['id']}", json={"name": "a"})
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "SCHEDULE_DUPLICATE_NAME"

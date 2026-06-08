@@ -14,6 +14,10 @@ from api_gateway.schemas import ScheduleCreate, ScheduleUpdate
 from api_gateway.tables import schedules
 
 
+class DuplicateScheduleNameError(Exception):
+    """Расписание с таким именем уже существует (имя — уникальный ключ слота)."""
+
+
 def schedule_to_api(row: dict[str, Any]) -> dict[str, Any]:
     """Преобразовать строку schedules в форму ответа API."""
     return {
@@ -50,6 +54,9 @@ def create_schedule(engine: Engine, body: ScheduleCreate) -> dict[str, Any]:
         "enabled": body.enabled,
     }
     with engine.begin() as conn:
+        clash = conn.execute(select(schedules.c.id).where(schedules.c.name == body.name)).first()
+        if clash is not None:
+            raise DuplicateScheduleNameError(body.name)
         result = conn.execute(insert(schedules).values(**values))
         inserted = result.inserted_primary_key
         if inserted is None:
@@ -86,6 +93,14 @@ def update_schedule(
         )
         if row is None:
             return None
+        if "name" in values:
+            clash = conn.execute(
+                select(schedules.c.id).where(
+                    schedules.c.name == values["name"], schedules.c.id != schedule_id
+                )
+            ).first()
+            if clash is not None:
+                raise DuplicateScheduleNameError(values["name"])
         if values:
             conn.execute(update(schedules).where(schedules.c.id == schedule_id).values(**values))
         merged = {**dict(row), **values}

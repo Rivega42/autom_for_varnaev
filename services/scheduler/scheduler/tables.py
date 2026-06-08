@@ -40,4 +40,5 @@ schedules = sa.Table(
     sa.Column("params", sa.JSON),
     sa.Column("interval_min", sa.Integer, nullable=False),
     sa.Column("enabled", sa.Boolean, nullable=False),
+    sa.UniqueConstraint("name", name="uq_schedules_name"),
 )

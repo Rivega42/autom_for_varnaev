@@ -25,6 +25,7 @@ from api_gateway.events_client import EventsClient, HttpEventsClient
 from api_gateway.integration import register_integration_routes
 from api_gateway.readings_repository import list_readings
 from api_gateway.schedules_repository import (
+    DuplicateScheduleNameError,
     create_schedule,
     delete_schedule,
     list_schedules,
@@ -293,13 +294,25 @@ def create_app(
 
     @app.post(f"{API_PREFIX}/schedules", dependencies=[auth])
     def post_schedule(body: ScheduleCreate) -> dict[str, Any]:
-        """Создать расписание (таймер запуска видеоанализа)."""
-        return ok(create_schedule(engine, body))
+        """Создать расписание (таймер запуска видеоанализа) или 409 при дубле имени."""
+        try:
+            return ok(create_schedule(engine, body))
+        except DuplicateScheduleNameError:
+            raise api_error(
+                ErrorCode.SCHEDULE_DUPLICATE_NAME,
+                f"Расписание с именем «{body.name}» уже существует",
+            ) from None
 
     @app.patch(f"{API_PREFIX}/schedules/{{schedule_id}}", dependencies=[auth])
     def patch_schedule(schedule_id: int, body: ScheduleUpdate) -> dict[str, Any]:
-        """Изменить расписание или 404 SCHEDULE_NOT_FOUND."""
-        item = update_schedule(engine, schedule_id, body)
+        """Изменить расписание или 404 SCHEDULE_NOT_FOUND / 409 при дубле имени."""
+        try:
+            item = update_schedule(engine, schedule_id, body)
+        except DuplicateScheduleNameError as exc:
+            raise api_error(
+                ErrorCode.SCHEDULE_DUPLICATE_NAME,
+                f"Расписание с именем «{exc}» уже существует",
+            ) from None
         if item is None:
             raise api_error(ErrorCode.SCHEDULE_NOT_FOUND, "Расписание не найдено")
         return ok(item)

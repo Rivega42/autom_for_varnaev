@@ -64,6 +64,7 @@
 | `ZONE_NOT_FOUND` | 404 | ROI-зона с таким id отсутствует |
 | `THRESHOLD_NOT_FOUND` | 404 | порог с таким id отсутствует |
 | `SCHEDULE_NOT_FOUND` | 404 | расписание с таким id отсутствует |
+| `SCHEDULE_DUPLICATE_NAME` | 409 | расписание с таким именем уже существует (имя — уникальный ключ слота) |
 | `NOT_IMPLEMENTED` | 501 | эндпойнт-разъём АУРА выключен в v1 |
 | `INTERNAL` | 500 | прочая внутренняя ошибка |
 
@@ -218,8 +219,8 @@ POST   /api/v1/thresholds                  # создать порог
 PATCH  /api/v1/thresholds/{id}             # изменить или 404 THRESHOLD_NOT_FOUND
 DELETE /api/v1/thresholds/{id}             # удалить или 404 THRESHOLD_NOT_FOUND
 GET    /api/v1/schedules                    # список расписаний (таймер)
-POST   /api/v1/schedules                   # создать расписание
-PATCH  /api/v1/schedules/{id}              # изменить или 404 SCHEDULE_NOT_FOUND
+POST   /api/v1/schedules                   # создать или 409 SCHEDULE_DUPLICATE_NAME
+PATCH  /api/v1/schedules/{id}              # изменить или 404/409 (имя занято)
 DELETE /api/v1/schedules/{id}              # удалить или 404 SCHEDULE_NOT_FOUND
 ```
 
@@ -239,7 +240,8 @@ DELETE /api/v1/schedules/{id}              # удалить или 404 SCHEDULE_
 ```
 Расписания из БД имеют приоритет над легаси-файлом `config/schedules.json` (файл
 остаётся поддержанным для совместимости; записи файла берутся, если имя не занято
-записью из БД). Коды ошибок: `THRESHOLD_NOT_FOUND`, `SCHEDULE_NOT_FOUND` (404).
+записью из БД; имя расписания уникально). Коды ошибок: `THRESHOLD_NOT_FOUND`,
+`SCHEDULE_NOT_FOUND` (404), `SCHEDULE_DUPLICATE_NAME` (409 — имя занято).
 
 ---
 

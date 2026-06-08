@@ -3,9 +3,11 @@
 Собирает рабочий конвейер приёма показаний:
   MQTT → разбор → запись в БД → сверка с порогами → события в log-service.
 
-Справочник узлов (node_id → room_id) и пороги загружаются из БД; пороги
-перечитываются каждый тик (изменения через интерфейс применяются без рестарта).
-Периодический тик также проверяет «тишину» узлов (событие sensor_silent).
+Справочник узлов (node_id → room_id) и пороги загружаются из БД. Пороги
+перечитываются каждый тик (правки порогов через интерфейс применяются без
+рестарта); справочник узлов читается один раз на старте — добавление нового
+узла требует перезапуска воркера. Периодический тик также проверяет «тишину»
+узлов (событие sensor_silent), порог тишины берётся из thresholds.silent_min.
 """
 
 from __future__ import annotations
@@ -51,9 +53,15 @@ def main() -> None:
     monitor = ThresholdMonitor(load_thresholds(engine))
     sink = HttpEventSink(os.getenv("LOG_SERVICE_URL", "http://log-service:8000"))
 
-    # Контроль «тишины» узлов: общий порог в минутах из env (v1-упрощение).
-    silent_min = int(os.getenv("SENSOR_SILENT_MIN", "10"))
-    silence = SilenceTracker(sink, _resolver, silent_min)
+    # Контроль «тишины» узлов: порог берётся из thresholds.silent_min помещения
+    # (docs/08, docs/04 §4). Если для помещения порог не задан — общий запасной
+    # из env. Резолвер читает актуальные пороги монитора (горячая перезагрузка).
+    default_silent_min = int(os.getenv("SENSOR_SILENT_MIN", "10"))
+
+    def silent_min_for_room(room_id: str | None) -> int:
+        return monitor.silent_min_for(room_id, default_silent_min)
+
+    silence = SilenceTracker(sink, _resolver, silent_min_for_room)
 
     handler = make_reading_handler(
         DbReadingWriter(engine),
@@ -72,9 +80,9 @@ def main() -> None:
         silence.check(datetime.now(UTC))
 
     logger.info(
-        "ingest-sensors: узлов=%d, порог тишины=%d мин, конвейер собран",
+        "ingest-sensors: узлов=%d, запасной порог тишины=%d мин, конвейер собран",
         len(nodes),
-        silent_min,
+        default_silent_min,
     )
     run(handler=handler, on_tick=on_tick)
 

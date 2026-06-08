@@ -33,6 +33,8 @@ def upgrade() -> None:
         sa.Column("params", postgresql.JSONB(), nullable=True),
         sa.Column("interval_min", sa.Integer(), nullable=False),
         sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
+        # Имя — уникальный ключ слота расписания (дедуп БД+файл идёт по имени).
+        sa.UniqueConstraint("name", name="uq_schedules_name"),
     )
 
 

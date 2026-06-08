@@ -81,6 +81,7 @@ schedules = sa.Table(
     "schedules",
     metadata,
     sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+    # Имя — уникальный ключ слота: планировщик склеивает БД и файл по имени.
     sa.Column("name", sa.Text, nullable=False),
     sa.Column("source_type", sa.Text, nullable=False),
     sa.Column("source_ref", sa.Text, nullable=False),
@@ -90,4 +91,5 @@ schedules = sa.Table(
     sa.Column("params", sa.JSON),
     sa.Column("interval_min", sa.Integer, nullable=False),
     sa.Column("enabled", sa.Boolean, nullable=False),
+    sa.UniqueConstraint("name", name="uq_schedules_name"),
 )

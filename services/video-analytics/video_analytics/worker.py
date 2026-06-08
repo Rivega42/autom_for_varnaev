@@ -202,6 +202,7 @@ def process_task(
                     created_at=ats,
                     kind=ArtifactKind.SCREENSHOT,
                     path=artifact_path,
+                    mime="image/jpeg",
                     room_id=task.room_id,
                     camera_id=task.camera_id,
                     task_id=task.id,

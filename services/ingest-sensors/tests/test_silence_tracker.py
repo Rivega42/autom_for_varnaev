@@ -46,6 +46,28 @@ def test_emits_sensor_silent_once_after_threshold() -> None:
     assert sink.events[0].payload["node_id"] == "node-01"
 
 
+def test_per_room_silent_min_resolver() -> None:
+    """Порог тишины может зависеть от помещения узла (функция-резолвер)."""
+    sink = _CollectingSink()
+    rooms = {"cold-01": "cold-01", "room-02": "room-02"}
+    # Холодильная камера — строгий порог 5 мин, обычное помещение — 20 мин.
+    silent_min_for = {"cold-01": 5, "room-02": 20}.get
+    tracker = SilenceTracker(sink, rooms.get, lambda room: silent_min_for(room, 10) if room else 10)
+    t0 = datetime(2026, 6, 8, 10, 0, tzinfo=UTC)
+    tracker.record(_reading_in("cold-01", t0))
+    tracker.record(_reading_in("room-02", t0))
+
+    # Через 7 минут: холодильная камера уже молчит (порог 5), обычная — нет (порог 20).
+    assert tracker.check(t0 + timedelta(minutes=7)) == 1
+    assert [e.payload["node_id"] for e in sink.events] == ["cold-01"]
+
+
+def _reading_in(node_id: str, ts: datetime) -> Reading:
+    return Reading(
+        ts=ts, node_id=node_id, room_id=node_id, metric=Metric.AIR_TEMP, value=4.0, unit="C"
+    )
+
+
 def test_record_resets_silence() -> None:
     """Новое показание сбрасывает эпизод тишины — событие может прийти снова."""
     sink = _CollectingSink()

@@ -248,9 +248,19 @@ async function loadThresholds() {
     const data = await api("/thresholds");
     for (const t of data.items) {
       const tr = document.createElement("tr");
-      tr.innerHTML =
-        `<td>${t.room || "все"}</td><td>${t.metric}</td><td>${t.op}</td>` +
-        `<td>${t.value}</td><td>${t.severity}${t.enabled ? "" : " (выкл)"}</td>`;
+      // textContent (не innerHTML): room — свободная строка оператора, иначе stored XSS.
+      const cells = [
+        t.room || "все",
+        t.metric,
+        t.op,
+        String(t.value),
+        t.severity + (t.enabled ? "" : " (выкл)"),
+      ];
+      for (const text of cells) {
+        const cell = document.createElement("td");
+        cell.textContent = text;
+        tr.appendChild(cell);
+      }
       const td = document.createElement("td");
       const btn = document.createElement("button");
       btn.textContent = "удалить";
@@ -306,9 +316,18 @@ async function loadSchedules() {
     const data = await api("/schedules");
     for (const s of data.items) {
       const tr = document.createElement("tr");
-      tr.innerHTML =
-        `<td>${s.name}${s.enabled ? "" : " (выкл)"}</td><td>${s.source_ref}</td>` +
-        `<td>${s.room || ""}</td><td>${s.interval_min}</td>`;
+      // textContent (не innerHTML): name/source_ref/room — свободные строки оператора.
+      const cells = [
+        s.name + (s.enabled ? "" : " (выкл)"),
+        s.source_ref,
+        s.room || "",
+        String(s.interval_min),
+      ];
+      for (const text of cells) {
+        const cell = document.createElement("td");
+        cell.textContent = text;
+        tr.appendChild(cell);
+      }
       const td = document.createElement("td");
       const btn = document.createElement("button");
       btn.textContent = "удалить";

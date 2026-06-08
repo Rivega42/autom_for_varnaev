@@ -14,6 +14,8 @@ from datetime import datetime
 from typing import Any, Protocol
 from uuid import uuid4
 
+import httpx
+
 from monitoring_shared import (
     Event,
     EventSource,
@@ -77,15 +79,11 @@ class HttpEventSink:
     """
 
     def __init__(self, base_url: str, client: Any | None = None) -> None:
-        import httpx
-
         self._url = base_url.rstrip("/") + "/events"
         self._client = client or httpx.Client(timeout=5.0)
 
     def emit(self, event: Event) -> None:
         """Отправить событие в log-service (ошибки логируются, не пробрасываются)."""
-        import httpx
-
         try:
             response = self._client.post(self._url, json=event.model_dump(mode="json"))
         except httpx.HTTPError as exc:

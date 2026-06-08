@@ -94,7 +94,7 @@ def test_screenshot_saved_on_events() -> None:
     # Кадр сохранён ровно один раз (один артефакт на задание).
     assert len(saved) == 1
     with engine.connect() as conn:
-        row = conn.execute(text("SELECT kind, path, task_id FROM artifacts")).fetchone()
+        row = conn.execute(text("SELECT kind, path, task_id, mime FROM artifacts")).fetchone()
     assert row is not None
     assert row[0] == "screenshot"
     assert row[1] == saved[0]
@@ -102,6 +102,7 @@ def test_screenshot_saved_on_events() -> None:
     assert row[1].startswith("/data/artifacts/2026-06-06/")
     assert row[1].endswith(".jpg")
     assert UUID(str(row[2])) == task_id
+    assert row[3] == "image/jpeg"
 
 
 def test_no_artifact_without_events() -> None:
