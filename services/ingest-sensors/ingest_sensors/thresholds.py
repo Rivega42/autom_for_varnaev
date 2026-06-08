@@ -67,6 +67,13 @@ class ThresholdMonitor:
         # ключ (room_id, metric) -> сработавший порог
         self._breached: dict[tuple[str | None, Metric], Threshold] = {}
 
+    def replace(self, thresholds: list[Threshold]) -> None:
+        """Заменить набор порогов, сохранив текущее состояние превышений.
+
+        Используется для горячей перезагрузки порогов из БД (изменения через
+        интерфейс применяются без перезапуска воркера)."""
+        self._thresholds = thresholds
+
     def evaluate(
         self, room_id: str | None, metric: Metric, value: float
     ) -> tuple[Transition, Threshold | None]:

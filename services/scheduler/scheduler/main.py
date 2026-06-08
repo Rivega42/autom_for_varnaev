@@ -16,18 +16,29 @@ from sqlalchemy import Engine
 
 from scheduler.config import Settings
 from scheduler.db import build_engine
-from scheduler.schedules import load_schedules
+from scheduler.schedules import ScheduleEntry, load_schedules, load_schedules_db
 from scheduler.tick import run_tick
 
 logger = logging.getLogger(__name__)
 
 
+def _merged_schedules(engine: Engine, settings: Settings) -> list[ScheduleEntry]:
+    """Расписания из БД (источник истины GUI) + из файла (легаси), БД приоритетна.
+
+    Записи файла добавляются, только если имя не занято записью из БД.
+    """
+    db_entries = load_schedules_db(engine)
+    names = {e.name for e in db_entries}
+    file_entries = [e for e in load_schedules(settings.schedules_path) if e.name not in names]
+    return db_entries + file_entries
+
+
 def tick_once(engine: Engine, settings: Settings, now: datetime) -> int:
-    """Один проход: прочитать расписания и создать недостающие задания.
+    """Один проход: прочитать расписания (БД+файл) и создать недостающие задания.
 
     Возвращает число созданных заданий (для логов и тестов).
     """
-    entries = load_schedules(settings.schedules_path)
+    entries = _merged_schedules(engine, settings)
     created = run_tick(engine, entries, now)
     return len(created)
 

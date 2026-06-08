@@ -61,3 +61,33 @@ camera_zones = sa.Table(
     sa.Column("polygon", sa.JSON, nullable=False),
     sa.Column("note", sa.Text),
 )
+
+
+thresholds = sa.Table(
+    "thresholds",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column("room_id", sa.Text),  # NULL = глобальный порог
+    sa.Column("metric", sa.Text, nullable=False),
+    sa.Column("op", sa.Text, nullable=False),
+    sa.Column("value", sa.Float, nullable=False),
+    sa.Column("severity", sa.Text, nullable=False),
+    sa.Column("silent_min", sa.Integer),
+    sa.Column("enabled", sa.Boolean, nullable=False),
+)
+
+
+schedules = sa.Table(
+    "schedules",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column("name", sa.Text, nullable=False),
+    sa.Column("source_type", sa.Text, nullable=False),
+    sa.Column("source_ref", sa.Text, nullable=False),
+    sa.Column("room_id", sa.Text),
+    sa.Column("camera_id", sa.Uuid),
+    sa.Column("pipeline", sa.Text, nullable=False),
+    sa.Column("params", sa.JSON),
+    sa.Column("interval_min", sa.Integer, nullable=False),
+    sa.Column("enabled", sa.Boolean, nullable=False),
+)

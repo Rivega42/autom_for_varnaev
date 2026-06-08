@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
-from monitoring_shared import SourceType, ZoneType
+from monitoring_shared import Metric, Severity, SourceType, ThresholdOp, ZoneType
 
 # Допустимые ключи пофункциональных тумблеров видеоаналитики камеры.
 ANALYTICS_FEATURES = frozenset({"pose", "actions", "uniform", "coverage"})
@@ -95,3 +95,56 @@ class CameraZoneUpdate(BaseModel):
     @classmethod
     def _check_polygon(cls, v: list[list[float]] | None) -> list[list[float]] | None:
         return _validate_polygon(v) if v is not None else None
+
+
+class ThresholdCreate(BaseModel):
+    """Тело POST /thresholds: порог метрики (критерий событий датчиков)."""
+
+    # room=None — глобальный порог (для всех помещений).
+    room: str | None = None
+    metric: Metric
+    op: ThresholdOp
+    value: float
+    severity: Severity = Severity.WARNING
+    silent_min: int | None = None
+    enabled: bool = True
+
+
+class ThresholdUpdate(BaseModel):
+    """Тело PATCH /thresholds/{id}: частичное обновление порога."""
+
+    room: str | None = None
+    metric: Metric | None = None
+    op: ThresholdOp | None = None
+    value: float | None = None
+    severity: Severity | None = None
+    silent_min: int | None = None
+    enabled: bool | None = None
+
+
+class ScheduleCreate(BaseModel):
+    """Тело POST /schedules: запись расписания видеоанализа (таймер)."""
+
+    name: str = Field(min_length=1)
+    source_type: SourceType = SourceType.STREAM
+    source_ref: str = Field(min_length=1)
+    room: str | None = None
+    camera_id: UUID | None = None
+    pipeline: str = Field(min_length=1, default="pose_v1")
+    params: dict[str, Any] | None = None
+    interval_min: int = Field(gt=0)
+    enabled: bool = True
+
+
+class ScheduleUpdate(BaseModel):
+    """Тело PATCH /schedules/{id}: частичное обновление расписания."""
+
+    name: str | None = Field(default=None, min_length=1)
+    source_type: SourceType | None = None
+    source_ref: str | None = Field(default=None, min_length=1)
+    room: str | None = None
+    camera_id: UUID | None = None
+    pipeline: str | None = Field(default=None, min_length=1)
+    params: dict[str, Any] | None = None
+    interval_min: int | None = Field(default=None, gt=0)
+    enabled: bool | None = None

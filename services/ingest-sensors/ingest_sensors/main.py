@@ -3,9 +3,9 @@
 Собирает рабочий конвейер приёма показаний:
   MQTT → разбор → запись в БД → сверка с порогами → события в log-service.
 
-Справочник узлов (node_id → room_id) и пороги загружаются из БД при старте.
-Контроль «тишины» узлов подключается отдельной задачей (нужен периодический
-тик и источник silent_min).
+Справочник узлов (node_id → room_id) и пороги загружаются из БД; пороги
+перечитываются каждый тик (изменения через интерфейс применяются без рестарта).
+Периодический тик также проверяет «тишину» узлов (событие sensor_silent).
 """
 
 from __future__ import annotations
@@ -63,7 +63,12 @@ def main() -> None:
         on_reading=silence.record,
     )
 
-    def check_silence() -> None:
+    def on_tick() -> None:
+        # Горячая перезагрузка порогов (изменения из интерфейса) + проверка тишины.
+        try:
+            monitor.replace(load_thresholds(engine))
+        except Exception:
+            logger.exception("Не удалось перечитать пороги из БД")
         silence.check(datetime.now(UTC))
 
     logger.info(
@@ -71,7 +76,7 @@ def main() -> None:
         len(nodes),
         silent_min,
     )
-    run(handler=handler, on_tick=check_silence)
+    run(handler=handler, on_tick=on_tick)
 
 
 if __name__ == "__main__":

@@ -24,15 +24,31 @@ from api_gateway.errors import api_error, register_error_handlers
 from api_gateway.events_client import EventsClient, HttpEventsClient
 from api_gateway.integration import register_integration_routes
 from api_gateway.readings_repository import list_readings
+from api_gateway.schedules_repository import (
+    create_schedule,
+    delete_schedule,
+    list_schedules,
+    update_schedule,
+)
 from api_gateway.schemas import (
     AnalysisTaskCreate,
     CameraCreate,
     CameraUpdate,
     CameraZoneCreate,
     CameraZoneUpdate,
+    ScheduleCreate,
+    ScheduleUpdate,
+    ThresholdCreate,
+    ThresholdUpdate,
 )
 from api_gateway.snapshot import Go2rtcSnapshotFetcher, SnapshotFetcher
 from api_gateway.tasks_repository import create_task, get_task, list_tasks
+from api_gateway.thresholds_repository import (
+    create_threshold,
+    delete_threshold,
+    list_thresholds,
+    update_threshold,
+)
 from api_gateway.zones_repository import create_zone, delete_zone, list_zones, update_zone
 from monitoring_shared import ErrorCode, ok
 
@@ -238,6 +254,62 @@ def create_app(
         if not delete_zone(engine, zone_id):
             raise api_error(ErrorCode.ZONE_NOT_FOUND, "Зона не найдена")
         return ok({"deleted": zone_id})
+
+    # ── Пороги датчиков (критерии событий) — настройка через интерфейс ──
+
+    @app.get(f"{API_PREFIX}/thresholds", dependencies=[auth])
+    def get_thresholds() -> dict[str, Any]:
+        """Список порогов."""
+        items = list_thresholds(engine)
+        return ok({"items": items, "total": len(items)})
+
+    @app.post(f"{API_PREFIX}/thresholds", dependencies=[auth])
+    def post_threshold(body: ThresholdCreate) -> dict[str, Any]:
+        """Создать порог метрики."""
+        return ok(create_threshold(engine, body))
+
+    @app.patch(f"{API_PREFIX}/thresholds/{{threshold_id}}", dependencies=[auth])
+    def patch_threshold(threshold_id: int, body: ThresholdUpdate) -> dict[str, Any]:
+        """Изменить порог или 404 THRESHOLD_NOT_FOUND."""
+        item = update_threshold(engine, threshold_id, body)
+        if item is None:
+            raise api_error(ErrorCode.THRESHOLD_NOT_FOUND, "Порог не найден")
+        return ok(item)
+
+    @app.delete(f"{API_PREFIX}/thresholds/{{threshold_id}}", dependencies=[auth])
+    def remove_threshold(threshold_id: int) -> dict[str, Any]:
+        """Удалить порог или 404 THRESHOLD_NOT_FOUND."""
+        if not delete_threshold(engine, threshold_id):
+            raise api_error(ErrorCode.THRESHOLD_NOT_FOUND, "Порог не найден")
+        return ok({"deleted": threshold_id})
+
+    # ── Расписания видеоанализа (таймер) — настройка через интерфейс ──
+
+    @app.get(f"{API_PREFIX}/schedules", dependencies=[auth])
+    def get_schedules() -> dict[str, Any]:
+        """Список расписаний."""
+        items = list_schedules(engine)
+        return ok({"items": items, "total": len(items)})
+
+    @app.post(f"{API_PREFIX}/schedules", dependencies=[auth])
+    def post_schedule(body: ScheduleCreate) -> dict[str, Any]:
+        """Создать расписание (таймер запуска видеоанализа)."""
+        return ok(create_schedule(engine, body))
+
+    @app.patch(f"{API_PREFIX}/schedules/{{schedule_id}}", dependencies=[auth])
+    def patch_schedule(schedule_id: int, body: ScheduleUpdate) -> dict[str, Any]:
+        """Изменить расписание или 404 SCHEDULE_NOT_FOUND."""
+        item = update_schedule(engine, schedule_id, body)
+        if item is None:
+            raise api_error(ErrorCode.SCHEDULE_NOT_FOUND, "Расписание не найдено")
+        return ok(item)
+
+    @app.delete(f"{API_PREFIX}/schedules/{{schedule_id}}", dependencies=[auth])
+    def remove_schedule(schedule_id: int) -> dict[str, Any]:
+        """Удалить расписание или 404 SCHEDULE_NOT_FOUND."""
+        if not delete_schedule(engine, schedule_id):
+            raise api_error(ErrorCode.SCHEDULE_NOT_FOUND, "Расписание не найдено")
+        return ok({"deleted": schedule_id})
 
     # СТЫК-АУРА (v2): заглушённые разъёмы /integration/* (501 при выключенном флаге).
     register_integration_routes(app, settings, dependencies=[auth])

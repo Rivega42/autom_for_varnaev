@@ -1,0 +1,116 @@
+"""CRUD порогов и расписаний через api-gateway (настройка из интерфейса)."""
+
+from __future__ import annotations
+
+from api_gateway.app import create_app
+from api_gateway.config import Settings
+from api_gateway.tables import metadata
+from fastapi.testclient import TestClient
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.pool import StaticPool
+
+_SETTINGS = Settings(
+    log_service_url="http://log-service:8000",
+    api_key=None,
+    aura_integration_enabled=False,
+)
+
+
+def _engine() -> Engine:
+    eng = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    metadata.create_all(eng)
+    return eng
+
+
+def _client() -> TestClient:
+    return TestClient(create_app(settings=_SETTINGS, engine=_engine()))
+
+
+# ── Пороги ──
+
+
+def test_threshold_crud() -> None:
+    """Создание, список, изменение и удаление порога."""
+    client = _client()
+    body = {
+        "room": "room-02",
+        "metric": "air_temp",
+        "op": ">",
+        "value": 8.0,
+        "severity": "warning",
+    }
+    created = client.post("/api/v1/thresholds", json=body).json()["data"]
+    assert created["metric"] == "air_temp"
+    assert created["enabled"] is True
+    tid = created["id"]
+
+    assert client.get("/api/v1/thresholds").json()["data"]["total"] == 1
+
+    patched = client.patch(f"/api/v1/thresholds/{tid}", json={"value": 6.0, "enabled": False})
+    assert patched.status_code == 200
+    assert patched.json()["data"]["value"] == 6.0
+    assert patched.json()["data"]["enabled"] is False
+
+    assert client.delete(f"/api/v1/thresholds/{tid}").status_code == 200
+    assert client.get("/api/v1/thresholds").json()["data"]["total"] == 0
+
+
+def test_threshold_missing_returns_404() -> None:
+    """Изменение/удаление несуществующего порога → 404 THRESHOLD_NOT_FOUND."""
+    client = _client()
+    assert client.patch("/api/v1/thresholds/999", json={"value": 1.0}).status_code == 404
+    resp = client.delete("/api/v1/thresholds/999")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "THRESHOLD_NOT_FOUND"
+
+
+def test_threshold_validation() -> None:
+    """Неизвестная метрика → 422."""
+    resp = _client().post(
+        "/api/v1/thresholds", json={"metric": "pressure", "op": ">", "value": 1.0}
+    )
+    assert resp.status_code == 422
+
+
+# ── Расписания (таймер) ──
+
+
+def test_schedule_crud() -> None:
+    """Создание, список, изменение и удаление расписания."""
+    client = _client()
+    body = {
+        "name": "кухня-каждые-15",
+        "source_ref": "rtsp://camera.local/stream",
+        "room": "room-01",
+        "interval_min": 15,
+    }
+    created = client.post("/api/v1/schedules", json=body).json()["data"]
+    assert created["interval_min"] == 15
+    assert created["pipeline"] == "pose_v1"
+    sid = created["id"]
+
+    assert client.get("/api/v1/schedules").json()["data"]["total"] == 1
+
+    patched = client.patch(f"/api/v1/schedules/{sid}", json={"interval_min": 30})
+    assert patched.json()["data"]["interval_min"] == 30
+
+    assert client.delete(f"/api/v1/schedules/{sid}").status_code == 200
+    assert client.get("/api/v1/schedules").json()["data"]["total"] == 0
+
+
+def test_schedule_missing_returns_404() -> None:
+    """Несуществующее расписание → 404 SCHEDULE_NOT_FOUND."""
+    resp = _client().delete("/api/v1/schedules/999")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "SCHEDULE_NOT_FOUND"
+
+
+def test_schedule_validation() -> None:
+    """Нулевой интервал → 422."""
+    resp = _client().post(
+        "/api/v1/schedules",
+        json={"name": "x", "source_ref": "rtsp://x", "interval_min": 0},
+    )
+    assert resp.status_code == 422

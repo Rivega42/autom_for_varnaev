@@ -97,6 +97,55 @@
     </section>
   </main>
 
+  <main>
+    <section class="panel" id="thresholds-panel" style="width:100%">
+      <h2 style="margin-top:0">Пороги датчиков</h2>
+      <p class="hint">Критерии событий: превышение/возврат к норме. Применяются воркером в течение минуты.</p>
+      <div class="row">
+        <input id="th_room" placeholder="помещение (пусто = все)" />
+        <select id="th_metric">
+          <option value="air_temp">темп. воздуха</option>
+          <option value="humidity">влажность</option>
+          <option value="surface_ir">темп. поверхности</option>
+        </select>
+        <select id="th_op">
+          <option value="&gt;">&gt;</option>
+          <option value="&lt;">&lt;</option>
+          <option value="&gt;=">&ge;</option>
+          <option value="&lt;=">&le;</option>
+        </select>
+        <input id="th_value" type="number" step="0.1" placeholder="значение" style="width:90px" />
+        <select id="th_sev">
+          <option value="warning">warning</option>
+          <option value="critical">critical</option>
+        </select>
+        <button id="th_add">Добавить порог</button>
+      </div>
+      <table id="thresholds">
+        <thead><tr><th>помещение</th><th>метрика</th><th>усл.</th><th>знач.</th><th>важность</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <main>
+    <section class="panel" id="schedules-panel" style="width:100%">
+      <h2 style="margin-top:0">Расписания видеоанализа (таймер)</h2>
+      <p class="hint">Периодический запуск анализа. Изменения подхватываются планировщиком на следующем тике.</p>
+      <div class="row">
+        <input id="sc_name" placeholder="имя (уникальное)" />
+        <input id="sc_ref" placeholder="rtsp://… или путь к файлу" style="min-width:240px" />
+        <input id="sc_room" placeholder="помещение" />
+        <input id="sc_interval" type="number" placeholder="интервал, мин" style="width:130px" />
+        <button id="sc_add">Добавить расписание</button>
+      </div>
+      <table id="schedules">
+        <thead><tr><th>имя</th><th>источник</th><th>помещение</th><th>интервал, мин</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
   <script src="app.js"></script>
 </body>
 </html>

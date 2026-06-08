@@ -239,7 +239,128 @@ async function createCamera() {
   }
 }
 
-$("reload").onclick = loadCameras;
+// ── Пороги датчиков ──
+
+async function loadThresholds() {
+  const tbody = $("thresholds").querySelector("tbody");
+  tbody.innerHTML = "";
+  try {
+    const data = await api("/thresholds");
+    for (const t of data.items) {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td>${t.room || "все"}</td><td>${t.metric}</td><td>${t.op}</td>` +
+        `<td>${t.value}</td><td>${t.severity}${t.enabled ? "" : " (выкл)"}</td>`;
+      const td = document.createElement("td");
+      const btn = document.createElement("button");
+      btn.textContent = "удалить";
+      btn.className = "sec";
+      btn.onclick = () => deleteThreshold(t.id);
+      td.appendChild(btn);
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+  } catch (e) {
+    msg("Ошибка загрузки порогов: " + e.message, false);
+  }
+}
+
+async function createThreshold() {
+  const value = parseFloat($("th_value").value);
+  if (Number.isNaN(value)) {
+    msg("Укажите числовое значение порога", false);
+    return;
+  }
+  const body = {
+    room: $("th_room").value.trim() || null,
+    metric: $("th_metric").value,
+    op: $("th_op").value,
+    value,
+    severity: $("th_sev").value,
+  };
+  try {
+    await api("/thresholds", { method: "POST", body: JSON.stringify(body) });
+    $("th_room").value = $("th_value").value = "";
+    loadThresholds();
+    msg("Порог добавлен");
+  } catch (e) {
+    msg("Ошибка добавления порога: " + e.message, false);
+  }
+}
+
+async function deleteThreshold(id) {
+  try {
+    await api(`/thresholds/${id}`, { method: "DELETE" });
+    loadThresholds();
+  } catch (e) {
+    msg("Ошибка удаления порога: " + e.message, false);
+  }
+}
+
+// ── Расписания (таймер) ──
+
+async function loadSchedules() {
+  const tbody = $("schedules").querySelector("tbody");
+  tbody.innerHTML = "";
+  try {
+    const data = await api("/schedules");
+    for (const s of data.items) {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td>${s.name}${s.enabled ? "" : " (выкл)"}</td><td>${s.source_ref}</td>` +
+        `<td>${s.room || ""}</td><td>${s.interval_min}</td>`;
+      const td = document.createElement("td");
+      const btn = document.createElement("button");
+      btn.textContent = "удалить";
+      btn.className = "sec";
+      btn.onclick = () => deleteSchedule(s.id);
+      td.appendChild(btn);
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+  } catch (e) {
+    msg("Ошибка загрузки расписаний: " + e.message, false);
+  }
+}
+
+async function createSchedule() {
+  const interval = parseInt($("sc_interval").value, 10);
+  const body = {
+    name: $("sc_name").value.trim(),
+    source_ref: $("sc_ref").value.trim(),
+    room: $("sc_room").value.trim() || null,
+    interval_min: interval,
+  };
+  if (!body.name || !body.source_ref || !(interval > 0)) {
+    msg("Заполните имя, источник и интервал (> 0)", false);
+    return;
+  }
+  try {
+    await api("/schedules", { method: "POST", body: JSON.stringify(body) });
+    $("sc_name").value = $("sc_ref").value = $("sc_room").value = $("sc_interval").value = "";
+    loadSchedules();
+    msg("Расписание добавлено");
+  } catch (e) {
+    msg("Ошибка добавления расписания: " + e.message, false);
+  }
+}
+
+async function deleteSchedule(id) {
+  try {
+    await api(`/schedules/${id}`, { method: "DELETE" });
+    loadSchedules();
+  } catch (e) {
+    msg("Ошибка удаления расписания: " + e.message, false);
+  }
+}
+
+function loadAll() {
+  loadCameras();
+  loadThresholds();
+  loadSchedules();
+}
+
+$("reload").onclick = loadAll;
 $("nc_save").onclick = createCamera;
 $("saveCam").onclick = saveCamera;
 $("loadFrame").onclick = loadFrame;
@@ -248,5 +369,7 @@ $("clearPoly").onclick = () => {
   points = [];
   draw();
 };
+$("th_add").onclick = createThreshold;
+$("sc_add").onclick = createSchedule;
 
-if (keyInput.value) loadCameras();
+if (keyInput.value) loadAll();

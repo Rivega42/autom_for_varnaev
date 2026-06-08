@@ -62,6 +62,8 @@
 | `EVENT_NOT_FOUND` | 404 | событие отсутствует |
 | `CAMERA_NOT_FOUND` | 404 | камера с таким id отсутствует |
 | `ZONE_NOT_FOUND` | 404 | ROI-зона с таким id отсутствует |
+| `THRESHOLD_NOT_FOUND` | 404 | порог с таким id отсутствует |
+| `SCHEDULE_NOT_FOUND` | 404 | расписание с таким id отсутствует |
 | `NOT_IMPLEMENTED` | 501 | эндпойнт-разъём АУРА выключен в v1 |
 | `INTERNAL` | 500 | прочая внутренняя ошибка |
 
@@ -201,6 +203,43 @@ DELETE /api/v1/zones/{zone_id}                # удалить зону или 4
 { "zone_type": "table", "polygon": [[0.1,0.1],[0.5,0.1],[0.5,0.5]], "note": "стол" }
 ```
 `zone_type`: `table` | `floor` | `window`. Типы зон и модель — `docs/04_DATA_MODEL.md`.
+
+---
+
+### 3.6 Пороги датчиков и расписания (настройка через интерфейс)
+
+Эти справочники настраиваются оператором через веб-GUI (или REST) — без SQL.
+Сервисы перечитывают их сами: `ingest-sensors` — пороги каждую минуту, `scheduler`
+— расписания каждый тик. Все эндпойнты требуют `X-API-Key`.
+
+```
+GET    /api/v1/thresholds                  # список порогов
+POST   /api/v1/thresholds                  # создать порог
+PATCH  /api/v1/thresholds/{id}             # изменить или 404 THRESHOLD_NOT_FOUND
+DELETE /api/v1/thresholds/{id}             # удалить или 404 THRESHOLD_NOT_FOUND
+GET    /api/v1/schedules                    # список расписаний (таймер)
+POST   /api/v1/schedules                   # создать расписание
+PATCH  /api/v1/schedules/{id}              # изменить или 404 SCHEDULE_NOT_FOUND
+DELETE /api/v1/schedules/{id}              # удалить или 404 SCHEDULE_NOT_FOUND
+```
+
+**Тело `POST /thresholds`** (`room=null` — глобальный порог для всех помещений):
+```json
+{ "room": "room-02", "metric": "air_temp", "op": ">", "value": 8.0,
+  "severity": "warning", "silent_min": 10, "enabled": true }
+```
+`metric`: `air_temp`|`humidity`|`surface_ir`; `op`: `>`|`<`|`>=`|`<=`;
+`severity`: `info`|`warning`|`critical`.
+
+**Тело `POST /schedules`** (периодический запуск видеоанализа — «таймер»):
+```json
+{ "name": "кухня-15м", "source_type": "stream", "source_ref": "rtsp://camera/stream",
+  "room": "room-01", "camera_id": "…", "pipeline": "pose_v1",
+  "params": { "fps": 5 }, "interval_min": 15, "enabled": true }
+```
+Расписания из БД имеют приоритет над легаси-файлом `config/schedules.json` (файл
+остаётся поддержанным для совместимости; записи файла берутся, если имя не занято
+записью из БД). Коды ошибок: `THRESHOLD_NOT_FOUND`, `SCHEDULE_NOT_FOUND` (404).
 
 ---
 
