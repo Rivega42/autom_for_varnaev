@@ -23,6 +23,11 @@ from ingest_sensors.silence import SilenceMonitor
 from monitoring_shared import Reading
 
 
+def _const_min(value: int) -> Callable[[str | None], int]:
+    """Обернуть фиксированный порог тишины в функцию room_id -> минут."""
+    return lambda _room: value
+
+
 class SilenceTracker:
     """Фиксирует активность узлов и эмитит sensor_silent при молчании."""
 
@@ -40,7 +45,7 @@ class SilenceTracker:
         # Порог тишины: общий (int) или зависящий от помещения узла (функция
         # room_id -> минут). Per-room вариант приходит из ThresholdMonitor.
         self._silent_min_for_room: Callable[[str | None], int] = (
-            silent_min if callable(silent_min) else (lambda _room, _v=silent_min: _v)
+            silent_min if callable(silent_min) else _const_min(silent_min)
         )
         self._monitor = monitor or SilenceMonitor()
         self._describe_room = describe_room
