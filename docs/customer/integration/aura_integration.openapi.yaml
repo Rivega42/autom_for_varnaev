@@ -1,0 +1,247 @@
+openapi: 3.1.0
+info:
+  title: Интеграция АУРА ↔ контур мониторинга
+  version: "1.0"
+  description: >
+    Машиночитаемое описание интеграционной поверхности контура мониторинга для
+    разработчиков АУРА (см. Приложение D руководства заказчика). В версии 1
+    эндпойнты /integration/* отвечают 501 (NOT_IMPLEMENTED); адреса и тела
+    стабильны и включаются в версии 2 фичефлагом. Все ответы — единый «конверт».
+servers:
+  - url: http://{host}:8000/api/v1
+    variables:
+      host:
+        default: localhost
+        description: адрес сервера объекта (внутри сети — api-gateway)
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: integration
+    description: Разъёмы для АУРА (в версии 1 отвечают 501)
+  - name: tasks
+    description: Задания на анализ
+paths:
+  /integration/analysis-tasks:
+    post:
+      tags: [integration]
+      summary: АУРА ставит задание на анализ файла
+      operationId: integrationCreateAnalysisTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IntegrationTaskCreate" }
+      responses:
+        "200":
+          description: (v2) Задание создано
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnalysisTaskEnvelope" }
+        "501":
+          description: (v1) Интеграция отключена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+      callbacks:
+        taskFinished:
+          "{$request.body#/callback_url}":
+            post:
+              summary: Уведомление о готовности (контур → АУРА)
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema: { $ref: "#/components/schemas/CallbackNotification" }
+              responses:
+                "200":
+                  description: АУРА приняла уведомление (обработка идемпотентна по task_id)
+  /analysis-tasks/{id}:
+    get:
+      tags: [tasks]
+      summary: Статус и результат задания (опрос)
+      operationId: getAnalysisTask
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Задание найдено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnalysisTaskEnvelope" }
+        "404":
+          description: Задание не найдено (TASK_NOT_FOUND)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+  /integration/events:
+    get:
+      tags: [integration]
+      summary: АУРА читает события (не показания)
+      operationId: integrationListEvents
+      parameters:
+        - { name: from, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: type, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: (v2) Список событий
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventListEnvelope" }
+        "501":
+          description: (v1) Интеграция отключена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+  /integration/settings:
+    put:
+      tags: [integration]
+      summary: АУРА передаёт настройки (пороги, расписания, пайплайны)
+      operationId: integrationPutSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Settings" }
+      responses:
+        "200":
+          description: (v2) Настройки применены
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OkEnvelope" }
+        "501":
+          description: (v1) Интеграция отключена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    EnvelopeBase:
+      type: object
+      required: [status, ts]
+      properties:
+        status: { type: string, enum: [ok, error] }
+        ts: { type: string, format: date-time }
+        error:
+          oneOf:
+            - { $ref: "#/components/schemas/ErrorObject" }
+            - { type: "null" }
+    ErrorObject:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [NOT_IMPLEMENTED, UNAUTHORIZED, VALIDATION_ERROR, TASK_NOT_FOUND, INTERNAL]
+        message: { type: string }
+    OkEnvelope:
+      allOf:
+        - { $ref: "#/components/schemas/EnvelopeBase" }
+        - type: object
+          properties:
+            data: { type: object }
+    ErrorEnvelope:
+      allOf:
+        - { $ref: "#/components/schemas/EnvelopeBase" }
+        - type: object
+          properties:
+            data: { type: "null" }
+    IntegrationTaskCreate:
+      type: object
+      required: [source_type, source_ref, pipeline]
+      properties:
+        source_type: { type: string, enum: [file, stream], description: "для АУРА обычно file" }
+        source_ref: { type: string, description: "путь к файлу на общем томе artifacts" }
+        room: { type: string }
+        camera_id: { type: string, format: uuid, description: "применит тумблеры и ROI-зоны камеры" }
+        pipeline: { type: string, example: pose_v1 }
+        params: { type: object, additionalProperties: true }
+        callback_url: { type: string, format: uri, description: "куда прислать уведомление о готовности" }
+    AnalysisTask:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        source_type: { type: string }
+        source_ref: { type: string }
+        room: { type: [string, "null"] }
+        camera_id: { type: [string, "null"], format: uuid }
+        pipeline: { type: string }
+        params: { type: [object, "null"], additionalProperties: true }
+        status: { type: string, enum: [queued, running, done, failed] }
+        trigger: { type: string, enum: [manual, scheduled, aura] }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        result:
+          type: [object, "null"]
+          properties:
+            events: { type: array, items: { type: string, format: uuid } }
+            artifacts: { type: array, items: { type: string } }
+        error: { type: [string, "null"] }
+    AnalysisTaskEnvelope:
+      allOf:
+        - { $ref: "#/components/schemas/EnvelopeBase" }
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/AnalysisTask" }
+    Event:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        ts: { type: string, format: date-time }
+        source: { type: string, enum: [sensors, analytics] }
+        type: { type: string }
+        room: { type: [string, "null"] }
+        severity: { type: string, enum: [info, warning, critical] }
+        message: { type: string, description: "готовая фраза для оператора (RU)" }
+        payload: { type: object, additionalProperties: true }
+        artifact_path: { type: [string, "null"] }
+    EventListEnvelope:
+      allOf:
+        - { $ref: "#/components/schemas/EnvelopeBase" }
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                items: { type: array, items: { $ref: "#/components/schemas/Event" } }
+                total: { type: integer }
+    Settings:
+      type: object
+      properties:
+        thresholds:
+          type: array
+          items:
+            type: object
+            properties:
+              room: { type: string }
+              metric: { type: string, enum: [air_temp, humidity, surface_ir] }
+              min: { type: number }
+              max: { type: number }
+              silent_min: { type: integer }
+        schedules:
+          type: array
+          items:
+            type: object
+            properties:
+              camera_id: { type: string, format: uuid }
+              interval_min: { type: integer }
+        pipelines_enabled:
+          type: array
+          items: { type: string }
+    CallbackNotification:
+      type: object
+      required: [task_id, status]
+      properties:
+        task_id: { type: string, format: uuid }
+        status: { type: string, enum: [done, failed] }
+        events: { type: array, items: { type: string, format: uuid } }
+        artifacts: { type: array, items: { type: string } }
