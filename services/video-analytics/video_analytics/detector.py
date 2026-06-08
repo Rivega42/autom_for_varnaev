@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+import numpy as np
+
 from video_analytics.landmarks import Landmark, PoseResult
 from video_analytics.sources import Frame
 
@@ -35,10 +37,16 @@ class MediaPipePoseDetector:
         self._landmarker = vision.PoseLandmarker.create_from_options(options)
 
     def detect(self, frame: Frame) -> PoseResult | None:
-        """Прогнать кадр через PoseLandmarker (кадр ожидается в RGB)."""
+        """Прогнать кадр через PoseLandmarker.
+
+        OpenCV отдаёт кадр в BGR, а MediaPipe ожидает RGB — конвертируем порядок
+        каналов (иначе цветозависимые эвристики и инференс работают по искажённым
+        цветам). `ascontiguousarray` нужен MediaPipe (C-непрерывный буфер).
+        """
         import mediapipe as mp
 
-        image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
+        rgb = np.ascontiguousarray(frame[:, :, ::-1])
+        image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         result: Any = self._landmarker.detect(image)
         if not result.pose_landmarks:
             return None

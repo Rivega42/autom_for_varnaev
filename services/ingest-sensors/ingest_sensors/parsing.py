@@ -23,12 +23,18 @@ RoomResolver = Callable[[str], str | None]
 
 
 def _parse_ts(raw: Any) -> datetime:
-    """Разобрать ISO-8601 ts или вернуть текущее время (UTC), если ts нет/битый."""
+    """Разобрать ISO-8601 ts или вернуть текущее время (UTC), если ts нет/битый.
+
+    Время без зоны нормируется к UTC: контракт MQTT задаёт UTC (суффикс `Z`), а
+    БД хранит timestamptz — naive-значение привело бы к смещению/ошибке.
+    """
     if isinstance(raw, str):
         try:
-            return datetime.fromisoformat(raw)
+            parsed = datetime.fromisoformat(raw)
         except ValueError:
             logger.warning("Некорректный ts в payload: %r — беру время приёма", raw)
+        else:
+            return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
     return datetime.now(UTC)
 
 

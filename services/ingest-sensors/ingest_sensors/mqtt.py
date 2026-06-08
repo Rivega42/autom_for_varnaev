@@ -62,6 +62,8 @@ def run(settings: Settings | None = None, handler: MessageHandler | None = None)
     """Запустить воркер: подключиться к брокеру и слушать (блокирующе)."""
     settings = settings or Settings.from_env()
     client = build_client(settings, handler)
+    # Автопереподключение с экспоненциальной задержкой (обрыв сети — норма).
+    client.reconnect_delay_set(min_delay=1, max_delay=32)
     logger.info("Подключение к брокеру %s:%s", settings.mqtt_host, settings.mqtt_port)
     client.connect(settings.mqtt_host, settings.mqtt_port)
     client.loop_forever()

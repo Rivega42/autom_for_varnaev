@@ -31,8 +31,15 @@ class HttpEventSink:
         self._client = client or httpx.Client(timeout=5.0)
 
     def emit(self, event: Event) -> None:
-        """Отправить событие в log-service."""
-        response = self._client.post(self._url, json=event.model_dump(mode="json"))
+        """Отправить событие в log-service (ошибки логируются, не пробрасываются).
+
+        Недоступность журнала не должна ронять обработку задания видеоанализа.
+        """
+        try:
+            response = self._client.post(self._url, json=event.model_dump(mode="json"))
+        except httpx.HTTPError as exc:
+            logger.warning("log-service недоступен, событие потеряно: %s", exc)
+            return
         if response.status_code >= 400:
             logger.warning("log-service отклонил событие: %s", response.status_code)
 
