@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import secrets
 import sys
@@ -59,7 +60,24 @@ def main() -> int:
         print(".env уже существует — пропускаю (используйте --force для перезаписи)")
         return 0
     text, generated = render_env(EXAMPLE.read_text(encoding="utf-8"))
-    ENV.write_text(text, encoding="utf-8")
+    # Защита от рассинхрона: если в .env.example нет какого-то секрета (например,
+    # переменную переименовали), .env уйдёт без сгенерированного пароля — это
+    # тихо ломает безопасность. Лучше упасть с понятным сообщением.
+    missing = SECRET_KEYS - generated.keys()
+    if missing:
+        print(
+            "Ошибка: в .env.example отсутствуют переменные для секретов: "
+            + ", ".join(sorted(missing)),
+            file=sys.stderr,
+        )
+        return 1
+    # Файл содержит секреты — пишем сразу с правами 0600 (только владелец),
+    # чтобы пароли не были читаемы другим пользователям системы.
+    fd = os.open(ENV, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    # На случай, если файл уже существовал с более широкими правами (--force).
+    ENV.chmod(0o600)
     print(f"Создан {ENV} со сгенерированными секретами:")
     for key, value in generated.items():
         print(f"  {key}={value}")

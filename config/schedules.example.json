@@ -5,7 +5,6 @@
     "source_ref": "rtsp://media-gateway:8554/room-01",
     "pipeline": "pose_v1",
     "room_id": "room-01",
-    "camera_id": "00000000-0000-0000-0000-000000000000",
     "interval_min": 30,
     "params": { "fps": 5 }
   }
