@@ -39,6 +39,19 @@ from monitoring_shared import ErrorCode, ok
 # Каталог статического GUI (отдаётся под /ui).
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 
+
+def _parse_query_dt(value: str | None) -> datetime | None:
+    """Разобрать ISO-8601 из query-параметра или вернуть 422 VALIDATION_ERROR."""
+    if value is None:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        raise api_error(
+            ErrorCode.VALIDATION_ERROR, "Неверный формат даты (ожидается ISO-8601)"
+        ) from None
+
+
 # Базовый префикс контракта (docs/03_API_CONTRACT.md §1).
 API_PREFIX = "/api/v1"
 
@@ -115,8 +128,8 @@ def create_app(
         offset: int = 0,
     ) -> dict[str, Any]:
         """Список заданий с фильтром по статусу/времени."""
-        from_ts = datetime.fromisoformat(from_) if from_ else None
-        to_ts = datetime.fromisoformat(to) if to else None
+        from_ts = _parse_query_dt(from_)
+        to_ts = _parse_query_dt(to)
         items, total = list_tasks(
             engine,
             status=status,
@@ -144,8 +157,8 @@ def create_app(
         limit: int = 500,
     ) -> dict[str, Any]:
         """Показания датчиков (проверочный путь; основной — Grafana)."""
-        from_ts = datetime.fromisoformat(from_) if from_ else None
-        to_ts = datetime.fromisoformat(to) if to else None
+        from_ts = _parse_query_dt(from_)
+        to_ts = _parse_query_dt(to)
         items = list_readings(
             engine,
             room=room,

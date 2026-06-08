@@ -55,8 +55,8 @@ class Envelope(BaseModel):
 
 
 def _now_iso() -> str:
-    """Текущее время UTC в ISO-8601 (формат контракта)."""
-    return datetime.now(UTC).isoformat()
+    """Текущее время UTC в ISO-8601 с суффиксом Z (формат контракта §1)."""
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def ok(data: Any) -> dict[str, Any]:

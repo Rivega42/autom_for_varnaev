@@ -53,3 +53,11 @@ def test_filter_by_room(engine: Engine) -> None:
     client = TestClient(create_app(engine))
     body = client.get("/events", params={"room": "room-01"}).json()
     assert body["data"]["total"] == 2
+
+
+def test_invalid_date_returns_422(engine: Engine) -> None:
+    """Некорректная дата в query log-service → 422 VALIDATION_ERROR (не 500)."""
+    client = TestClient(create_app(engine))
+    resp = client.get("/events", params={"from": "not-a-date"})
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_ERROR"

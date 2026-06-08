@@ -42,7 +42,7 @@ def create_app(engine: Engine | None = None) -> FastAPI:
         insert_event(engine, event)
         return ok({"id": str(event.id)})
 
-    @app.get("/events")
+    @app.get("/events", response_model=None)
     def get_events(
         from_: str | None = Query(default=None, alias="from"),
         to: str | None = None,
@@ -50,10 +50,16 @@ def create_app(engine: Engine | None = None) -> FastAPI:
         room: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | JSONResponse:
         """Лента событий с фильтрами по времени/типу/помещению."""
-        from_ts = datetime.fromisoformat(from_) if from_ else None
-        to_ts = datetime.fromisoformat(to) if to else None
+        try:
+            from_ts = datetime.fromisoformat(from_) if from_ else None
+            to_ts = datetime.fromisoformat(to) if to else None
+        except ValueError:
+            return JSONResponse(
+                status_code=422,
+                content=error("VALIDATION_ERROR", "Неверный формат даты (ожидается ISO-8601)"),
+            )
         items, total = list_events(
             engine,
             from_ts=from_ts,

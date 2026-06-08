@@ -7,7 +7,8 @@ from typing import Any
 
 
 def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+    """Текущее время UTC в ISO-8601 с суффиксом Z (формат контракта §1)."""
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def ok(data: Any) -> dict[str, Any]:

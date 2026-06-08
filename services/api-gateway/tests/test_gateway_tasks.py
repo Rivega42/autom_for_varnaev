@@ -100,3 +100,16 @@ def test_list_tasks_with_status_filter() -> None:
 
     none_resp = client.get("/api/v1/analysis-tasks", params={"status": "done"}).json()["data"]
     assert none_resp["total"] == 0
+
+
+def test_invalid_from_date_returns_422() -> None:
+    """Некорректная дата в query → 422 VALIDATION_ERROR (не 500)."""
+    resp = _client(_engine()).get("/api/v1/analysis-tasks?from=not-a-date")
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_envelope_ts_has_z_suffix() -> None:
+    """Поле ts конверта оканчивается на Z (формат контракта §1)."""
+    resp = _client(_engine()).get("/api/v1/health")
+    assert resp.json()["ts"].endswith("Z")
