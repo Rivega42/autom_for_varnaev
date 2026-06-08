@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI, Query, Response
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Engine
 
 from api_gateway.auth import make_require_api_key
@@ -23,9 +25,13 @@ from api_gateway.schemas import (
     CameraZoneCreate,
     CameraZoneUpdate,
 )
+from api_gateway.snapshot import Go2rtcSnapshotFetcher, SnapshotFetcher
 from api_gateway.tasks_repository import create_task, get_task, list_tasks
 from api_gateway.zones_repository import create_zone, delete_zone, list_zones, update_zone
 from monitoring_shared import ErrorCode, ok
+
+# Каталог статического GUI (отдаётся под /ui).
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 # Базовый префикс контракта (docs/03_API_CONTRACT.md §1).
 API_PREFIX = "/api/v1"
@@ -35,15 +41,18 @@ def create_app(
     settings: Settings | None = None,
     events_client: EventsClient | None = None,
     engine: Engine | None = None,
+    snapshot_fetcher: SnapshotFetcher | None = None,
 ) -> FastAPI:
     """Создать приложение api-gateway.
 
-    `settings`/`events_client`/`engine` можно передать (для тестов); по умолчанию
-    берутся из окружения, поднимается HTTP-клиент к log-service и engine БД.
+    `settings`/`events_client`/`engine`/`snapshot_fetcher` можно передать (для
+    тестов); по умолчанию берутся из окружения, поднимается HTTP-клиент к
+    log-service, engine БД и источник кадров go2rtc.
     """
     settings = settings or Settings.from_env()
     events = events_client or HttpEventsClient(settings.log_service_url)
     engine = engine if engine is not None else build_engine()
+    snapshots = snapshot_fetcher or Go2rtcSnapshotFetcher(settings.go2rtc_url)
 
     app = FastAPI(title="api-gateway")
     register_error_handlers(app)
@@ -165,6 +174,17 @@ def create_app(
             raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
         return ok(item)
 
+    @app.get(f"{API_PREFIX}/cameras/{{camera_id}}/snapshot", dependencies=[auth])
+    def camera_snapshot(camera_id: UUID) -> Response:
+        """JPEG-кадр камеры от go2rtc (фон для разметки ROI в GUI)."""
+        camera = get_camera(engine, camera_id)
+        if camera is None:
+            raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
+        image = snapshots.fetch(camera["name"])
+        if image is None:
+            raise api_error(ErrorCode.INTERNAL, "Кадр-превью недоступен (go2rtc)")
+        return Response(content=image, media_type="image/jpeg")
+
     @app.get(f"{API_PREFIX}/cameras/{{camera_id}}/zones", dependencies=[auth])
     def get_camera_zones(camera_id: UUID) -> dict[str, Any]:
         """ROI-зоны камеры (для % покрытия)."""
@@ -197,6 +217,11 @@ def create_app(
 
     # СТЫК-АУРА (v2): заглушённые разъёмы /integration/* (501 при выключенном флаге).
     register_integration_routes(app, settings, dependencies=[auth])
+
+    # GUI настройки видеоаналитики (статический SPA). Сам HTML/JS — без ключа;
+    # запросы к API из него несут X-API-Key. Каталог создаётся вместе с пакетом.
+    if _STATIC_DIR.is_dir():
+        app.mount("/ui", StaticFiles(directory=str(_STATIC_DIR), html=True), name="ui")
 
     return app
 

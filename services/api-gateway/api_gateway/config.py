@@ -16,6 +16,8 @@ class Settings:
     api_key: str | None
     # СТЫК-АУРА (v2): фичефлаг интеграции; в v1 всегда False (разъёмы отдают 501).
     aura_integration_enabled: bool
+    # Базовый URL медиа-шлюза go2rtc (для кадра-превью камеры в GUI разметки ROI).
+    go2rtc_url: str = "http://media-gateway:1984"
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -25,4 +27,5 @@ class Settings:
             api_key=os.getenv("API_KEY") or None,
             aura_integration_enabled=os.getenv("AURA_INTEGRATION_ENABLED", "false").lower()
             == "true",
+            go2rtc_url=os.getenv("GO2RTC_URL", "http://media-gateway:1984"),
         )

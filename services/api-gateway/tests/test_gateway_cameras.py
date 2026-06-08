@@ -159,3 +159,51 @@ def test_patch_and_delete_missing_zone() -> None:
     resp = client.delete("/api/v1/zones/999")
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "ZONE_NOT_FOUND"
+
+
+# ── Кадр-превью (snapshot) и GUI ──
+
+
+class _FakeSnap:
+    """Источник кадра-заглушка для тестов (без go2rtc)."""
+
+    def __init__(self, data: bytes | None) -> None:
+        self._data = data
+
+    def fetch(self, src: str) -> bytes | None:
+        return self._data
+
+
+def test_snapshot_returns_jpeg() -> None:
+    """Снапшот камеры отдаётся как image/jpeg."""
+    engine = _engine()
+    cam_id = _seed_camera(engine)
+    app = create_app(settings=_SETTINGS, engine=engine, snapshot_fetcher=_FakeSnap(b"\xff\xd8jpg"))
+    resp = TestClient(app).get(f"/api/v1/cameras/{cam_id}/snapshot")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/jpeg"
+    assert resp.content == b"\xff\xd8jpg"
+
+
+def test_snapshot_camera_missing() -> None:
+    """Снапшот несуществующей камеры → 404 CAMERA_NOT_FOUND."""
+    app = create_app(settings=_SETTINGS, engine=_engine(), snapshot_fetcher=_FakeSnap(b"x"))
+    resp = TestClient(app).get(f"/api/v1/cameras/{uuid4()}/snapshot")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "CAMERA_NOT_FOUND"
+
+
+def test_snapshot_unavailable() -> None:
+    """go2rtc недоступен (fetch=None) → 500 INTERNAL."""
+    engine = _engine()
+    cam_id = _seed_camera(engine)
+    app = create_app(settings=_SETTINGS, engine=engine, snapshot_fetcher=_FakeSnap(None))
+    resp = TestClient(app).get(f"/api/v1/cameras/{cam_id}/snapshot")
+    assert resp.status_code == 500
+
+
+def test_ui_served() -> None:
+    """Статический GUI настройки отдаётся под /ui/."""
+    resp = _client(_engine()).get("/ui/")
+    assert resp.status_code == 200
+    assert "<canvas" in resp.text

@@ -137,11 +137,14 @@ POST /api/v1/analysis-tasks
   "source_type": "stream",          // "stream" | "file"
   "source_ref": "rtsp://cam-01/...",// URL потока ИЛИ путь к файлу на томе
   "room": "room-01",
+  "camera_id": "…",                 // опц.: по нему применяются настройки камеры
   "pipeline": "pose_v1",            // какой анализ применить
   "params": { "fps": 5 }
 }
 ```
-Ответ `data`: созданное задание со `status: "queued"` и `id`.
+Ответ `data`: созданное задание со `status: "queued"` и `id`. Если задан
+`camera_id`, воркер применит к заданию тумблеры аналитики и ROI-зоны этой камеры
+— одинаково для `stream` и `file` (распознавание по переданному файлу).
 
 ```
 GET /api/v1/analysis-tasks/{id}       → статус и результат задания
@@ -163,11 +166,19 @@ GET /api/v1/readings?room=&metric=&from=&to=&limit=
 GET   /api/v1/cameras                         # список камер
 GET   /api/v1/cameras/{camera_id}             # камера или 404 CAMERA_NOT_FOUND
 PATCH /api/v1/cameras/{camera_id}             # enabled и/или тумблеры analytics
+GET   /api/v1/cameras/{camera_id}/snapshot    # JPEG-кадр от go2rtc (фон для ROI)
 GET   /api/v1/cameras/{camera_id}/zones       # ROI-зоны камеры
 POST  /api/v1/cameras/{camera_id}/zones       # создать ROI-зону
 PATCH /api/v1/zones/{zone_id}                 # изменить зону или 404 ZONE_NOT_FOUND
 DELETE /api/v1/zones/{zone_id}                # удалить зону или 404 ZONE_NOT_FOUND
 ```
+
+`GET /cameras/{id}/snapshot` отдаёт `image/jpeg` (не конверт): api-gateway
+проксирует кадр у go2rtc по имени потока = `cameras.name`. Используется веб-GUI.
+
+**Веб-GUI настройки** видеоаналитики отдаётся api-gateway по адресу **`/ui/`**
+(статический SPA): список камер, тумблеры функций, разметка ROI-зон мышью поверх
+кадра-превью. Сам GUI без ключа, его запросы к API несут `X-API-Key`.
 
 **Тело `PATCH /cameras/{id}`** (поля необязательны; `analytics` сливается с текущим):
 ```json

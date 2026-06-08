@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -19,6 +20,8 @@ class AnalysisTaskCreate(BaseModel):
     source_ref: str = Field(min_length=1)
     # В контракте поле называется `room` (внутри БД — room_id).
     room: str | None = None
+    # Камера задания: по ней применяются тумблеры аналитики и ROI-зоны.
+    camera_id: UUID | None = None
     pipeline: str = Field(min_length=1)
     params: dict[str, Any] | None = None
 

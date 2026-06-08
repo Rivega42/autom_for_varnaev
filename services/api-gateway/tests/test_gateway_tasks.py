@@ -61,6 +61,15 @@ def test_create_task_validation_error() -> None:
     assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
+def test_create_task_with_camera_id() -> None:
+    """camera_id из тела сохраняется и возвращается (для применения настроек камеры)."""
+    client = _client(_engine())
+    cam_id = str(uuid4())
+    resp = client.post("/api/v1/analysis-tasks", json={**_BODY, "camera_id": cam_id})
+    assert resp.status_code == 200
+    assert resp.json()["data"]["camera_id"] == cam_id
+
+
 def test_get_task_roundtrip() -> None:
     """Созданное задание читается по id."""
     client = _client(_engine())
