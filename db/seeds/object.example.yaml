@@ -24,3 +24,18 @@ cameras:
     name: cam-01
     rtsp_url: "rtsp://camera.local/stream"
     enabled: true
+
+# Пороги датчиков (критерии событий). room не указан = глобальный порог.
+# op: ">" | "<" | ">=" | "<"; severity: info | warning | critical.
+# silent_min (необяз.) — порог «тишины» узла в минутах (событие sensor_silent).
+thresholds:
+  - metric: humidity
+    op: ">"
+    value: 70.0
+    severity: warning
+  - room: room-02
+    metric: air_temp
+    op: ">"
+    value: 8.0
+    severity: critical
+    silent_min: 10

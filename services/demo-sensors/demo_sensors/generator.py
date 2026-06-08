@@ -70,7 +70,7 @@ def default_nodes() -> list[NodeProfile]:
     """Демо-топология: кухня (room-01/node-01) и холодильная камера (room-02/node-02).
 
     Узлы и помещения совпадают с db/seeds/demo.yaml. Всплески подобраны под
-    демо-пороги (см. scripts/demo_seed.py): влажность node-01 → 82% (> 70%),
+    демо-пороги (db/seeds/demo.yaml): влажность node-01 → 82% (> 70%),
     темп. воздуха node-02 → 12 °C (> 8 °C в холодильной камере).
     """
     return [
