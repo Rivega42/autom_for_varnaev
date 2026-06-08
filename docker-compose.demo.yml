@@ -1,0 +1,68 @@
+# Демо-оверлей: весь контур с СИНТЕТИЧЕСКИМИ данными датчиков, без железа.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build
+#   (или одной командой: scripts/bootstrap.sh --demo)
+#
+# Что делает оверлей:
+#   - demo-seed (one-shot): заводит демо-справочники и демо-пороги ДО старта
+#     ingest-sensors (тот читает справочник узлов один раз на старте);
+#   - demo-sensors: публикует синтетические показания в MQTT → ingest-sensors
+#     пишет их в БД, пороги дают события; всё видно в Grafana и GET /readings;
+#   - видеоаналитика уводится за профиль with-video (в демо нет модели и камер).
+services:
+  demo-seed:
+    # Демо-сид справочников и порогов (образ сидинга, см. db/Dockerfile.seed).
+    build:
+      context: .
+      dockerfile: db/Dockerfile.seed
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+    networks:
+      - internal
+    entrypoint: ["python", "scripts/demo_seed.py", "--apply"]
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  ingest-sensors:
+    # В демо ждём demo-seed: узлы должны быть в справочнике ДО старта воркера.
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      mqtt-broker:
+        condition: service_started
+      demo-seed:
+        condition: service_completed_successfully
+
+  demo-sensors:
+    # Генератор синтетических показаний (только демо).
+    build:
+      context: .
+      dockerfile: services/demo-sensors/Dockerfile
+    environment:
+      MQTT_HOST: ${MQTT_HOST:-mqtt-broker}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-monitoring}
+      DEMO_INTERVAL_S: ${DEMO_INTERVAL_S:-5}
+      DEMO_SPIKE_EVERY: ${DEMO_SPIKE_EVERY:-12}
+    networks:
+      - internal
+    depends_on:
+      mqtt-broker:
+        condition: service_started
+      ingest-sensors:
+        condition: service_started
+    restart: unless-stopped
+
+  video-analytics:
+    # В демо видеоаналитику не запускаем (нет модели и видео) — уводим за профиль.
+    profiles: ["with-video"]

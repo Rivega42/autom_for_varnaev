@@ -40,10 +40,23 @@ CLAUDE.md  →  docs/00_BEST_PRACTICES_CODE.md  →  docs/01…05  →  docs/06_
 
 **Требования:** Docker + Docker Compose, Python 3.12.
 
+**Быстрее всего — одной командой** (см. [`docs/10`](docs/10_DEPLOYMENT.md) §0):
+
+```bash
+scripts/bootstrap.sh --demo   # демо: весь контур + синтетические датчики (без железа)
+scripts/bootstrap.sh          # боевой: .env + модель + справочники + стек
+```
+
+Демо само заведёт справочники и погонит синтетический поток показаний — данные и
+события сразу видны в Grafana (http://localhost:3000) и GUI (http://localhost:8000/ui/).
+
+Ручной путь (dev):
+
 ```bash
 # 1. Конфигурация окружения (секреты — только локально, .env в .gitignore)
 cp .env.example .env
 #    отредактируй .env: задай POSTGRES_PASSWORD, API_KEY и прочие пароли
+#    (или: python scripts/init_env.py — сгенерит секреты автоматически)
 
 # 2. Поднять весь контур. Порядок выдержит compose сам:
 #    db (healthy) → migrate (alembic upgrade head) → прикладные сервисы.

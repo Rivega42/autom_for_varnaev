@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [api-gateway, log-service, ingest-sensors, scheduler, video-analytics]
+        service: [api-gateway, log-service, ingest-sensors, scheduler, video-analytics, demo-sensors]
     steps:
       - uses: actions/checkout@v4
 

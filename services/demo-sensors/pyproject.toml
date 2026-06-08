@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "demo-sensors"
+version = "0.1.0"
+description = "Демо-генератор синтетических показаний датчиков (только демо-режим)"
+requires-python = ">=3.12"
+dependencies = [
+  "paho-mqtt>=2",
+  "monitoring-shared",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["demo_sensors"]
