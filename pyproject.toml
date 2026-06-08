@@ -52,6 +52,9 @@ module = [
   "yaml",
   "uvicorn",
   "uvicorn.*",
+  "markdown",
+  "weasyprint",
+  "weasyprint.*",
 ]
 ignore_missing_imports = true
 
