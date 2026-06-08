@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 520" font-family="'Segoe UI','PT Sans',Arial,sans-serif">
+  <defs>
+    <marker id="s2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#3d5266"/></marker>
+    <style>
+      .t{fill:#1f2a36;} .lbl{font-size:12px;} .lbl-s{font-size:11px;} .muted{fill:#6a7a89;font-size:11px;}
+      .task{fill:#f3fbf6;stroke:#54a777;}
+      .taskbad{fill:#fdf1f1;stroke:#c96a6a;}
+      .taskcan{fill:#f3f5f7;stroke:#8a98a6;}
+      .seq{stroke:#3d5266;stroke-width:1.6;fill:none;marker-end:url(#s2);}
+      .gw{fill:#fff7e6;stroke:#d8a23a;}
+      .evs{fill:#fff;stroke:#5a8f5f;stroke-width:2;}
+      .eve{fill:#fff;stroke:#444;stroke-width:3;}
+    </style>
+  </defs>
+  <text x="20" y="30" class="t" font-size="17" font-weight="700">04 · Жизненный цикл задания на анализ (BPMN 2.0)</text>
+  <text x="20" y="50" class="muted">queued → running → done / failed; отмена до запуска → cancelled. Ромбы — шлюзы (исключающее ветвление).</text>
+
+  <!-- start -->
+  <circle cx="70" cy="150" r="18" class="evs"/>
+  <text x="34" y="190" class="muted">Триггер: расписание</text><text x="48" y="204" class="muted">(v1) / АУРА (v2)</text>
+
+  <rect x="120" y="120" width="150" height="64" rx="8" class="task"/><text x="136" y="157" class="t lbl">queued: создано</text>
+
+  <polygon points="320,150 348,122 376,150 348,178" class="gw"/><text x="300" y="112" class="muted">Отменено до запуска?</text>
+
+  <rect x="430" y="120" width="150" height="64" rx="8" class="task"/><text x="446" y="157" class="t lbl">running: анализ</text>
+
+  <polygon points="630,150 656,124 682,150 656,176" class="gw"/><text x="642" y="112" class="muted">Успех?</text>
+
+  <rect x="730" y="120" width="170" height="64" rx="8" class="task"/><text x="746" y="150" class="t lbl-s">done: события и</text><text x="746" y="167" class="t lbl-s">артефакты записаны</text>
+  <circle cx="960" cy="152" r="18" class="eve"/><text x="940" y="195" class="muted">Готово</text>
+
+  <!-- failed -->
+  <rect x="730" y="270" width="170" height="60" rx="8" class="taskbad"/><text x="746" y="306" class="t lbl-s">failed: ошибка</text>
+  <circle cx="960" cy="300" r="18" class="eve"/><text x="930" y="343" class="muted">С ошибкой</text>
+
+  <!-- cancelled -->
+  <rect x="300" y="270" width="130" height="60" rx="8" class="taskcan"/><text x="316" y="306" class="t lbl-s">cancelled</text>
+  <circle cx="365" cy="400" r="18" class="eve"/><text x="338" y="443" class="muted">Отменено</text>
+
+  <!-- flows -->
+  <path class="seq" d="M88,150 L120,150"/>
+  <path class="seq" d="M270,152 L320,150"/>
+  <path class="seq" d="M376,150 L430,152"/><text x="388" y="142" class="muted">нет</text>
+  <path class="seq" d="M580,152 L630,150"/>
+  <path class="seq" d="M682,150 L730,152"/><text x="694" y="142" class="muted">да</text>
+  <path class="seq" d="M900,152 L942,152"/>
+  <!-- result no -> failed -->
+  <path class="seq" d="M656,176 L656,300 L730,300"/><text x="664" y="240" class="muted">нет</text>
+  <path class="seq" d="M900,300 L942,300"/>
+  <!-- cancel yes -->
+  <path class="seq" d="M348,178 L348,270"/><text x="356" y="230" class="muted">да</text>
+  <path class="seq" d="M365,330 L365,382"/>
+</svg>
