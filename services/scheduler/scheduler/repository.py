@@ -26,6 +26,7 @@ def create_task(engine: Engine, entry: ScheduleEntry, now: datetime) -> UUID:
         source_type=entry.source_type.value,
         source_ref=entry.source_ref,
         room_id=entry.room_id,
+        camera_id=entry.camera_id,
         pipeline=entry.pipeline,
         params=entry.params,
         status=TaskStatus.QUEUED.value,

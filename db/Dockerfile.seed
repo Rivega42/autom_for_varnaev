@@ -1,0 +1,40 @@
+# Образ массового сидинга справочников (one-shot, профиль "seed").
+# Заводит rooms/sensor_nodes/cameras пачкой из YAML-конфига объекта ВНУТРИ сети
+# контура — БД наружу не публикуется, поэтому seed.py с хоста не достучится.
+# Поднимается отдельным профилем, не в составе дефолтного стека:
+#   docker compose --profile seed run --rm seed            # dry-run (проверка)
+#   docker compose --profile seed run --rm seed --apply    # запись в БД
+#
+# Контекст сборки — КОРЕНЬ репозитория: нужны локальный пакет shared и scripts/.
+
+# ── Стадия сборки: ставим зависимости в изолированный virtualenv ──
+FROM python:3.12-slim AS builder
+WORKDIR /build
+# Локальный пакет monitoring-shared (модели Room/SensorNode/Camera для валидации)
+# плюс рантайм-зависимости seed.py: YAML-разбор и доступ к PostgreSQL.
+COPY shared/ ./shared/
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir \
+        ./shared \
+        "pyyaml>=6" \
+        "sqlalchemy>=2.0,<3" \
+        "psycopg2-binary>=2.9"
+
+# ── Стадия запуска: тонкий runtime без инструментов сборки ──
+FROM python:3.12-slim AS runtime
+WORKDIR /app
+# Непривилегированный пользователь (не root).
+RUN useradd --create-home --uid 10001 appuser
+COPY --from=builder /opt/venv /opt/venv
+# Скрипты сидинга. Конфиг объекта монтируется в /seeds (см. docker-compose.yml);
+# демо-конфиг (db/seeds/demo.yaml) запекается в образ — он коммитится в репозиторий.
+COPY scripts/seed.py ./scripts/seed.py
+COPY scripts/demo_seed.py ./scripts/demo_seed.py
+COPY db/seeds/demo.yaml ./db/seeds/demo.yaml
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+USER appuser
+# ENTRYPOINT фиксирует команду и путь к конфигу; аргументы (напр. --apply)
+# добавляются через `docker compose run`. Без аргументов — dry-run (только проверка).
+ENTRYPOINT ["python", "scripts/seed.py", "/seeds/object.yaml"]

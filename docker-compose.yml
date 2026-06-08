@@ -19,7 +19,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
       # Read-only пользователь для Grafana (создаётся init-скриптом 02_grafana_ro.sh).
       POSTGRES_RO_USER: ${POSTGRES_RO_USER:-grafana_ro}
-      POSTGRES_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:-}
+      POSTGRES_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:?POSTGRES_RO_PASSWORD должен быть задан в .env}
     networks:
       - internal
     volumes:
@@ -34,6 +34,58 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
+
+  migrate:
+    # Применение миграций Alembic (one-shot) ДО старта прикладных сервисов.
+    # Завершается после `alembic upgrade head`; зависимые сервисы ждут его
+    # успешного завершения (service_completed_successfully) и стартуют на готовой
+    # схеме. Без этого шага БД поднимается без прикладных таблиц и сервисы падают.
+    build:
+      context: .
+      dockerfile: db/Dockerfile
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+    # Одноразовая задача: после успешного завершения не перезапускаем.
+    restart: "no"
+
+  seed:
+    # Массовый сидинг справочников из YAML (one-shot, ТОЛЬКО под профилем "seed").
+    # Не входит в дефолтный стек. Запускается явно ВНУТРИ сети контура (БД наружу
+    # не публикуется). Альтернатива — завести справочники через GUI/REST.
+    #   docker compose --profile seed run --rm seed            # dry-run (проверка)
+    #   docker compose --profile seed run --rm seed --apply    # запись в БД
+    profiles: ["seed"]
+    build:
+      context: .
+      dockerfile: db/Dockerfile.seed
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+    networks:
+      - internal
+    volumes:
+      # Конфиг объекта (rooms/sensor_nodes/cameras). Реальный object.yaml — не в репо;
+      # см. db/seeds/object.example.yaml. ENTRYPOINT читает /seeds/object.yaml.
+      - ./db/seeds:/seeds:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # Одноразовая задача: после завершения не перезапускаем.
+    restart: "no"
 
   mqtt-broker:
     # Брокер MQTT (Mosquitto): приём показаний от узлов датчиков (ESPHome).
@@ -66,7 +118,7 @@ services:
       # Передаются в provisioning datasource (timescaledb.yaml) через ${VAR}.
       POSTGRES_DB: ${POSTGRES_DB:-monitoring}
       POSTGRES_RO_USER: ${POSTGRES_RO_USER:-grafana_ro}
-      POSTGRES_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:-}
+      POSTGRES_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:?POSTGRES_RO_PASSWORD должен быть задан в .env}
     networks:
       - internal
     ports:
@@ -80,6 +132,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   log-service:
@@ -98,6 +152,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 15s
@@ -114,8 +170,10 @@ services:
       dockerfile: services/api-gateway/Dockerfile
     environment:
       LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
-      API_KEY: ${API_KEY:-}
+      API_KEY: ${API_KEY:?API_KEY должен быть задан в .env (иначе API открыт без ключа)}
       AURA_INTEGRATION_ENABLED: ${AURA_INTEGRATION_ENABLED:-false}
+      # Кадр-превью камеры для GUI разметки ROI (go2rtc во внутренней сети).
+      GO2RTC_URL: ${GO2RTC_URL:-http://media-gateway:1984}
     networks:
       - internal
       - integration
@@ -125,6 +183,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       log-service:
         condition: service_healthy
     healthcheck:
@@ -150,11 +210,15 @@ services:
       MQTT_PORT: ${MQTT_PORT:-1883}
       MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-monitoring}
       LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
+      # Порог «тишины» узла (мин): нет показаний дольше — событие sensor_silent.
+      SENSOR_SILENT_MIN: ${SENSOR_SILENT_MIN:-10}
     networks:
       - internal
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       mqtt-broker:
         condition: service_started
     restart: unless-stopped
@@ -181,6 +245,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   video-analytics:
@@ -208,6 +274,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       log-service:
         condition: service_started
       media-gateway:
@@ -226,8 +294,9 @@ services:
       dockerfile: services/api-gateway/Dockerfile.release
     environment:
       LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
-      API_KEY: ${API_KEY:-}
+      API_KEY: ${API_KEY:?API_KEY должен быть задан в .env (иначе API открыт без ключа)}
       AURA_INTEGRATION_ENABLED: ${AURA_INTEGRATION_ENABLED:-false}
+      GO2RTC_URL: ${GO2RTC_URL:-http://media-gateway:1984}
     networks:
       - internal
       - integration
@@ -236,6 +305,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       log-service:
         condition: service_healthy
     # healthcheck не задаём: distroless-образ без python и шелла.
@@ -264,6 +335,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       log-service:
         condition: service_started
       media-gateway:

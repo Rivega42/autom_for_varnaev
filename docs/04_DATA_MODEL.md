@@ -118,6 +118,7 @@ created_at    timestamptz NOT NULL
 source_type   text NOT NULL        -- "stream" | "file"
 source_ref    text NOT NULL        -- RTSP URL или путь к файлу на томе
 room_id       text REFERENCES rooms(id)
+camera_id     uuid REFERENCES cameras(id)  -- камера задания: по ней берутся ROI-зоны (% покрытия)
 pipeline      text NOT NULL        -- "pose_v1" и т.п.
 params        jsonb                -- параметры пайплайна (fps и пр.)
 status        text NOT NULL        -- см. ниже
@@ -175,8 +176,12 @@ room_id       text REFERENCES rooms(id)
 name          text NOT NULL
 rtsp_url      text NOT NULL        -- источник для media-gateway
 viewpoint     jsonb                -- пресет ракурса из PoC
-enabled       boolean DEFAULT true
+enabled       boolean DEFAULT true  -- камера активна; false = аналитика выключена
+analytics     jsonb                -- тумблеры функций {pose,actions,uniform,coverage}; null = все вкл.
 ```
+
+> Управление `enabled`/`analytics` и ROI-зонами — через REST `api-gateway`
+> (`docs/03_API_CONTRACT.md` §3.5); воркер видеоаналитики учитывает тумблеры.
 
 ### camera_zones
 ```
@@ -215,6 +220,7 @@ rooms 1───* sensor_nodes 1───* sensor_readings
 rooms 1───* cameras 1───* camera_zones
 rooms 1───* events *───0..1 artifacts
 cameras 1───* artifacts
+cameras 1───* analysis_tasks
 rooms 1───* analysis_tasks 1───* artifacts
 analysis_tasks 1───* events
 rooms 1───* thresholds

@@ -61,6 +61,15 @@ def test_create_task_validation_error() -> None:
     assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
+def test_create_task_with_camera_id() -> None:
+    """camera_id из тела сохраняется и возвращается (для применения настроек камеры)."""
+    client = _client(_engine())
+    cam_id = str(uuid4())
+    resp = client.post("/api/v1/analysis-tasks", json={**_BODY, "camera_id": cam_id})
+    assert resp.status_code == 200
+    assert resp.json()["data"]["camera_id"] == cam_id
+
+
 def test_get_task_roundtrip() -> None:
     """Созданное задание читается по id."""
     client = _client(_engine())
@@ -91,3 +100,16 @@ def test_list_tasks_with_status_filter() -> None:
 
     none_resp = client.get("/api/v1/analysis-tasks", params={"status": "done"}).json()["data"]
     assert none_resp["total"] == 0
+
+
+def test_invalid_from_date_returns_422() -> None:
+    """Некорректная дата в query → 422 VALIDATION_ERROR (не 500)."""
+    resp = _client(_engine()).get("/api/v1/analysis-tasks?from=not-a-date")
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_envelope_ts_has_z_suffix() -> None:
+    """Поле ts конверта оканчивается на Z (формат контракта §1)."""
+    resp = _client(_engine()).get("/api/v1/health")
+    assert resp.json()["ts"].endswith("Z")

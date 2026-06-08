@@ -14,6 +14,7 @@ analysis_tasks = sa.Table(
     sa.Column("source_type", sa.Text, nullable=False),
     sa.Column("source_ref", sa.Text, nullable=False),
     sa.Column("room_id", sa.Text),
+    sa.Column("camera_id", sa.Uuid),
     sa.Column("pipeline", sa.Text, nullable=False),
     sa.Column("params", sa.JSON),
     sa.Column("status", sa.Text, nullable=False),
@@ -23,6 +24,19 @@ analysis_tasks = sa.Table(
     sa.Column("result", sa.JSON),
     sa.Column("error", sa.Text),
     sa.Column("callback_url", sa.Text),
+)
+
+
+cameras = sa.Table(
+    "cameras",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("room_id", sa.Text, nullable=False),
+    sa.Column("name", sa.Text, nullable=False),
+    sa.Column("rtsp_url", sa.Text, nullable=False),
+    sa.Column("viewpoint", sa.JSON),
+    sa.Column("enabled", sa.Boolean, nullable=False),
+    sa.Column("analytics", sa.JSON),
 )
 
 

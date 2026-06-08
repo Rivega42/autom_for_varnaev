@@ -63,6 +63,7 @@
 | `log-service` | единый журнал событий: приём от ingest и analytics, чтение через API | Python/FastAPI |
 | `api-gateway` | единственный REST-вход контура наружу; разъёмы для АУРА (заглушены в v1) | Python/FastAPI |
 | `db` | TimescaleDB: временные ряды датчиков + события/задания/артефакты | TimescaleDB (PostgreSQL 16) |
+| `migrate` | одноразовое применение миграций (`alembic upgrade head`) до старта сервисов | Python + Alembic |
 | `grafana` | дашборды: графики датчиков, лента событий | Grafana |
 
 Что НЕ наше (контейнеры АУРА, мы их не создаём): видеозапись, контроль
@@ -188,9 +189,9 @@ v2:  scheduler (cron) ──┐
 
 ---
 
-## 8. Структура репозитория (целевая)
+## 8. Структура репозитория
 
-Claude Code разворачивает монорепо по этой структуре. Не придумывать свою.
+Фактическая структура монорепо (v1 реализован). Следовать ей, не придумывать свою.
 
 ```
 .
@@ -219,15 +220,18 @@ Claude Code разворачивает монорепо по этой струк
 ├─ media-gateway/             # go2rtc.yaml: приём RTSP/ONVIF, релей воркеру + превью WebRTC
 ├─ db/
 │  ├─ migrations/             # Alembic
-│  └─ init/                   # включение timescaledb, hypertable
+│  ├─ init/                   # включение timescaledb, ro-пользователь Grafana
+│  └─ Dockerfile              # образ сервиса migrate (alembic upgrade head)
 ├─ firmware/
 │  └─ esphome/                # YAML-конфиги узлов (ESP32-C3 + SHT4x + MLX90614)
 ├─ grafana/
-│  ├─ dashboards/
-│  └─ provisioning/
+│  ├─ dashboards/             # дашборды (sensors, events)
+│  └─ provisioning/           # datasource (ro), дашборды, алерты
+├─ models/                    # бинарная модель MediaPipe (внешний ассет, не в гите)
+├─ config/                    # расписания планировщика (schedules.json)
 ├─ shared/                    # общие Python-модели (конверт API, схемы событий)
-│  └─ ...
-└─ scripts/                   # утилиты разработчика
+├─ tests/                     # корневые тесты (структура, миграции, compose)
+└─ scripts/                   # утилиты разработчика (проверки, сиды)
 ```
 
 `shared/` важен: единый конверт API и схемы событий/заданий лежат там, чтобы

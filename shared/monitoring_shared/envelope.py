@@ -20,6 +20,14 @@ class ErrorCode(StrEnum):
     VALIDATION_ERROR = "VALIDATION_ERROR"
     TASK_NOT_FOUND = "TASK_NOT_FOUND"
     EVENT_NOT_FOUND = "EVENT_NOT_FOUND"
+    CAMERA_NOT_FOUND = "CAMERA_NOT_FOUND"
+    ZONE_NOT_FOUND = "ZONE_NOT_FOUND"
+    THRESHOLD_NOT_FOUND = "THRESHOLD_NOT_FOUND"
+    SCHEDULE_NOT_FOUND = "SCHEDULE_NOT_FOUND"
+    SCHEDULE_DUPLICATE_NAME = "SCHEDULE_DUPLICATE_NAME"
+    ROOM_NOT_FOUND = "ROOM_NOT_FOUND"
+    ROOM_ALREADY_EXISTS = "ROOM_ALREADY_EXISTS"
+    NODE_ALREADY_EXISTS = "NODE_ALREADY_EXISTS"
     NOT_IMPLEMENTED = "NOT_IMPLEMENTED"
     INTERNAL = "INTERNAL"
 
@@ -29,6 +37,14 @@ ERROR_HTTP_STATUS: dict[ErrorCode, int] = {
     ErrorCode.VALIDATION_ERROR: 422,
     ErrorCode.TASK_NOT_FOUND: 404,
     ErrorCode.EVENT_NOT_FOUND: 404,
+    ErrorCode.CAMERA_NOT_FOUND: 404,
+    ErrorCode.ZONE_NOT_FOUND: 404,
+    ErrorCode.THRESHOLD_NOT_FOUND: 404,
+    ErrorCode.SCHEDULE_NOT_FOUND: 404,
+    ErrorCode.SCHEDULE_DUPLICATE_NAME: 409,
+    ErrorCode.ROOM_NOT_FOUND: 404,
+    ErrorCode.ROOM_ALREADY_EXISTS: 409,
+    ErrorCode.NODE_ALREADY_EXISTS: 409,
     ErrorCode.NOT_IMPLEMENTED: 501,
     ErrorCode.INTERNAL: 500,
 }
@@ -51,8 +67,8 @@ class Envelope(BaseModel):
 
 
 def _now_iso() -> str:
-    """Текущее время UTC в ISO-8601 (формат контракта)."""
-    return datetime.now(UTC).isoformat()
+    """Текущее время UTC в ISO-8601 с суффиксом Z (формат контракта §1)."""
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def ok(data: Any) -> dict[str, Any]:

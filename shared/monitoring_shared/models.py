@@ -129,6 +129,8 @@ class AnalysisTask(BaseModel):
     source_type: SourceType
     source_ref: str
     room_id: str | None = None
+    # камера задания: по ней берутся ROI-зоны для % покрытия (None = без покрытия)
+    camera_id: UUID | None = None
     pipeline: str
     params: dict[str, Any] | None = None
     status: TaskStatus
@@ -195,6 +197,9 @@ class Camera(BaseModel):
     rtsp_url: str
     viewpoint: dict[str, Any] | None = None
     enabled: bool = True
+    # Пофункциональные тумблеры видеоаналитики камеры: {"pose","actions","uniform",
+    # "coverage": bool}. None или отсутствие ключа = функция включена (по умолчанию).
+    analytics: dict[str, bool] | None = None
 
 
 class ZoneType(StrEnum):

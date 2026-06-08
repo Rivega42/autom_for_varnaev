@@ -10,7 +10,14 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _CI = REPO_ROOT / ".github/workflows/ci.yml"
 
-_SERVICES = {"api-gateway", "log-service", "ingest-sensors", "scheduler", "video-analytics"}
+_SERVICES = {
+    "api-gateway",
+    "log-service",
+    "ingest-sensors",
+    "scheduler",
+    "video-analytics",
+    "demo-sensors",
+}
 
 
 def _ci() -> dict[str, Any]:
@@ -31,7 +38,7 @@ def test_docker_build_job_present() -> None:
 
 
 def test_builds_all_services() -> None:
-    """Матрица сборки покрывает все пять сервисов."""
+    """Матрица сборки покрывает все сервисы с Dockerfile (services/<svc>/Dockerfile)."""
     services = set(_docker_build_job()["strategy"]["matrix"]["service"])
     assert services == _SERVICES
 

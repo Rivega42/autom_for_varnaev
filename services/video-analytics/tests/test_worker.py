@@ -94,6 +94,7 @@ def test_run_once_processes_task_and_emits_event() -> None:
         detector=detector,
         sink=sink,
         source_factory=lambda *_: source,
+        save_frame=lambda *_: None,  # не трогаем cv2 в тестах
         now_fn=lambda: datetime(2026, 6, 6, 10, 5, tzinfo=UTC),
     )
 

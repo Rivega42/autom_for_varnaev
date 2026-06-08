@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 660" font-family="'Segoe UI', 'PT Sans', Arial, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#5b6b7a"/>
+    </marker>
+    <style>
+      .t{fill:#1f2a36;}
+      .muted{fill:#5b6b7a;}
+      .room{fill:#eef3f8;stroke:#c3d2e0;}
+      .ours{fill:#e8f5ee;stroke:#54a777;}
+      .aura{fill:#f4eef9;stroke:#9b6dc4;}
+      .vol{fill:#fff6e6;stroke:#d8a23a;}
+      .srv{fill:#ffffff;stroke:#3d5266;}
+      .lbl{font-size:13px;}
+      .lbl-s{font-size:11px;}
+      .h{font-size:15px;font-weight:700;}
+      .flow{stroke:#5b6b7a;stroke-width:1.6;fill:none;marker-end:url(#arr);}
+    </style>
+  </defs>
+
+  <text x="24" y="34" class="t h" font-size="18">01 · Топология объекта</text>
+  <text x="24" y="54" class="muted lbl">Несколько помещений с датчиками и камерами → один физический сервер на объекте</text>
+
+  <!-- Rooms -->
+  <g>
+    <rect x="24" y="80" width="250" height="150" rx="10" class="room"/>
+    <text x="40" y="104" class="t h">Помещение 1</text>
+    <rect x="40" y="118" width="100" height="40" rx="6" class="srv"/>
+    <text x="52" y="142" class="t lbl-s">датчики</text>
+    <rect x="156" y="118" width="100" height="40" rx="6" class="srv"/>
+    <text x="170" y="142" class="t lbl-s">камера(ы)</text>
+    <text x="40" y="186" class="muted lbl-s">t° / влажность / ИК</text>
+    <text x="40" y="204" class="muted lbl-s">видеопоток</text>
+
+    <rect x="24" y="246" width="250" height="150" rx="10" class="room"/>
+    <text x="40" y="270" class="t h">Помещение 2</text>
+    <rect x="40" y="284" width="100" height="40" rx="6" class="srv"/>
+    <text x="52" y="308" class="t lbl-s">датчики</text>
+    <rect x="156" y="284" width="100" height="40" rx="6" class="srv"/>
+    <text x="170" y="308" class="t lbl-s">камера(ы)</text>
+    <text x="40" y="352" class="muted lbl-s">холодильная камера:</text>
+    <text x="40" y="370" class="muted lbl-s">радио снаружи, датчики на I²C внутри</text>
+
+    <rect x="24" y="412" width="250" height="120" rx="10" class="room"/>
+    <text x="40" y="436" class="t h">Помещение N</text>
+    <rect x="40" y="450" width="100" height="40" rx="6" class="srv"/>
+    <text x="52" y="474" class="t lbl-s">датчики</text>
+    <rect x="156" y="450" width="100" height="40" rx="6" class="srv"/>
+    <text x="170" y="474" class="t lbl-s">камера(ы)</text>
+  </g>
+
+  <!-- transport labels -->
+  <path class="flow" d="M274,150 C320,150 320,300 360,300"/>
+  <path class="flow" d="M274,300 L360,300"/>
+  <path class="flow" d="M274,470 C320,470 320,300 360,300"/>
+  <text x="290" y="288" class="muted lbl-s">датчики → MQTT (Wi-Fi)</text>
+  <text x="290" y="318" class="muted lbl-s">камеры → RTSP</text>
+
+  <!-- Server -->
+  <rect x="362" y="80" width="594" height="500" rx="12" fill="#fbfdff" stroke="#3d5266" stroke-width="1.5"/>
+  <text x="380" y="106" class="t h">Физический сервер на объекте (Docker)</text>
+
+  <!-- our circuit -->
+  <rect x="380" y="122" width="560" height="270" rx="10" class="ours"/>
+  <text x="396" y="144" class="t h" fill="#2f7a4f">Наш контур (контейнеры)</text>
+
+  <rect x="396" y="158" width="120" height="40" rx="6" class="srv"/>
+  <text x="406" y="182" class="t lbl-s">mqtt-broker</text>
+  <rect x="540" y="158" width="130" height="40" rx="6" class="srv"/>
+  <text x="552" y="182" class="t lbl-s">ingest-sensors</text>
+  <rect x="396" y="214" width="130" height="40" rx="6" class="srv"/>
+  <text x="408" y="238" class="t lbl-s">video-analytics</text>
+  <rect x="540" y="214" width="130" height="40" rx="6" class="srv"/>
+  <text x="556" y="238" class="t lbl-s">scheduler</text>
+  <rect x="396" y="270" width="130" height="40" rx="6" class="srv"/>
+  <text x="416" y="294" class="t lbl-s">log-service</text>
+  <rect x="540" y="270" width="130" height="40" rx="6" class="srv"/>
+  <text x="556" y="294" class="t lbl-s">grafana</text>
+
+  <rect x="700" y="158" width="150" height="96" rx="6" class="srv"/>
+  <text x="716" y="182" class="t lbl-s">TimescaleDB</text>
+  <text x="716" y="200" class="muted lbl-s">ряды + события</text>
+  <text x="716" y="216" class="muted lbl-s">задания + артефакты</text>
+
+  <rect x="700" y="270" width="150" height="40" rx="6" fill="#dff0e7" stroke="#2f7a4f"/>
+  <text x="712" y="294" class="t lbl-s" fill="#2f7a4f">api-gateway</text>
+
+  <text x="396" y="340" class="muted lbl-s">api-gateway — единственный вход снаружи контура</text>
+  <text x="396" y="360" class="muted lbl-s">остальные сервисы видны только внутри (см. 02 · Сетевая модель)</text>
+
+  <!-- AURA -->
+  <rect x="380" y="404" width="370" height="100" rx="10" class="aura"/>
+  <text x="396" y="426" class="t h" fill="#7b46a8">АУРА — продукт заказчика (мы не трогаем)</text>
+  <text x="396" y="450" class="muted lbl-s">видеозапись · контроль производства</text>
+  <text x="396" y="468" class="muted lbl-s">тех. карты · программа произв. контроля (ППК)</text>
+  <text x="396" y="492" class="muted lbl-s">v1: обмена с нашим контуром нет</text>
+
+  <!-- volume -->
+  <rect x="766" y="404" width="174" height="100" rx="10" class="vol"/>
+  <text x="782" y="426" class="t h" fill="#9a6f1e">Общий том</text>
+  <text x="782" y="448" class="muted lbl-s">артефакты</text>
+  <text x="782" y="466" class="muted lbl-s">пишем мы →</text>
+  <text x="782" y="484" class="muted lbl-s">читает АУРА (v2)</text>
+
+  <!-- outward -->
+  <rect x="380" y="518" width="560" height="48" rx="10" fill="#eef3f8" stroke="#c3d2e0"/>
+  <text x="396" y="540" class="t lbl">Наружу хоста опубликованы порты только:</text>
+  <text x="396" y="558" class="muted lbl-s">api-gateway (REST) · grafana (дашборд)</text>
+
+  <text x="24" y="630" class="muted lbl-s">v1 — наш контур standalone. Видео идёт и к нам (аналитика), и в АУРА (запись) раздельно. В v2 поток уходит в АУРА, нам приходят фрагменты на анализ.</text>
+</svg>

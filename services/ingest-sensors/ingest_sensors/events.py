@@ -11,8 +11,10 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import uuid4
+
+import httpx
 
 from monitoring_shared import (
     Event,
@@ -67,6 +69,28 @@ class LoggingEventSink:
 
     def emit(self, event: Event) -> None:
         logger.info("Событие [%s] %s", event.type.value, event.message)
+
+
+class HttpEventSink:
+    """Сток в единый журнал log-service по HTTP (POST /events).
+
+    Устойчив к сбоям log-service: ошибку логирует, но не пробрасывает — приём
+    показаний по MQTT не должен падать из-за недоступности журнала.
+    """
+
+    def __init__(self, base_url: str, client: Any | None = None) -> None:
+        self._url = base_url.rstrip("/") + "/events"
+        self._client = client or httpx.Client(timeout=5.0)
+
+    def emit(self, event: Event) -> None:
+        """Отправить событие в log-service (ошибки логируются, не пробрасываются)."""
+        try:
+            response = self._client.post(self._url, json=event.model_dump(mode="json"))
+        except httpx.HTTPError as exc:
+            logger.warning("log-service недоступен, событие потеряно: %s", exc)
+            return
+        if response.status_code >= 400:
+            logger.warning("log-service отклонил событие: %s", response.status_code)
 
 
 def build_threshold_exceeded(

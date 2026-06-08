@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 600" font-family="'Segoe UI','PT Sans',Arial,sans-serif">
+  <defs>
+    <marker id="seq" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#3d5266"/></marker>
+    <marker id="msg" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto"><path d="M1,1 L9,4 L1,7" fill="none" stroke="#7b46a8" stroke-width="1.2"/></marker>
+    <marker id="msgs" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><circle cx="4" cy="4" r="3" fill="#fff" stroke="#7b46a8"/></marker>
+    <style>
+      .t{fill:#1f2a36;} .lbl{font-size:12px;} .lbl-s{font-size:10.5px;} .muted{fill:#6a7a89;}
+      .pool{fill:#fbfdff;stroke:#3d5266;}
+      .band-cam{fill:#eef3f8;} .band-our{fill:#e8f5ee;} .band-aura{fill:#f4eef9;}
+      .task{fill:#ffffff;stroke:#3d5266;rx:8;}
+      .task-our{fill:#f3fbf6;stroke:#54a777;}
+      .task-aura{fill:#f9f4fd;stroke:#9b6dc4;}
+      .ev{fill:#fff;stroke:#5a8f5f;stroke-width:2;}
+      .seq{stroke:#3d5266;stroke-width:1.6;fill:none;marker-end:url(#seq);}
+      .msg{stroke:#7b46a8;stroke-width:1.5;fill:none;stroke-dasharray:6 4;marker-end:url(#msg);marker-start:url(#msgs);}
+      .band-txt{font-size:12px;font-weight:700;}
+    </style>
+  </defs>
+
+  <text x="20" y="30" class="t" font-size="17" font-weight="700">03 · API: кто кому что шлёт (BPMN 2.0)</text>
+  <text x="20" y="50" class="muted lbl">Сплошные стрелки — поток внутри участника. Пунктир — поток сообщений между участниками. v1 — RTSP; v2 — задание/уведомление.</text>
+
+  <!-- Pool Camera -->
+  <rect x="40" y="70" width="800" height="110" class="pool"/>
+  <rect x="40" y="70" width="28" height="110" class="band-cam" stroke="#3d5266"/>
+  <text x="58" y="160" class="band-txt" transform="rotate(-90 58,160)">Камера</text>
+  <circle cx="120" cy="125" r="16" class="ev" stroke="#888"/><text x="98" y="160" class="muted lbl-s">Камера включена</text>
+  <rect x="180" y="100" width="150" height="52" rx="8" fill="#fff" stroke="#3d5266"/><text x="196" y="131" class="t lbl">Отдаёт RTSP-поток</text>
+  <path class="seq" d="M136,125 L180,125"/>
+
+  <!-- Pool Our -->
+  <rect x="40" y="200" width="800" height="150" class="pool"/>
+  <rect x="40" y="200" width="28" height="150" class="band-our" stroke="#3d5266"/>
+  <text x="58" y="305" class="band-txt" fill="#2f7a4f" transform="rotate(-90 58,305)">Наш контур</text>
+  <circle cx="110" cy="270" r="16" class="ev"/><text x="86" y="305" class="muted lbl-s">Расписание (v1)</text>
+  <rect x="160" y="245" width="160" height="52" rx="8" fill="#f3fbf6" stroke="#54a777"/><text x="172" y="270" class="t lbl-s">video-analytics:</text><text x="172" y="287" class="t lbl-s">анализ источника</text>
+  <rect x="350" y="245" width="180" height="52" rx="8" fill="#f3fbf6" stroke="#54a777"/><text x="362" y="270" class="t lbl-s">log-service: запись</text><text x="362" y="287" class="t lbl-s">события + артефакт</text>
+  <rect x="560" y="245" width="180" height="52" rx="8" fill="#f3fbf6" stroke="#54a777"/><text x="572" y="270" class="t lbl-s">api-gateway:</text><text x="572" y="287" class="t lbl-s">/integration/* (501 в v1)</text>
+  <path class="seq" d="M126,270 L160,270"/>
+  <path class="seq" d="M320,271 L350,271"/>
+
+  <!-- Pool Aura -->
+  <rect x="40" y="370" width="800" height="150" class="pool"/>
+  <rect x="40" y="370" width="28" height="150" class="band-aura" stroke="#3d5266"/>
+  <text x="58" y="480" class="band-txt" fill="#7b46a8" transform="rotate(-90 58,480)">АУРА (v2)</text>
+  <rect x="160" y="415" width="160" height="52" rx="8" fill="#f9f4fd" stroke="#9b6dc4"/><text x="172" y="446" class="t lbl-s">Видеозапись (АУРА)</text>
+  <rect x="430" y="415" width="170" height="52" rx="8" fill="#f9f4fd" stroke="#9b6dc4"/><text x="442" y="440" class="t lbl-s">Ставит задание</text><text x="442" y="457" class="t lbl-s">на файл (v2)</text>
+  <rect x="630" y="415" width="160" height="52" rx="8" fill="#f9f4fd" stroke="#9b6dc4"/><text x="642" y="440" class="t lbl-s">Принимает</text><text x="642" y="457" class="t lbl-s">уведомление (v2)</text>
+  <path class="seq" d="M600,441 L630,441"/>
+
+  <!-- Message flows -->
+  <path class="msg" d="M230,152 L235,245"/>
+  <text x="240" y="200" class="muted lbl-s" fill="#7b46a8">RTSP (v1)</text>
+  <path class="msg" d="M255,152 C255,300 230,360 230,415"/>
+  <text x="120" y="400" class="muted lbl-s" fill="#7b46a8">RTSP (v1)</text>
+  <path class="msg" d="M560,415 C540,360 650,330 650,297"/>
+  <text x="600" y="360" class="muted lbl-s" fill="#7b46a8">POST /integration (v2)</text>
+  <path class="msg" d="M700,297 C710,340 710,380 710,415"/>
+  <text x="715" y="360" class="muted lbl-s" fill="#7b46a8">callback (v2)</text>
+</svg>

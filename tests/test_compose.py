@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +82,68 @@ def test_video_analytics_mounts_artifacts() -> None:
     """video-analytics монтирует общий том artifacts."""
     va = _compose()["services"]["video-analytics"]
     assert any("artifacts:/data/artifacts" in v for v in va["volumes"])
+
+
+# ── Применение миграций Alembic (migrate-сервис) ──
+
+# Сервисы, которым нужна готовая схема БД до старта (зависят от migrate).
+_NEEDS_SCHEMA = (
+    "log-service",
+    "api-gateway",
+    "ingest-sensors",
+    "scheduler",
+    "video-analytics",
+    "grafana",
+)
+
+
+def test_migrate_service_present() -> None:
+    """Сервис migrate собирается из db/Dockerfile, в internal, ждёт healthy БД."""
+    migrate = _compose()["services"].get("migrate")
+    assert migrate is not None, "Сервис migrate отсутствует в compose"
+    assert migrate["build"]["dockerfile"] == "db/Dockerfile"
+    assert migrate["build"]["context"] == "."
+    assert migrate["networks"] == ["internal"]
+    assert migrate["depends_on"]["db"]["condition"] == "service_healthy"
+    # Одноразовая задача: не перезапускается после успешного завершения.
+    assert str(migrate["restart"]) == "no"
+
+
+def test_schema_consumers_wait_for_migrate() -> None:
+    """Сервисы, читающие/пишущие таблицы, стартуют после успешных миграций."""
+    services = _compose()["services"]
+    for name in _NEEDS_SCHEMA:
+        depends = services[name]["depends_on"]
+        assert "migrate" in depends, f"{name} должен зависеть от migrate"
+        assert depends["migrate"]["condition"] == "service_completed_successfully"
+
+
+# ── Полнота .env.example относительно docker-compose ──
+
+
+def _compose_env_vars() -> set[str]:
+    """Имена переменных, на которые ссылается compose через ${VAR...}."""
+    lines = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8").splitlines()
+    # Отбрасываем комментарии (в них встречаются литералы вроде «через ${VAR}»).
+    body = "\n".join(line.split("#", 1)[0] for line in lines)
+    # ${VAR}, ${VAR:-default}, ${VAR:?msg} — берём только имя.
+    return set(re.findall(r"\$\{([A-Z0-9_]+)[}:]", body))
+
+
+def _env_example_keys() -> set[str]:
+    """Ключи, объявленные в .env.example (строки вида KEY=...)."""
+    keys: set[str] = set()
+    for line in (REPO_ROOT / ".env.example").read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            keys.add(stripped.split("=", 1)[0].strip())
+    return keys
+
+
+def test_env_example_documents_all_compose_vars() -> None:
+    """Каждая переменная из docker-compose описана в .env.example (E0.3)."""
+    missing = _compose_env_vars() - _env_example_keys()
+    assert not missing, f".env.example не содержит переменных compose: {sorted(missing)}"
 
 
 # ── Профили dev/release (E9.7) ──

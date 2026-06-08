@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -15,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 # Обработчик входящего сообщения: (topic, payload) -> None.
 MessageHandler = Callable[[str, bytes], None]
+# Периодический тик (например, проверка «тишины» узлов).
+TickHandler = Callable[[], None]
 
 
 def _default_handler(topic: str, payload: bytes) -> None:
@@ -58,10 +61,38 @@ def build_client(settings: Settings, handler: MessageHandler | None = None) -> m
     return client
 
 
-def run(settings: Settings | None = None, handler: MessageHandler | None = None) -> None:
-    """Запустить воркер: подключиться к брокеру и слушать (блокирующе)."""
+def run(
+    settings: Settings | None = None,
+    handler: MessageHandler | None = None,
+    *,
+    on_tick: TickHandler | None = None,
+    tick_interval_s: float = 60.0,
+) -> None:
+    """Запустить воркер: подключиться к брокеру и слушать (блокирующе).
+
+    Если задан `on_tick`, сеть обслуживается фоновым потоком (loop_start), а в
+    основном потоке периодически (раз в `tick_interval_s` сек) вызывается `on_tick`
+    — это используется для проверки «тишины» узлов независимо от входящих
+    сообщений. Без `on_tick` поведение прежнее (loop_forever).
+    """
     settings = settings or Settings.from_env()
     client = build_client(settings, handler)
+    # Автопереподключение с экспоненциальной задержкой (обрыв сети — норма).
+    client.reconnect_delay_set(min_delay=1, max_delay=32)
     logger.info("Подключение к брокеру %s:%s", settings.mqtt_host, settings.mqtt_port)
     client.connect(settings.mqtt_host, settings.mqtt_port)
-    client.loop_forever()
+
+    if on_tick is None:
+        client.loop_forever()
+        return
+
+    client.loop_start()
+    try:
+        while True:
+            time.sleep(tick_interval_s)
+            try:
+                on_tick()
+            except Exception:
+                logger.exception("Ошибка периодической проверки (тик)")
+    finally:
+        client.loop_stop()

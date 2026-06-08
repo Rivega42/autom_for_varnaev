@@ -6,6 +6,7 @@ from ingest_sensors.thresholds import (
     applicable_thresholds,
     compare,
     load_thresholds,
+    resolve_silent_min,
 )
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
@@ -56,6 +57,50 @@ def test_monitor_transitions() -> None:
     assert monitor.evaluate("room-01", Metric.AIR_TEMP, 7.0)[0] is Transition.RECOVERED
     # снова норма — без перехода
     assert monitor.evaluate("room-01", Metric.AIR_TEMP, 6.0)[0] is Transition.NONE
+
+
+def test_resolve_silent_min_per_room_and_default() -> None:
+    """silent_min берётся из порогов помещения (минимальный), иначе default."""
+    thresholds = [
+        _threshold(id=1, room_id=None, silent_min=15),  # глобальный
+        _threshold(id=2, room_id="cold-01", silent_min=5),  # холодильная камера — строже
+        _threshold(id=3, room_id="cold-01", silent_min=8),
+        _threshold(id=4, room_id="room-02", silent_min=None),  # порог без silent_min
+        _threshold(id=5, room_id="room-09", silent_min=3, enabled=False),  # выключен — игнор
+    ]
+    # для холодильной камеры берётся минимальный из её и глобального (5)
+    assert resolve_silent_min(thresholds, "cold-01", default=99) == 5
+    # для room-02 свой silent_min не задан → действует глобальный (15)
+    assert resolve_silent_min(thresholds, "room-02", default=99) == 15
+    # помещение без порогов с silent_min и есть глобальный → глобальный
+    assert resolve_silent_min(thresholds, "room-77", default=99) == 15
+    # если глобального нет вовсе — default
+    assert resolve_silent_min([_threshold(id=9, silent_min=None)], "room-01", default=42) == 42
+    # выключенный порог не учитывается
+    assert resolve_silent_min([thresholds[4]], "room-09", default=42) == 42
+
+
+def test_replace_drops_stale_breach_state() -> None:
+    """replace() выкидывает превышение, для которого больше нет применимого порога.
+
+    Иначе следующее показание в норме породило бы ложный BACK_TO_NORMAL.
+    """
+    monitor = ThresholdMonitor([_threshold(room_id="room-01", value=8.0, op=ThresholdOp.GT)])
+    assert monitor.evaluate("room-01", Metric.AIR_TEMP, 9.0)[0] is Transition.BREACHED
+    # Порог удалили через интерфейс — набор пуст.
+    monitor.replace([])
+    # Показание в норме НЕ должно дать RECOVERED по уже несуществующему порогу.
+    assert monitor.evaluate("room-01", Metric.AIR_TEMP, 7.0)[0] is Transition.NONE
+
+
+def test_replace_keeps_breach_when_threshold_remains() -> None:
+    """Если применимый порог сохранился — состояние превышения не теряется."""
+    monitor = ThresholdMonitor([_threshold(room_id="room-01", value=8.0, op=ThresholdOp.GT)])
+    assert monitor.evaluate("room-01", Metric.AIR_TEMP, 9.0)[0] is Transition.BREACHED
+    # Перезагрузка тем же набором (например, поменяли другой порог).
+    monitor.replace([_threshold(room_id="room-01", value=8.0, op=ThresholdOp.GT)])
+    # Возврат к норме корректно фиксируется один раз.
+    assert monitor.evaluate("room-01", Metric.AIR_TEMP, 7.0)[0] is Transition.RECOVERED
 
 
 def test_load_thresholds_from_db() -> None:

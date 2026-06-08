@@ -1,0 +1,24 @@
+# Демо-конфигурация стенда для демо-режима (docker-compose.demo.yml).
+# В отличие от db/seeds/object.yaml этот файл КОММИТИТСЯ в репозиторий: это
+# синтетический стенд без реальных адресов камер и узлов. Узлы здесь должны
+# совпадать с теми, что публикует demo-sensors (services/demo-sensors).
+rooms:
+  - id: room-01
+    name: "Помещение для приготовления пищи"
+    is_cold: false
+  - id: room-02
+    name: "Холодильная камера"
+    is_cold: true
+
+sensor_nodes:
+  - id: node-01
+    room_id: room-01
+    placement: "внутри (I2C)"
+    power: mains
+  - id: node-02
+    room_id: room-02
+    placement: "внутри камеры (I2C-шлейф)"
+    power: mains
+
+# Камер в демо нет: видеоаналитика в демо-режиме не запускается (нет модели).
+cameras: []

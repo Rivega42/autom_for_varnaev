@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Настройка видеоаналитики</title>
+  <style>
+    :root { --bd: #d0d7de; --bg: #f6f8fa; --accent: #3367d6; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; color: #10204a; }
+    header { background: var(--accent); color: #fff; padding: 10px 16px; display: flex;
+             gap: 12px; align-items: center; flex-wrap: wrap; }
+    header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+    header input { padding: 4px 8px; border: none; border-radius: 4px; }
+    main { display: flex; gap: 16px; padding: 16px; flex-wrap: wrap; }
+    .panel { border: 1px solid var(--bd); border-radius: 8px; padding: 12px; background: #fff; }
+    #cameras { width: 260px; }
+    #cameras ul { list-style: none; padding: 0; margin: 0; }
+    #cameras li { padding: 8px; border-radius: 6px; cursor: pointer; }
+    #cameras li.active { background: var(--bg); font-weight: 600; }
+    #cameras li.off { color: #98a; }
+    .editor { flex: 1; min-width: 480px; }
+    label.flag { display: inline-flex; gap: 4px; align-items: center; margin-right: 14px; }
+    canvas { border: 1px solid var(--bd); cursor: crosshair; max-width: 100%; background: #eee; }
+    button { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+             padding: 6px 12px; cursor: pointer; }
+    button.sec { background: #eaeef2; color: #10204a; }
+    .row { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+    th, td { border: 1px solid var(--bd); padding: 4px 8px; text-align: left; font-size: 13px; }
+    #msg { margin-left: auto; font-size: 13px; }
+    .hint { color: #57606a; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Настройка видеоаналитики</h1>
+    <input id="apikey" type="password" placeholder="X-API-Key" />
+    <button id="reload" class="sec">Загрузить камеры</button>
+    <span id="msg"></span>
+  </header>
+
+  <main>
+    <section class="panel" id="directories-panel" style="width:100%">
+      <h2 style="margin-top:0">Справочники объекта</h2>
+      <p class="hint">Заведите помещения и узлы датчиков. Без узла в справочнике
+        показания этого датчика по MQTT отбрасываются. Кнопка «Загрузить камеры»
+        в шапке подтягивает и справочники.</p>
+      <div class="row" style="align-items:flex-start">
+        <div style="flex:1; min-width:320px">
+          <strong>Помещения</strong>
+          <div class="row">
+            <input id="rm_id" placeholder="id (напр. room-01)" />
+            <input id="rm_name" placeholder="название" />
+            <label class="flag"><input type="checkbox" id="rm_cold" /> холодильная</label>
+            <button id="rm_add">Добавить</button>
+          </div>
+          <table id="rooms">
+            <thead><tr><th>id</th><th>название</th><th>холод</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div style="flex:1; min-width:320px">
+          <strong>Узлы датчиков</strong>
+          <div class="row">
+            <input id="nd_id" placeholder="id (напр. node-01)" />
+            <input id="nd_room" placeholder="помещение (room id)" />
+            <input id="nd_place" placeholder="размещение (необяз.)" />
+            <button id="nd_add">Добавить</button>
+          </div>
+          <table id="nodes">
+            <thead><tr><th>id</th><th>помещение</th><th>размещение</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <main>
+    <section id="cameras" class="panel">
+      <strong>Камеры</strong>
+      <ul id="camlist"></ul>
+      <p id="emptyhint" class="hint" hidden>
+        Камер нет. Заведите камеру в форме ниже или через сид-конфиг
+        (<code>db/seeds/object.yaml</code> + <code>scripts/seed.py --apply</code>).
+      </p>
+
+      <details id="addcam">
+        <summary>Добавить камеру</summary>
+        <div class="row"><input id="nc_room" placeholder="помещение (room id)" /></div>
+        <div class="row"><input id="nc_name" placeholder="имя = поток в go2rtc" /></div>
+        <div class="row"><input id="nc_rtsp" placeholder="rtsp://…" /></div>
+        <div class="row"><button id="nc_save">Создать</button></div>
+        <p class="hint">Имя должно совпадать с именем потока в go2rtc.yaml.</p>
+      </details>
+    </section>
+
+    <section class="editor panel" id="editor" hidden>
+      <h2 id="camname" style="margin-top:0"></h2>
+
+      <div class="row">
+        <label class="flag"><input type="checkbox" id="enabled" /> камера включена</label>
+      </div>
+      <div class="row">
+        <span>Функции аналитики:</span>
+        <label class="flag"><input type="checkbox" id="f_pose" /> позы</label>
+        <label class="flag"><input type="checkbox" id="f_actions" /> действия</label>
+        <label class="flag"><input type="checkbox" id="f_uniform" /> спецодежда</label>
+        <label class="flag"><input type="checkbox" id="f_coverage" /> покрытие</label>
+        <button id="saveCam">Сохранить настройки</button>
+      </div>
+
+      <h3>ROI-зоны</h3>
+      <div class="row">
+        <button id="loadFrame" class="sec">Загрузить кадр</button>
+        <label>тип зоны:
+          <select id="zoneType">
+            <option value="table">стол</option>
+            <option value="floor">пол</option>
+            <option value="window">окно</option>
+          </select>
+        </label>
+        <button id="saveZone">Сохранить зону</button>
+        <button id="clearPoly" class="sec">Очистить точки</button>
+      </div>
+      <p class="hint">Клик по кадру — добавить вершину полигона (≥3). Координаты нормируются [0..1].</p>
+      <canvas id="canvas" width="640" height="360"></canvas>
+
+      <table id="zones">
+        <thead><tr><th>id</th><th>тип</th><th>вершин</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <main>
+    <section class="panel" id="thresholds-panel" style="width:100%">
+      <h2 style="margin-top:0">Пороги датчиков</h2>
+      <p class="hint">Критерии событий: превышение/возврат к норме. Применяются воркером в течение минуты.</p>
+      <div class="row">
+        <input id="th_room" placeholder="помещение (пусто = все)" />
+        <select id="th_metric">
+          <option value="air_temp">темп. воздуха</option>
+          <option value="humidity">влажность</option>
+          <option value="surface_ir">темп. поверхности</option>
+        </select>
+        <select id="th_op">
+          <option value="&gt;">&gt;</option>
+          <option value="&lt;">&lt;</option>
+          <option value="&gt;=">&ge;</option>
+          <option value="&lt;=">&le;</option>
+        </select>
+        <input id="th_value" type="number" step="0.1" placeholder="значение" style="width:90px" />
+        <select id="th_sev">
+          <option value="warning">warning</option>
+          <option value="critical">critical</option>
+        </select>
+        <button id="th_add">Добавить порог</button>
+      </div>
+      <table id="thresholds">
+        <thead><tr><th>помещение</th><th>метрика</th><th>усл.</th><th>знач.</th><th>важность</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <main>
+    <section class="panel" id="schedules-panel" style="width:100%">
+      <h2 style="margin-top:0">Расписания видеоанализа (таймер)</h2>
+      <p class="hint">Периодический запуск анализа. Изменения подхватываются планировщиком на следующем тике.</p>
+      <div class="row">
+        <input id="sc_name" placeholder="имя (уникальное)" />
+        <input id="sc_ref" placeholder="rtsp://… или путь к файлу" style="min-width:240px" />
+        <input id="sc_room" placeholder="помещение" />
+        <input id="sc_interval" type="number" placeholder="интервал, мин" style="width:130px" />
+        <button id="sc_add">Добавить расписание</button>
+      </div>
+      <table id="schedules">
+        <thead><tr><th>имя</th><th>источник</th><th>помещение</th><th>интервал, мин</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

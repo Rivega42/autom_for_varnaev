@@ -11,10 +11,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import Engine, select
 
 from monitoring_shared import SourceType
+from scheduler.tables import schedules as _schedules_table
 
 
 class ScheduleEntry(BaseModel):
@@ -26,6 +29,8 @@ class ScheduleEntry(BaseModel):
     source_ref: str = Field(min_length=1)
     pipeline: str = Field(min_length=1)
     room_id: str | None = None
+    # Камера задания: по ней видеоаналитика берёт ROI-зоны для % покрытия.
+    camera_id: UUID | None = None
     # Период повторения, минут (> 0).
     interval_min: int = Field(gt=0)
     # Параметры пайплайна (fps и пр.), попадают в analysis_tasks.params.
@@ -64,3 +69,26 @@ def load_schedules(path: str | Path) -> list[ScheduleEntry]:
     if not isinstance(raw, list):
         raise ValueError("файл расписаний должен содержать JSON-массив записей")
     return parse_schedules(raw)
+
+
+def load_schedules_db(engine: Engine) -> list[ScheduleEntry]:
+    """Прочитать включённые расписания из БД (таблица schedules).
+
+    Источник истины при настройке через веб-интерфейс. Перечитывается каждый тик,
+    поэтому изменения применяются без перезапуска планировщика.
+    """
+    with engine.connect() as conn:
+        rows = conn.execute(select(_schedules_table).where(_schedules_table.c.enabled)).mappings()
+        return [
+            ScheduleEntry(
+                name=row["name"],
+                source_type=SourceType(row["source_type"]),
+                source_ref=row["source_ref"],
+                pipeline=row["pipeline"],
+                room_id=row["room_id"],
+                camera_id=row["camera_id"],
+                interval_min=row["interval_min"],
+                params=row["params"],
+            )
+            for row in rows
+        ]

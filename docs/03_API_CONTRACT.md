@@ -60,6 +60,14 @@
 | `UNAUTHORIZED` | 401 | отсутствует или неверен `X-API-Key` |
 | `TASK_NOT_FOUND` | 404 | задание с таким id отсутствует |
 | `EVENT_NOT_FOUND` | 404 | событие отсутствует |
+| `CAMERA_NOT_FOUND` | 404 | камера с таким id отсутствует |
+| `ZONE_NOT_FOUND` | 404 | ROI-зона с таким id отсутствует |
+| `THRESHOLD_NOT_FOUND` | 404 | порог с таким id отсутствует |
+| `SCHEDULE_NOT_FOUND` | 404 | расписание с таким id отсутствует |
+| `SCHEDULE_DUPLICATE_NAME` | 409 | расписание с таким именем уже существует (имя — уникальный ключ слота) |
+| `ROOM_NOT_FOUND` | 404 | помещение с таким id отсутствует (напр. при заведении узла) |
+| `ROOM_ALREADY_EXISTS` | 409 | помещение с таким id уже существует |
+| `NODE_ALREADY_EXISTS` | 409 | узел датчиков с таким id уже существует |
 | `NOT_IMPLEMENTED` | 501 | эндпойнт-разъём АУРА выключен в v1 |
 | `INTERNAL` | 500 | прочая внутренняя ошибка |
 
@@ -135,11 +143,14 @@ POST /api/v1/analysis-tasks
   "source_type": "stream",          // "stream" | "file"
   "source_ref": "rtsp://cam-01/...",// URL потока ИЛИ путь к файлу на томе
   "room": "room-01",
+  "camera_id": "…",                 // опц.: по нему применяются настройки камеры
   "pipeline": "pose_v1",            // какой анализ применить
   "params": { "fps": 5 }
 }
 ```
-Ответ `data`: созданное задание со `status: "queued"` и `id`.
+Ответ `data`: созданное задание со `status: "queued"` и `id`. Если задан
+`camera_id`, воркер применит к заданию тумблеры аналитики и ROI-зоны этой камеры
+— одинаково для `stream` и `file` (распознавание по переданному файлу).
 
 ```
 GET /api/v1/analysis-tasks/{id}       → статус и результат задания
@@ -151,6 +162,113 @@ GET /api/v1/analysis-tasks?status=&from=&to=  → список
 ```
 GET /api/v1/readings?room=&metric=&from=&to=&limit=
 ```
+
+### 3.4a Справочники объекта: помещения и узлы датчиков
+
+Базовые справочники заводятся через интерфейс/REST — **без SQL и сидинга**.
+Помещения нужны как ключ для узлов, камер, показаний и событий; узлы датчиков —
+обязательны: без узла в справочнике `ingest-sensors` отбрасывает его показания.
+Все эндпойнты требуют `X-API-Key`.
+
+```
+GET  /api/v1/rooms                  # список помещений
+POST /api/v1/rooms                  # завести помещение или 409 ROOM_ALREADY_EXISTS
+GET  /api/v1/sensor-nodes           # список узлов датчиков
+POST /api/v1/sensor-nodes           # завести узел: 404 ROOM_NOT_FOUND / 409 NODE_ALREADY_EXISTS
+```
+
+**Тело `POST /rooms`** (`id` — человекочитаемый ключ помещения):
+```json
+{ "id": "room-01", "name": "Кухня", "is_cold": false }
+```
+
+**Тело `POST /sensor-nodes`** (`room_id` — id существующего помещения):
+```json
+{ "id": "node-01", "room_id": "room-01", "placement": "внутри (I2C)", "power": "mains", "note": null }
+```
+
+### 3.5 Настройка видеоаналитики: камеры и ROI-зоны
+
+Интерфейс настройки контура под объект: включение камеры и её функций аналитики,
+управление ROI-зонами для расчёта % покрытия. Все эндпойнты требуют `X-API-Key`.
+
+```
+GET   /api/v1/cameras                         # список камер
+POST  /api/v1/cameras                         # завести камеру в справочнике
+GET   /api/v1/cameras/{camera_id}             # камера или 404 CAMERA_NOT_FOUND
+PATCH /api/v1/cameras/{camera_id}             # enabled и/или тумблеры analytics
+GET   /api/v1/cameras/{camera_id}/snapshot    # JPEG-кадр от go2rtc (фон для ROI)
+GET   /api/v1/cameras/{camera_id}/zones       # ROI-зоны камеры
+POST  /api/v1/cameras/{camera_id}/zones       # создать ROI-зону
+PATCH /api/v1/zones/{zone_id}                 # изменить зону или 404 ZONE_NOT_FOUND
+DELETE /api/v1/zones/{zone_id}                # удалить зону или 404 ZONE_NOT_FOUND
+```
+
+`GET /cameras/{id}/snapshot` отдаёт `image/jpeg` (не конверт): api-gateway
+проксирует кадр у go2rtc по имени потока = `cameras.name`. Используется веб-GUI.
+
+**Веб-GUI настройки** видеоаналитики отдаётся api-gateway по адресу **`/ui/`**
+(статический SPA): список камер, тумблеры функций, разметка ROI-зон мышью поверх
+кадра-превью. Сам GUI без ключа, его запросы к API несут `X-API-Key`.
+
+**Тело `POST /cameras`** (заводит камеру; альтернатива сид-конфигу `db/seeds/object.yaml`):
+```json
+{ "room": "room-01", "name": "cam-01", "rtsp_url": "rtsp://camera.local/stream", "enabled": true }
+```
+`name` обязано совпадать с именем потока в `media-gateway/go2rtc.yaml` (по нему
+берётся кадр-превью). `room` — id существующего помещения. Ответ `data` — созданная
+камера (с выданным `id`); `analytics=null` (все функции включены).
+
+**Тело `PATCH /cameras/{id}`** (поля необязательны; `analytics` сливается с текущим):
+```json
+{ "enabled": true, "analytics": { "pose": true, "actions": true, "uniform": true, "coverage": false } }
+```
+Функции аналитики: `pose`, `actions`, `uniform`, `coverage`. Отсутствие ключа или
+`analytics=null` = функция включена. `enabled=false` отключает всю аналитику камеры.
+
+**Тело `POST /cameras/{id}/zones`** (полигон — ≥3 вершин, координаты нормированы [0..1]):
+```json
+{ "zone_type": "table", "polygon": [[0.1,0.1],[0.5,0.1],[0.5,0.5]], "note": "стол" }
+```
+`zone_type`: `table` | `floor` | `window`. Типы зон и модель — `docs/04_DATA_MODEL.md`.
+
+---
+
+### 3.6 Пороги датчиков и расписания (настройка через интерфейс)
+
+Эти справочники настраиваются оператором через веб-GUI (или REST) — без SQL.
+Сервисы перечитывают их сами: `ingest-sensors` — пороги каждую минуту, `scheduler`
+— расписания каждый тик. Все эндпойнты требуют `X-API-Key`.
+
+```
+GET    /api/v1/thresholds                  # список порогов
+POST   /api/v1/thresholds                  # создать порог
+PATCH  /api/v1/thresholds/{id}             # изменить или 404 THRESHOLD_NOT_FOUND
+DELETE /api/v1/thresholds/{id}             # удалить или 404 THRESHOLD_NOT_FOUND
+GET    /api/v1/schedules                    # список расписаний (таймер)
+POST   /api/v1/schedules                   # создать или 409 SCHEDULE_DUPLICATE_NAME
+PATCH  /api/v1/schedules/{id}              # изменить или 404/409 (имя занято)
+DELETE /api/v1/schedules/{id}              # удалить или 404 SCHEDULE_NOT_FOUND
+```
+
+**Тело `POST /thresholds`** (`room=null` — глобальный порог для всех помещений):
+```json
+{ "room": "room-02", "metric": "air_temp", "op": ">", "value": 8.0,
+  "severity": "warning", "silent_min": 10, "enabled": true }
+```
+`metric`: `air_temp`|`humidity`|`surface_ir`; `op`: `>`|`<`|`>=`|`<=`;
+`severity`: `info`|`warning`|`critical`.
+
+**Тело `POST /schedules`** (периодический запуск видеоанализа — «таймер»):
+```json
+{ "name": "кухня-15м", "source_type": "stream", "source_ref": "rtsp://camera/stream",
+  "room": "room-01", "camera_id": "…", "pipeline": "pose_v1",
+  "params": { "fps": 5 }, "interval_min": 15, "enabled": true }
+```
+Расписания из БД имеют приоритет над легаси-файлом `config/schedules.json` (файл
+остаётся поддержанным для совместимости; записи файла берутся, если имя не занято
+записью из БД; имя расписания уникально). Коды ошибок: `THRESHOLD_NOT_FOUND`,
+`SCHEDULE_NOT_FOUND` (404), `SCHEDULE_DUPLICATE_NAME` (409 — имя занято).
 
 ---
 

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 
 
@@ -22,15 +23,21 @@ class SilenceMonitor:
         self._last_seen[node_id] = ts
         self._flagged.discard(node_id)
 
-    def silent_nodes(self, now: datetime, silent_min: int) -> list[tuple[str, int]]:
-        """Узлы, молчащие дольше silent_min минут (однократно на эпизод тишины).
+    def silent_nodes(
+        self, now: datetime, silent_min: int | Callable[[str], int]
+    ) -> list[tuple[str, int]]:
+        """Узлы, молчащие дольше порога минут (однократно на эпизод тишины).
 
-        Возвращает список (node_id, прошло_минут).
+        `silent_min` — общий порог (int) либо функция `node_id -> минут` (порог
+        зависит от помещения узла, см. docs/08). Возвращает список (node_id, прошло_минут).
         """
+        threshold_for: Callable[[str], int] = (
+            silent_min if callable(silent_min) else (lambda _node: silent_min)
+        )
         result: list[tuple[str, int]] = []
         for node_id, last in self._last_seen.items():
             elapsed_min = (now - last).total_seconds() / 60.0
-            if elapsed_min > silent_min and node_id not in self._flagged:
+            if elapsed_min > threshold_for(node_id) and node_id not in self._flagged:
                 self._flagged.add(node_id)
                 result.append((node_id, int(elapsed_min)))
         return result
