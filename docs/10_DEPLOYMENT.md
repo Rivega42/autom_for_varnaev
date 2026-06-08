@@ -110,11 +110,18 @@ curl -X POST -H "$H" $U/cameras      -d '{"room":"room-01","name":"cam-01","rtsp
 ```
 
 > **Массовый импорт (опционально).** Для большого объекта справочники можно
-> загрузить пачкой из YAML скриптом `scripts/seed.py`. Так как БД доступна только
-> во внутренней сети, запускайте сид **внутри сети контура**, а не с хоста —
-> например, одноразовым контейнером с доступом к `db` (см. `scripts/seed.py` и
-> `db/seeds/object.example.yaml`). Прямое подключение с хоста к `localhost:5432`
-> не сработает: порт БД наружу не публикуется.
+> загрузить пачкой из YAML одноразовым сервисом `seed` (профиль `seed`). Он
+> работает **внутри сети контура** (БД наружу не публикуется), идемпотентен
+> (UPSERT по id) и ждёт готовности миграций:
+>
+> ```bash
+> cp db/seeds/object.example.yaml db/seeds/object.yaml   # отредактировать под объект
+> docker compose --profile seed run --rm seed            # dry-run: разбор и проверка
+> docker compose --profile seed run --rm seed --apply    # запись в БД
+> ```
+>
+> `object.yaml` не коммитится (в `.gitignore`). Прямой запуск `scripts/seed.py`
+> с хоста к `localhost:5432` не сработает — порт БД наружу не публикуется.
 
 > **ROI-зоны и тумблеры аналитики** настраиваются по REST через `api-gateway`
 > (`docs/03_API_CONTRACT.md` §3.5): `POST /api/v1/cameras/{id}/zones` — добавить

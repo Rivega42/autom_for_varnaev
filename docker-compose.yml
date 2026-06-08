@@ -57,6 +57,36 @@ services:
     # Одноразовая задача: после успешного завершения не перезапускаем.
     restart: "no"
 
+  seed:
+    # Массовый сидинг справочников из YAML (one-shot, ТОЛЬКО под профилем "seed").
+    # Не входит в дефолтный стек. Запускается явно ВНУТРИ сети контура (БД наружу
+    # не публикуется). Альтернатива — завести справочники через GUI/REST.
+    #   docker compose --profile seed run --rm seed            # dry-run (проверка)
+    #   docker compose --profile seed run --rm seed --apply    # запись в БД
+    profiles: ["seed"]
+    build:
+      context: .
+      dockerfile: db/Dockerfile.seed
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+    networks:
+      - internal
+    volumes:
+      # Конфиг объекта (rooms/sensor_nodes/cameras). Реальный object.yaml — не в репо;
+      # см. db/seeds/object.example.yaml. ENTRYPOINT читает /seeds/object.yaml.
+      - ./db/seeds:/seeds:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # Одноразовая задача: после завершения не перезапускаем.
+    restart: "no"
+
   mqtt-broker:
     # Брокер MQTT (Mosquitto): приём показаний от узлов датчиков (ESPHome).
     image: eclipse-mosquitto:2
