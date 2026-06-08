@@ -19,7 +19,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
       # Read-only пользователь для Grafana (создаётся init-скриптом 02_grafana_ro.sh).
       POSTGRES_RO_USER: ${POSTGRES_RO_USER:-grafana_ro}
-      POSTGRES_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:-}
+      POSTGRES_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:?POSTGRES_RO_PASSWORD должен быть задан в .env}
     networks:
       - internal
     volumes:
@@ -88,7 +88,7 @@ services:
       # Передаются в provisioning datasource (timescaledb.yaml) через ${VAR}.
       POSTGRES_DB: ${POSTGRES_DB:-monitoring}
       POSTGRES_RO_USER: ${POSTGRES_RO_USER:-grafana_ro}
-      POSTGRES_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:-}
+      POSTGRES_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:?POSTGRES_RO_PASSWORD должен быть задан в .env}
     networks:
       - internal
     ports:
@@ -140,7 +140,7 @@ services:
       dockerfile: services/api-gateway/Dockerfile
     environment:
       LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
-      API_KEY: ${API_KEY:-}
+      API_KEY: ${API_KEY:?API_KEY должен быть задан в .env (иначе API открыт без ключа)}
       AURA_INTEGRATION_ENABLED: ${AURA_INTEGRATION_ENABLED:-false}
       # Кадр-превью камеры для GUI разметки ROI (go2rtc во внутренней сети).
       GO2RTC_URL: ${GO2RTC_URL:-http://media-gateway:1984}
@@ -180,6 +180,8 @@ services:
       MQTT_PORT: ${MQTT_PORT:-1883}
       MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-monitoring}
       LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
+      # Порог «тишины» узла (мин): нет показаний дольше — событие sensor_silent.
+      SENSOR_SILENT_MIN: ${SENSOR_SILENT_MIN:-10}
     networks:
       - internal
     depends_on:
@@ -262,7 +264,7 @@ services:
       dockerfile: services/api-gateway/Dockerfile.release
     environment:
       LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
-      API_KEY: ${API_KEY:-}
+      API_KEY: ${API_KEY:?API_KEY должен быть задан в .env (иначе API открыт без ключа)}
       AURA_INTEGRATION_ENABLED: ${AURA_INTEGRATION_ENABLED:-false}
       GO2RTC_URL: ${GO2RTC_URL:-http://media-gateway:1984}
     networks:

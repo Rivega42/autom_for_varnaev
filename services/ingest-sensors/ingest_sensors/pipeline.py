@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Protocol
 
 from ingest_sensors.events import (
@@ -38,13 +39,16 @@ def make_reading_handler(
     monitor: ThresholdMonitor | None = None,
     sink: EventSink | None = None,
     describe_room: RoomDescriber = default_room_describer,
+    on_reading: Callable[[Reading], None] | None = None,
 ) -> MessageHandler:
     """Создать обработчик: разобрать сообщение в Reading, записать и эмитить события.
 
     Битые/неизвестные сообщения parse_message отсекает (None) — запись не делается.
     Если `monitor` и `sink` заданы, по переходам порога эмитятся события
-    THRESHOLD_EXCEEDED / BACK_TO_NORMAL. Обработчик отказоустойчив: исключение на
-    одном сообщении логируется и не роняет цикл приёма.
+    THRESHOLD_EXCEEDED / BACK_TO_NORMAL. `on_reading` (если задан) вызывается на
+    каждое валидное показание — используется для отметки активности узла (контроль
+    «тишины»). Обработчик отказоустойчив: исключение на одном сообщении логируется
+    и не роняет цикл приёма.
     """
 
     def handle(topic: str, payload: bytes) -> None:
@@ -52,6 +56,8 @@ def make_reading_handler(
             reading = parse_message(topic, payload, resolve_room)
             if reading is None:
                 return
+            if on_reading is not None:
+                on_reading(reading)
             writer.write(reading)
 
             if monitor is None or sink is None:

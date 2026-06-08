@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import UTC, datetime
 
 from sqlalchemy import Engine, text
 
@@ -20,6 +21,7 @@ from ingest_sensors.events import HttpEventSink
 from ingest_sensors.mqtt import run
 from ingest_sensors.parsing import RoomResolver
 from ingest_sensors.pipeline import make_reading_handler
+from ingest_sensors.silence_tracker import SilenceTracker
 from ingest_sensors.thresholds import ThresholdMonitor, load_thresholds
 
 logger = logging.getLogger(__name__)
@@ -48,10 +50,28 @@ def main() -> None:
 
     monitor = ThresholdMonitor(load_thresholds(engine))
     sink = HttpEventSink(os.getenv("LOG_SERVICE_URL", "http://log-service:8000"))
-    handler = make_reading_handler(DbReadingWriter(engine), _resolver, monitor=monitor, sink=sink)
 
-    logger.info("ingest-sensors: узлов в справочнике=%d, конвейер собран", len(nodes))
-    run(handler=handler)
+    # Контроль «тишины» узлов: общий порог в минутах из env (v1-упрощение).
+    silent_min = int(os.getenv("SENSOR_SILENT_MIN", "10"))
+    silence = SilenceTracker(sink, _resolver, silent_min)
+
+    handler = make_reading_handler(
+        DbReadingWriter(engine),
+        _resolver,
+        monitor=monitor,
+        sink=sink,
+        on_reading=silence.record,
+    )
+
+    def check_silence() -> None:
+        silence.check(datetime.now(UTC))
+
+    logger.info(
+        "ingest-sensors: узлов=%d, порог тишины=%d мин, конвейер собран",
+        len(nodes),
+        silent_min,
+    )
+    run(handler=handler, on_tick=check_silence)
 
 
 if __name__ == "__main__":
