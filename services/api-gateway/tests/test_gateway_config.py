@@ -28,6 +28,48 @@ def _client() -> TestClient:
     return TestClient(create_app(settings=_SETTINGS, engine=_engine()))
 
 
+# ── Справочники: помещения и узлы датчиков ──
+
+
+def test_room_crud() -> None:
+    """Создание и список помещений; занятый id → 409."""
+    client = _client()
+    created = client.post(
+        "/api/v1/rooms", json={"id": "room-01", "name": "Кухня", "is_cold": False}
+    )
+    assert created.status_code == 200
+    assert created.json()["data"]["id"] == "room-01"
+    assert client.get("/api/v1/rooms").json()["data"]["total"] == 1
+
+    # Повторный id → 409.
+    dup = client.post("/api/v1/rooms", json={"id": "room-01", "name": "Другая"})
+    assert dup.status_code == 409
+    assert dup.json()["error"]["code"] == "ROOM_ALREADY_EXISTS"
+
+
+def test_sensor_node_crud_and_room_fk() -> None:
+    """Узел требует существующего помещения; занятый id → 409."""
+    client = _client()
+    # Помещения ещё нет → 404 ROOM_NOT_FOUND.
+    no_room = client.post("/api/v1/sensor-nodes", json={"id": "node-01", "room_id": "room-01"})
+    assert no_room.status_code == 404
+    assert no_room.json()["error"]["code"] == "ROOM_NOT_FOUND"
+
+    client.post("/api/v1/rooms", json={"id": "room-01", "name": "Кухня"})
+    created = client.post(
+        "/api/v1/sensor-nodes",
+        json={"id": "node-01", "room_id": "room-01", "placement": "внутри (I2C)"},
+    )
+    assert created.status_code == 200
+    assert created.json()["data"]["room_id"] == "room-01"
+    assert client.get("/api/v1/sensor-nodes").json()["data"]["total"] == 1
+
+    # Повторный id узла → 409.
+    dup = client.post("/api/v1/sensor-nodes", json={"id": "node-01", "room_id": "room-01"})
+    assert dup.status_code == 409
+    assert dup.json()["error"]["code"] == "NODE_ALREADY_EXISTS"
+
+
 # ── Пороги ──
 
 

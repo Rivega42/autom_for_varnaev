@@ -373,13 +373,92 @@ async function deleteSchedule(id) {
   }
 }
 
+// ── Справочники: помещения и узлы датчиков ──
+
+function fillRows(tableId, items, cols) {
+  const tbody = $(tableId).querySelector("tbody");
+  tbody.innerHTML = "";
+  for (const it of items) {
+    const tr = document.createElement("tr");
+    for (const text of cols(it)) {
+      const cell = document.createElement("td");
+      cell.textContent = text; // textContent: значения вводит оператор
+      tr.appendChild(cell);
+    }
+    tbody.appendChild(tr);
+  }
+}
+
+async function loadRooms() {
+  try {
+    const data = await api("/rooms");
+    fillRows("rooms", data.items, (r) => [r.id, r.name, r.is_cold ? "да" : ""]);
+  } catch (e) {
+    msg("Ошибка загрузки помещений: " + e.message, false);
+  }
+}
+
+async function createRoom() {
+  const body = {
+    id: $("rm_id").value.trim(),
+    name: $("rm_name").value.trim(),
+    is_cold: $("rm_cold").checked,
+  };
+  if (!body.id || !body.name) {
+    msg("Заполните id и название помещения", false);
+    return;
+  }
+  try {
+    await api("/rooms", { method: "POST", body: JSON.stringify(body) });
+    $("rm_id").value = $("rm_name").value = "";
+    $("rm_cold").checked = false;
+    loadRooms();
+    msg("Помещение добавлено");
+  } catch (e) {
+    msg("Ошибка добавления помещения: " + e.message, false);
+  }
+}
+
+async function loadNodes() {
+  try {
+    const data = await api("/sensor-nodes");
+    fillRows("nodes", data.items, (n) => [n.id, n.room_id, n.placement || ""]);
+  } catch (e) {
+    msg("Ошибка загрузки узлов: " + e.message, false);
+  }
+}
+
+async function createNode() {
+  const body = {
+    id: $("nd_id").value.trim(),
+    room_id: $("nd_room").value.trim(),
+    placement: $("nd_place").value.trim() || null,
+  };
+  if (!body.id || !body.room_id) {
+    msg("Заполните id узла и помещение", false);
+    return;
+  }
+  try {
+    await api("/sensor-nodes", { method: "POST", body: JSON.stringify(body) });
+    $("nd_id").value = $("nd_room").value = $("nd_place").value = "";
+    loadNodes();
+    msg("Узел добавлен");
+  } catch (e) {
+    msg("Ошибка добавления узла: " + e.message, false);
+  }
+}
+
 function loadAll() {
+  loadRooms();
+  loadNodes();
   loadCameras();
   loadThresholds();
   loadSchedules();
 }
 
 $("reload").onclick = loadAll;
+$("rm_add").onclick = createRoom;
+$("nd_add").onclick = createNode;
 $("nc_save").onclick = createCamera;
 $("saveCam").onclick = saveCamera;
 $("loadFrame").onclick = loadFrame;

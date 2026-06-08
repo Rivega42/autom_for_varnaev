@@ -6,6 +6,26 @@ import sqlalchemy as sa
 
 metadata = sa.MetaData()
 
+rooms = sa.Table(
+    "rooms",
+    metadata,
+    sa.Column("id", sa.Text, primary_key=True),
+    sa.Column("name", sa.Text, nullable=False),
+    sa.Column("is_cold", sa.Boolean, nullable=False),
+)
+
+
+sensor_nodes = sa.Table(
+    "sensor_nodes",
+    metadata,
+    sa.Column("id", sa.Text, primary_key=True),
+    sa.Column("room_id", sa.Text, sa.ForeignKey("rooms.id"), nullable=False),
+    sa.Column("placement", sa.Text),
+    sa.Column("power", sa.Text),
+    sa.Column("note", sa.Text),
+)
+
+
 analysis_tasks = sa.Table(
     "analysis_tasks",
     metadata,

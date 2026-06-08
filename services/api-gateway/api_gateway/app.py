@@ -24,6 +24,11 @@ from api_gateway.errors import api_error, register_error_handlers
 from api_gateway.events_client import EventsClient, HttpEventsClient
 from api_gateway.integration import register_integration_routes
 from api_gateway.readings_repository import list_readings
+from api_gateway.rooms_repository import (
+    RoomAlreadyExistsError,
+    create_room,
+    list_rooms,
+)
 from api_gateway.schedules_repository import (
     DuplicateScheduleNameError,
     create_schedule,
@@ -37,10 +42,18 @@ from api_gateway.schemas import (
     CameraUpdate,
     CameraZoneCreate,
     CameraZoneUpdate,
+    RoomCreate,
     ScheduleCreate,
     ScheduleUpdate,
+    SensorNodeCreate,
     ThresholdCreate,
     ThresholdUpdate,
+)
+from api_gateway.sensor_nodes_repository import (
+    NodeAlreadyExistsError,
+    RoomNotFoundForNodeError,
+    create_node,
+    list_nodes,
 )
 from api_gateway.snapshot import Go2rtcSnapshotFetcher, SnapshotFetcher
 from api_gateway.tasks_repository import create_task, get_task, list_tasks
@@ -185,6 +198,49 @@ def create_app(
             limit=limit,
         )
         return ok({"items": items, "total": len(items)})
+
+    # ── Справочники объекта: помещения и узлы датчиков (docs/03_API_CONTRACT.md §3.4) ──
+    # Заводятся через интерфейс/REST — без SQL и сидинга. Без узла в справочнике
+    # ingest-sensors отбрасывает его показания, поэтому это часть первичной настройки.
+
+    @app.get(f"{API_PREFIX}/rooms", dependencies=[auth])
+    def get_rooms() -> dict[str, Any]:
+        """Список помещений."""
+        items = list_rooms(engine)
+        return ok({"items": items, "total": len(items)})
+
+    @app.post(f"{API_PREFIX}/rooms", dependencies=[auth])
+    def post_room(body: RoomCreate) -> dict[str, Any]:
+        """Завести помещение или 409 ROOM_ALREADY_EXISTS при занятом id."""
+        try:
+            return ok(create_room(engine, body))
+        except RoomAlreadyExistsError:
+            raise api_error(
+                ErrorCode.ROOM_ALREADY_EXISTS,
+                f"Помещение с id «{body.id}» уже существует",
+            ) from None
+
+    @app.get(f"{API_PREFIX}/sensor-nodes", dependencies=[auth])
+    def get_sensor_nodes() -> dict[str, Any]:
+        """Список узлов датчиков."""
+        items = list_nodes(engine)
+        return ok({"items": items, "total": len(items)})
+
+    @app.post(f"{API_PREFIX}/sensor-nodes", dependencies=[auth])
+    def post_sensor_node(body: SensorNodeCreate) -> dict[str, Any]:
+        """Завести узел датчиков (404 если помещения нет, 409 при занятом id)."""
+        try:
+            return ok(create_node(engine, body))
+        except RoomNotFoundForNodeError:
+            raise api_error(
+                ErrorCode.ROOM_NOT_FOUND,
+                f"Помещение «{body.room_id}» не найдено — сначала заведите его",
+            ) from None
+        except NodeAlreadyExistsError:
+            raise api_error(
+                ErrorCode.NODE_ALREADY_EXISTS,
+                f"Узел с id «{body.id}» уже существует",
+            ) from None
 
     # ── Настройка видеоаналитики: камеры и ROI-зоны (docs/03_API_CONTRACT.md §3.4) ──
 

@@ -89,19 +89,32 @@ docker compose logs -f migrate   # «running upgrade … 0011 …»
 
 ---
 
-## 6. Засеять справочники
+## 6. Завести справочники объекта
 
-Справочники помещений/узлов/камер засеваются из конфига объекта скриптом
-(см. [`db/seeds/object.example.yaml`](../db/seeds/object.example.yaml)):
+Помещения, узлы датчиков и камеры заводятся через **веб-GUI** (`/ui/`) или REST —
+**без SQL и без прямого доступа к БД** (БД намеренно не публикуется наружу). Порядок:
+помещения → узлы датчиков → камеры (узел и камера ссылаются на помещение).
+
+> **Важно:** без узла в справочнике `ingest-sensors` **отбрасывает** показания
+> этого датчика (неизвестный узел). Заведите узлы до приёма показаний.
+
+В GUI `/ui/` (введите `API_KEY` в шапке → «Загрузить камеры»): раздел
+«Справочники объекта» — формы помещений и узлов; ниже — заведение камер. То же по REST
+(`docs/03_API_CONTRACT.md` §3.4a, §3.5):
 
 ```bash
-cp db/seeds/object.example.yaml db/seeds/object.yaml   # отредактировать под объект
-# dry-run (печатает, что вставит):
-DATABASE_URL=postgresql+psycopg2://monitoring:$POSTGRES_PASSWORD@localhost:5432/monitoring \
-  python scripts/seed.py db/seeds/object.yaml
-# применить:
-DATABASE_URL=... python scripts/seed.py db/seeds/object.yaml --apply
+H="X-API-Key: $API_KEY"; U=http://localhost:8000/api/v1
+curl -X POST -H "$H" $U/rooms        -d '{"id":"room-01","name":"Кухня","is_cold":false}'
+curl -X POST -H "$H" $U/sensor-nodes -d '{"id":"node-01","room_id":"room-01"}'
+curl -X POST -H "$H" $U/cameras      -d '{"room":"room-01","name":"cam-01","rtsp_url":"rtsp://camera.local/stream"}'
 ```
+
+> **Массовый импорт (опционально).** Для большого объекта справочники можно
+> загрузить пачкой из YAML скриптом `scripts/seed.py`. Так как БД доступна только
+> во внутренней сети, запускайте сид **внутри сети контура**, а не с хоста —
+> например, одноразовым контейнером с доступом к `db` (см. `scripts/seed.py` и
+> `db/seeds/object.example.yaml`). Прямое подключение с хоста к `localhost:5432`
+> не сработает: порт БД наружу не публикуется.
 
 > **ROI-зоны и тумблеры аналитики** настраиваются по REST через `api-gateway`
 > (`docs/03_API_CONTRACT.md` §3.5): `POST /api/v1/cameras/{id}/zones` — добавить

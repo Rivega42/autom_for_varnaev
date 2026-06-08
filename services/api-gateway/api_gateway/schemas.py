@@ -39,6 +39,33 @@ def _validate_polygon(polygon: list[list[float]]) -> list[list[float]]:
     return polygon
 
 
+class RoomCreate(BaseModel):
+    """Тело POST /rooms: завести помещение в справочнике объекта.
+
+    `id` — человекочитаемый идентификатор помещения (напр. «room-01»),
+    используется как первичный ключ и в показаниях/событиях.
+    """
+
+    id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    # Признак холодильной/морозильной камеры (важно для холодовой цепи).
+    is_cold: bool = False
+
+
+class SensorNodeCreate(BaseModel):
+    """Тело POST /sensor-nodes: завести узел датчиков в справочнике.
+
+    `room_id` обязан ссылаться на существующее помещение. Без узла в справочнике
+    показания этого `node_id` по MQTT отбрасываются (см. ingest-sensors).
+    """
+
+    id: str = Field(min_length=1)
+    room_id: str = Field(min_length=1)
+    placement: str | None = None
+    power: str | None = None
+    note: str | None = None
+
+
 class CameraCreate(BaseModel):
     """Тело POST /cameras: завести камеру в справочнике объекта.
 

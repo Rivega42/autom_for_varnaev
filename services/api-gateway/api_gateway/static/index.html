@@ -41,6 +41,43 @@
   </header>
 
   <main>
+    <section class="panel" id="directories-panel" style="width:100%">
+      <h2 style="margin-top:0">Справочники объекта</h2>
+      <p class="hint">Заведите помещения и узлы датчиков. Без узла в справочнике
+        показания этого датчика по MQTT отбрасываются. Кнопка «Загрузить камеры»
+        в шапке подтягивает и справочники.</p>
+      <div class="row" style="align-items:flex-start">
+        <div style="flex:1; min-width:320px">
+          <strong>Помещения</strong>
+          <div class="row">
+            <input id="rm_id" placeholder="id (напр. room-01)" />
+            <input id="rm_name" placeholder="название" />
+            <label class="flag"><input type="checkbox" id="rm_cold" /> холодильная</label>
+            <button id="rm_add">Добавить</button>
+          </div>
+          <table id="rooms">
+            <thead><tr><th>id</th><th>название</th><th>холод</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div style="flex:1; min-width:320px">
+          <strong>Узлы датчиков</strong>
+          <div class="row">
+            <input id="nd_id" placeholder="id (напр. node-01)" />
+            <input id="nd_room" placeholder="помещение (room id)" />
+            <input id="nd_place" placeholder="размещение (необяз.)" />
+            <button id="nd_add">Добавить</button>
+          </div>
+          <table id="nodes">
+            <thead><tr><th>id</th><th>помещение</th><th>размещение</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <main>
     <section id="cameras" class="panel">
       <strong>Камеры</strong>
       <ul id="camlist"></ul>
