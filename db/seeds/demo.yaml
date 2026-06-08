@@ -22,3 +22,16 @@ sensor_nodes:
 
 # Камер в демо нет: видеоаналитика в демо-режиме не запускается (нет модели).
 cameras: []
+
+# Демо-пороги: подобраны под «всплески» генератора demo-sensors, чтобы в журнале
+# периодически появлялись события (влажность > 70%, темп. в холодильной > 8 °C).
+thresholds:
+  - metric: humidity
+    op: ">"
+    value: 70.0
+    severity: warning
+  - room: room-02
+    metric: air_temp
+    op: ">"
+    value: 8.0
+    severity: critical

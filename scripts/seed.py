@@ -1,9 +1,10 @@
-"""Сиды справочников из конфигурации объекта.
+"""Сиды справочников и порогов из конфигурации объекта.
 
-Читает YAML-конфиг (rooms/sensor_nodes/cameras), валидирует моделями
-monitoring_shared и идемпотентно загружает их в БД (UPSERT по первичному ключу).
-Без флага --apply выполняется только разбор и валидация (dry-run) — это и
-покрывается тестами; реальная запись в БД требует доступной TimescaleDB.
+Читает YAML-конфиг (rooms/sensor_nodes/cameras/thresholds), валидирует моделями
+monitoring_shared и идемпотентно загружает их в БД. Справочники — UPSERT по
+первичному ключу; пороги (без естественного ключа) — вставка, если идентичного
+ещё нет. Без флага --apply выполняется только разбор и валидация (dry-run) — это
+и покрывается тестами; реальная запись в БД требует доступной TimescaleDB.
 
 Запуск:
     python scripts/seed.py db/seeds/object.example.yaml          # dry-run
@@ -18,8 +19,22 @@ import os
 from pathlib import Path
 
 import yaml
+from pydantic import BaseModel
 
-from monitoring_shared import Camera, Room, SensorNode
+from monitoring_shared import Camera, Metric, Room, SensorNode, Severity, ThresholdOp
+
+
+class ThresholdSeed(BaseModel):
+    """Порог датчика из конфига объекта (room=None — глобальный порог)."""
+
+    room: str | None = None
+    metric: Metric
+    op: ThresholdOp
+    value: float
+    severity: Severity = Severity.WARNING
+    silent_min: int | None = None
+    enabled: bool = True
+
 
 # SQL-команды UPSERT (идемпотентность по первичному ключу).
 _UPSERT_ROOM = (
@@ -42,15 +57,29 @@ _UPSERT_CAMERA = (
     "rtsp_url = EXCLUDED.rtsp_url, viewpoint = EXCLUDED.viewpoint, "
     "enabled = EXCLUDED.enabled"
 )
+# Пороги не имеют естественного ключа — вставляем, только если идентичного
+# (по room_id+metric+op+value) ещё нет, чтобы повторный сид не плодил дубли и не
+# затирал пороги, заведённые оператором через GUI.
+_INSERT_THRESHOLD_IF_ABSENT = (
+    "INSERT INTO thresholds (room_id, metric, op, value, severity, silent_min, enabled) "
+    "SELECT :room, :metric, :op, :value, :severity, :silent_min, :enabled "
+    "WHERE NOT EXISTS ("
+    "SELECT 1 FROM thresholds "
+    "WHERE room_id IS NOT DISTINCT FROM :room AND metric = :metric "
+    "AND op = :op AND value = :value)"
+)
 
 
-def load_config(path: str | Path) -> tuple[list[Room], list[SensorNode], list[Camera]]:
+def load_config(
+    path: str | Path,
+) -> tuple[list[Room], list[SensorNode], list[Camera], list[ThresholdSeed]]:
     """Прочитать и провалидировать конфиг объекта."""
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     rooms = [Room(**item) for item in data.get("rooms", [])]
     nodes = [SensorNode(**item) for item in data.get("sensor_nodes", [])]
     cameras = [Camera(**item) for item in data.get("cameras", [])]
-    return rooms, nodes, cameras
+    thresholds = [ThresholdSeed(**item) for item in data.get("thresholds", [])]
+    return rooms, nodes, cameras, thresholds
 
 
 def _database_url() -> str:
@@ -66,8 +95,13 @@ def _database_url() -> str:
     return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{name}"
 
 
-def apply(rooms: list[Room], nodes: list[SensorNode], cameras: list[Camera]) -> None:
-    """Идемпотентно записать справочники в БД (UPSERT по id)."""
+def apply(
+    rooms: list[Room],
+    nodes: list[SensorNode],
+    cameras: list[Camera],
+    thresholds: list[ThresholdSeed] | None = None,
+) -> None:
+    """Идемпотентно записать справочники (UPSERT по id) и пороги (вставка без дублей)."""
     from sqlalchemy import create_engine, text
 
     engine = create_engine(_database_url())
@@ -101,6 +135,19 @@ def apply(rooms: list[Room], nodes: list[SensorNode], cameras: list[Camera]) -> 
                     "enabled": camera.enabled,
                 },
             )
+        for threshold in thresholds or []:
+            conn.execute(
+                text(_INSERT_THRESHOLD_IF_ABSENT),
+                {
+                    "room": threshold.room,
+                    "metric": threshold.metric.value,
+                    "op": threshold.op.value,
+                    "value": threshold.value,
+                    "severity": threshold.severity.value,
+                    "silent_min": threshold.silent_min,
+                    "enabled": threshold.enabled,
+                },
+            )
 
 
 def main() -> None:
@@ -114,11 +161,14 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    rooms, nodes, cameras = load_config(args.config)
-    print(f"Прочитано: помещений={len(rooms)}, узлов={len(nodes)}, камер={len(cameras)}")
+    rooms, nodes, cameras, thresholds = load_config(args.config)
+    print(
+        f"Прочитано: помещений={len(rooms)}, узлов={len(nodes)}, "
+        f"камер={len(cameras)}, порогов={len(thresholds)}"
+    )
     if args.apply:
-        apply(rooms, nodes, cameras)
-        print("Справочники записаны в БД.")
+        apply(rooms, nodes, cameras, thresholds)
+        print("Справочники и пороги записаны в БД.")
     else:
         print("Режим проверки (dry-run): запись не выполнялась. Для записи добавьте --apply.")
 
