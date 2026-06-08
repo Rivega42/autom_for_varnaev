@@ -38,3 +38,9 @@ config/schedules.json
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Готовые документы для заказчика (отрисованные из Markdown) — отслеживаем,
+# несмотря на общий игнор build/ выше.
+!docs/customer/build/
+!docs/customer/build/*.pdf
+!docs/customer/build/*.html
