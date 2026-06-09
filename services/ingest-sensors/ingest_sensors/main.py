@@ -38,7 +38,7 @@ def _load_node_rooms(engine: Engine) -> dict[str, str]:
 
 def main() -> None:
     """Настроить логирование, собрать конвейер и запустить воркер."""
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
     engine = build_engine()
 
     nodes = _load_node_rooms(engine)

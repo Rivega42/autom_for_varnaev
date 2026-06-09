@@ -83,15 +83,14 @@ def run_forever(
 
 def main() -> None:
     """Собрать боевые зависимости (БД, детектор, сток) и запустить цикл."""
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
     settings = Settings.from_env()
     engine = build_engine()
-    model_path = os.getenv("ANALYTICS_MODEL_PATH", "/models/pose_landmarker.task")
-    detector = MediaPipePoseDetector(model_path)
+    detector = MediaPipePoseDetector(settings.model_path)
     sink = HttpEventSink(settings.log_service_url)
     logger.info(
         "Видеоаналитика запущена: модель=%s, лог=%s",
-        model_path,
+        settings.model_path,
         settings.log_service_url,
     )
     run_forever(

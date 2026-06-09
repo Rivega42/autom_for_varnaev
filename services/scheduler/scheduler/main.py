@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -78,7 +79,7 @@ def run_forever(
 
 def main() -> None:
     """Настроить логирование, собрать настройки/engine и запустить цикл."""
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
     settings = Settings.from_env()
     engine = build_engine()
     logger.info(

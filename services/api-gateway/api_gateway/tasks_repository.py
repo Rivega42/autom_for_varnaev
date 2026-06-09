@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, func, select
 
 from api_gateway.schemas import AnalysisTaskCreate
 from api_gateway.tables import analysis_tasks
@@ -92,7 +92,8 @@ def list_tasks(
         conditions.append(analysis_tasks.c.created_at < to_ts)
 
     base = select(analysis_tasks)
-    count_stmt = select(analysis_tasks.c.id)
+    # COUNT(*) на стороне БД — не выгружаем все id в память ради числа.
+    count_stmt = select(func.count()).select_from(analysis_tasks)
     for cond in conditions:
         base = base.where(cond)
         count_stmt = count_stmt.where(cond)
@@ -100,5 +101,5 @@ def list_tasks(
 
     with engine.connect() as conn:
         items = [task_to_api(dict(r)) for r in conn.execute(base).mappings()]
-        total = len(conn.execute(count_stmt).all())
+        total = int(conn.execute(count_stmt).scalar_one())
     return items, total

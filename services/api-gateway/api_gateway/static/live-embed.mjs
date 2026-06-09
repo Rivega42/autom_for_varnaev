@@ -234,12 +234,16 @@ export function mountLiveAnalysis(container, opts) {
           const lm = smooth(res.landmarks[0]);
           draw(lm);
           const evs = engine.analyze(lm, world, performance.now());
+          let resetHeat = false;
           for (const e of evs) {
             const shot = e.snapshot ? snapshot() : null;
             log(e.text, e.color, e.isAct, shot);
             if (e.isAct) postEvent(e.text, shot);   // действие (+стоп-кадр) → журнал/Grafana
-            if (shot) clearHeat();                  // после стоп-кадра сбрасываем заливку и % (как в PoC)
+            // сброс заливки/% — только после ЗАВЕРШЕНИЯ уборки; стоп-кадр
+            // падения/SOS посреди уборки покрытие не трогает
+            if (e.snapshot && ["wipe", "mop", "sweep", "window"].includes(e.action)) resetHeat = true;
           }
+          if (resetHeat) clearHeat();
           const cleanActive = engine.actState.wipe || engine.actState.mop || engine.actState.sweep || engine.actState.window;
           if (cleanActive && !prevCleanActive) backfillHeat(); // дорисовать след начала уборки
           prevCleanActive = cleanActive;

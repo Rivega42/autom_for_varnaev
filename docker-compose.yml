@@ -92,6 +92,8 @@ services:
     image: eclipse-mosquitto:2
     networks:
       - internal
+      # edge: публикуемый порт 1883 не работает из чисто internal-сети
+      - edge
     ports:
       # публикация на LAN объекта — узлы датчиков вне Docker
       - "1883:1883"
@@ -105,6 +107,8 @@ services:
     image: alexxit/go2rtc:latest
     networks:
       - internal
+      # edge: go2rtc должен дотягиваться до IP-камер в LAN объекта
+      - edge
     volumes:
       - ./media-gateway/go2rtc.yaml:/config/go2rtc.yaml:ro
     restart: unless-stopped
@@ -121,6 +125,8 @@ services:
       POSTGRES_RO_PASSWORD: ${POSTGRES_RO_PASSWORD:?POSTGRES_RO_PASSWORD должен быть задан в .env}
     networks:
       - internal
+      # edge: публикуемый порт 3000 не работает из чисто internal-сети
+      - edge
     ports:
       # дашборд публикуется на хост (единственный наружу, кроме api-gateway)
       - "3000:3000"
@@ -186,6 +192,8 @@ services:
     networks:
       - internal
       - integration
+      # edge: публикуемый порт 8000 не должен зависеть от сети integration
+      - edge
     ports:
       # единственный (кроме Grafana) опубликованный наружу REST-вход
       - "8000:8000"
@@ -221,9 +229,13 @@ services:
       MQTT_HOST: ${MQTT_HOST:-mqtt-broker}
       MQTT_PORT: ${MQTT_PORT:-1883}
       MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-monitoring}
+      # Учётные данные брокера (если Mosquitto настроен с авторизацией).
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
       LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
       # Порог «тишины» узла (мин): нет показаний дольше — событие sensor_silent.
       SENSOR_SILENT_MIN: ${SENSOR_SILENT_MIN:-10}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - internal
     depends_on:
@@ -248,6 +260,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
       SCHEDULER_CONFIG: ${SCHEDULER_CONFIG:-/config/schedules.json}
       SCHEDULER_TICK_S: ${SCHEDULER_TICK_S:-60}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - internal
     volumes:
@@ -277,6 +290,7 @@ services:
       ANALYTICS_FPS: ${ANALYTICS_FPS:-5}
       ANALYTICS_MODEL_PATH: ${ANALYTICS_MODEL_PATH:-/models/pose_landmarker.task}
       ANALYTICS_MAX_STREAM_FRAMES: ${ANALYTICS_MAX_STREAM_FRAMES:-150}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - internal
     volumes:
@@ -321,6 +335,8 @@ services:
     networks:
       - internal
       - integration
+      # edge: публикуемый порт 8000 не должен зависеть от сети integration
+      - edge
     ports:
       - "8000:8000"
     volumes:
@@ -363,13 +379,22 @@ services:
       migrate:
         condition: service_completed_successfully
       log-service:
-        condition: service_started
+        # healthy, а не started: иначе первые события воркера тихо теряются,
+        # пока uvicorn log-service ещё не принимает соединения.
+        condition: service_healthy
       media-gateway:
         condition: service_started
     restart: unless-stopped
 
 networks:
+  # internal: true — реальная изоляция (docs/02_NETWORK.md): из этой сети нет
+  # выхода наружу и published-порты сервисов, висящих ТОЛЬКО в ней, не работают.
+  # Поэтому сервисы, которым нужен LAN объекта (камеры, узлы датчиков) или
+  # публикация порта на хост, дополнительно включены в сеть edge.
   internal:
+    driver: bridge
+    internal: true
+  edge:
     driver: bridge
   integration:
     driver: bridge

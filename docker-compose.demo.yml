@@ -24,7 +24,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
     networks:
       - internal
-    entrypoint: ["python", "scripts/seed.py", "db/seeds/demo.yaml", "--apply"]
+    # Абсолютный путь: не зависим от WORKDIR образа (конвенция как у штатного
+    # ENTRYPOINT с /seeds/object.yaml).
+    entrypoint: ["python", "/app/scripts/seed.py", "/app/db/seeds/demo.yaml", "--apply"]
     depends_on:
       db:
         condition: service_healthy
@@ -53,8 +55,12 @@ services:
       MQTT_HOST: ${MQTT_HOST:-mqtt-broker}
       MQTT_PORT: ${MQTT_PORT:-1883}
       MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-monitoring}
+      # Учётные данные брокера (если Mosquitto настроен с авторизацией).
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
       DEMO_INTERVAL_S: ${DEMO_INTERVAL_S:-5}
       DEMO_SPIKE_EVERY: ${DEMO_SPIKE_EVERY:-12}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - internal
     depends_on:

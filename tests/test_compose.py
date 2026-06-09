@@ -72,10 +72,24 @@ def test_internal_services_not_published() -> None:
 
 
 def test_api_gateway_bridges_networks_and_published() -> None:
-    """api-gateway — в обеих сетях (internal+integration) и единственный с REST наружу."""
+    """api-gateway — в internal+integration+edge и единственный с REST наружу.
+
+    edge нужен, потому что internal объявлена с internal: true (реальная
+    изоляция): публикуемый порт из чисто internal-сети не работает.
+    """
     gateway = _compose()["services"]["api-gateway"]
-    assert set(gateway["networks"]) == {"internal", "integration"}
+    assert set(gateway["networks"]) == {"internal", "integration", "edge"}
     assert any("8000" in str(p) for p in gateway["ports"]), "REST-порт не опубликован"
+
+
+def test_internal_network_isolated_and_edge_declared() -> None:
+    """Сеть internal реально изолирована (internal: true); edge объявлена для
+    публикуемых портов и доступа к LAN (mqtt, grafana, media-gateway)."""
+    compose = _compose()
+    assert compose["networks"]["internal"].get("internal") is True
+    assert "edge" in compose["networks"]
+    for name in ("mqtt-broker", "grafana", "media-gateway"):
+        assert "edge" in compose["services"][name]["networks"], f"{name} без edge"
 
 
 def test_video_analytics_mounts_artifacts() -> None:

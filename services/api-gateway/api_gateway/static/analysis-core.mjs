@@ -192,7 +192,9 @@ export class HeatGrid {
 export class AnalysisEngine {
   constructor(opts = {}) {
     this.enabled = {};
-    for (const k of DETECTOR_KEYS) this.enabled[k] = opts.enabled ? !!opts.enabled[k] : true;
+    // Детектор включён по умолчанию; opts.enabled выключает ТОЛЬКО явные false —
+    // частичная карта ({wave:false}) не должна молча гасить все остальные.
+    for (const k of DETECTOR_KEYS) this.enabled[k] = !(opts.enabled && opts.enabled[k] === false);
     this.SENS = opts.sens ?? 1;
     /* зоны: [{type:'table'|'floor'|'window', pts:[[x,y]*4], name?}] */
     this.rois = (opts.rois ?? []).map((r) => ({ ...r, cov: 0 }));
@@ -416,6 +418,22 @@ export class AnalysisEngine {
     for (const r of this.rois) r.cov = this.heat.coverage(r.pts);
   }
 
+  /* На старте уборки дорисовать в сетку покрытия след кистей из окна истории —
+   * движения до подтверждения детекта (аналог backfillHeat в PoC; в hist только
+   * запястья, без локтя, поэтому штампуем по ним). */
+  _backfillGrid() {
+    const idx = this.cleanHandIdx && this.cleanHandIdx.length ? this.cleanHandIdx : [];
+    if (!idx.length || !this.hist.length) return;
+    const rad = (this.lastTorso * 0.62) / this.aspect;
+    for (const f of this.hist) {
+      for (const wr of idx) {
+        const x = wr === 16 ? f.rwx : f.lwx, y = wr === 16 ? f.rwy : f.lwy;
+        const inClip = !this.cleanClip || this.cleanClip.some((poly) => pip(x, y, poly));
+        if (inClip) this.heat.stamp(x, y, rad);
+      }
+    }
+  }
+
   _detectActivities(lm, now) {
     const h = this.hist, k = this.SENS, last = h[h.length - 1];
     const lwx = h.map((f) => f.lwx), lwy = h.map((f) => f.lwy), rwx = h.map((f) => f.rwx), rwy = h.map((f) => f.rwy);
@@ -502,11 +520,19 @@ export class AnalysisEngine {
     }
     ['mop', 'sweep', 'wipe', 'window'].forEach((t) => {
       this._transition(t, activeType === t,
-        () => { this._log(this._startMsg(t), COLORS.act, true, false, { action: t }); this.cleanZonesHit.clear(); },
+        () => {
+          this._log(this._startMsg(t), COLORS.act, true, false, { action: t });
+          this.cleanZonesHit.clear();
+          this._backfillGrid(); // след до подтверждения — в сетку покрытия (как backfill в PoC)
+        },
         (sec) => {
           this._log(this._endMsg(t, sec), COLORS.act, true, true, { action: t, durationS: Number(sec) });
           const rt = ACT_TO_ROI[t];
-          [...this.cleanZonesHit].filter((z) => z.type === rt).forEach((z) => {
+          [...this.cleanZonesHit].forEach((z) => {
+            // Зона удалена оператором во время уборки — выкидываем без отчёта.
+            if (!this.rois.includes(z)) { this.cleanZonesHit.delete(z); return; }
+            // Зона другого типа остаётся в наборе до завершения СВОЕЙ уборки (как в PoC).
+            if (z.type !== rt) return;
             z.cov = this.heat.coverage(z.pts); // считаем покрытие только для отчитываемых зон
             const name = z.name || ROI_TYPE_RU[z.type];
             this._log(name + ' ' + CLEAN_VERB[z.type] + ' на ' + (z.cov || 0) + '%', ROI_COL[z.type], false, false,

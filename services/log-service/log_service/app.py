@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -15,6 +15,11 @@ from log_service.db import build_engine
 from log_service.envelope import error, ok
 from log_service.repository import get_event, insert_event, list_events
 from monitoring_shared import Event
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Время без зоны трактовать как UTC (контракт), иначе фильтр зависел бы от TZ БД."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 def create_app(engine: Engine | None = None) -> FastAPI:
@@ -53,8 +58,8 @@ def create_app(engine: Engine | None = None) -> FastAPI:
     ) -> dict[str, Any] | JSONResponse:
         """Лента событий с фильтрами по времени/типу/помещению."""
         try:
-            from_ts = datetime.fromisoformat(from_) if from_ else None
-            to_ts = datetime.fromisoformat(to) if to else None
+            from_ts = _as_utc(datetime.fromisoformat(from_)) if from_ else None
+            to_ts = _as_utc(datetime.fromisoformat(to)) if to else None
         except ValueError:
             return JSONResponse(
                 status_code=422,
