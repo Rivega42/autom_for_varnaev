@@ -25,6 +25,7 @@ from monitoring_shared import (
     Camera,
     CameraZone,
     SourceType,
+    ZoneType,
 )
 from video_analytics.actions import CompositeActionAnalyzer, build_action_event
 from video_analytics.artifacts import build_artifact_path, insert_artifact, save_screenshot
@@ -133,6 +134,8 @@ def process_task(
     coverage_on = _feature_on(analytics, "coverage")
     poses = SimplePoseAnalyzer()
     actions = CompositeActionAnalyzer()
+    # Полигоны зон «стол» — протирание засчитывается только над ними (PoC §2.1).
+    table_polys = [z.polygon for z in zones if z.zone_type is ZoneType.TABLE]
     frames = 0
     poses_found = 0
     events_sent = 0
@@ -162,7 +165,7 @@ def process_task(
                     sink.emit(build_pose_event(detection, task.room_id, ts))
                     events_sent += 1
             if actions_on:
-                for action in actions.process(pose, ts):
+                for action in actions.process(pose, ts, table_polys):
                     sink.emit(build_action_event(action, task.room_id, ts))
                     events_sent += 1
             # Эвристика «белого халата»: при видимом торсе и отсутствии халата —

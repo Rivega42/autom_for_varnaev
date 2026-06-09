@@ -36,6 +36,41 @@ def test_wiping_two_hands() -> None:
     assert result.hands == "both"
 
 
+def test_wiping_one_hand() -> None:
+    """Одна рука протирает, вторая неподвижна — событие одноручное."""
+    det = WipingDetector(needed=3)
+    xs = [0.3, 0.6, 0.3, 0.6, 0.3, 0.6, 0.3, 0.6]
+    result = None
+    for i, x in enumerate(xs):
+        pose = _pose(LEFT_WRIST=Landmark(x, 0.5, 0.9), RIGHT_WRIST=Landmark(0.5, 0.5, 0.9))
+        result = result or det.update(pose, _T0 + timedelta(seconds=i * 0.2))
+    assert result is not None
+    assert result.action == "surface_wiped"
+    assert result.hands == "left"
+
+
+def test_wiping_gated_outside_table_zone() -> None:
+    """Вне зоны «стол» протирание НЕ засчитывается (гейтинг по ROI)."""
+    analyzer = CompositeActionAnalyzer()
+    far_zone = [[0.0, 0.0], [0.1, 0.0], [0.1, 0.1], [0.0, 0.1]]  # не содержит (x,0.5)
+    detections = []
+    for i, x in enumerate([0.3, 0.6] * 5):
+        pose = _pose(LEFT_WRIST=Landmark(x, 0.5, 0.9), RIGHT_WRIST=Landmark(x, 0.5, 0.9))
+        detections += analyzer.process(pose, _T0 + timedelta(seconds=i * 0.2), [far_zone])
+    assert all(d.action != "surface_wiped" for d in detections)
+
+
+def test_wiping_gated_inside_table_zone() -> None:
+    """В зоне «стол» протирание засчитывается."""
+    analyzer = CompositeActionAnalyzer()
+    table = [[0.2, 0.4], [0.7, 0.4], [0.7, 0.6], [0.2, 0.6]]  # содержит (0.3..0.6, 0.5)
+    detections = []
+    for i, x in enumerate([0.3, 0.6] * 5):
+        pose = _pose(LEFT_WRIST=Landmark(x, 0.5, 0.9), RIGHT_WRIST=Landmark(x, 0.5, 0.9))
+        detections += analyzer.process(pose, _T0 + timedelta(seconds=i * 0.2), [table])
+    assert any(d.action == "surface_wiped" for d in detections)
+
+
 def test_clap() -> None:
     det = ClapDetector()
     apart = _pose(LEFT_WRIST=Landmark(0.2, 0.5, 0.9), RIGHT_WRIST=Landmark(0.8, 0.5, 0.9))
