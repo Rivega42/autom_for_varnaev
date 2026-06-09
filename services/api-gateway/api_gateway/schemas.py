@@ -39,6 +39,20 @@ def _validate_polygon(polygon: list[list[float]]) -> list[list[float]]:
     return polygon
 
 
+class AnalyticsEventCreate(BaseModel):
+    """Тело POST /analytics-events: событие от браузерного живого анализа.
+
+    Браузерный анализ (live.html) шлёт распознанное событие в журнал, чтобы оно
+    попало в Grafana/историю. Тип фиксируем как action_detected, источник —
+    analytics; в payload добавляется origin=browser (отличить от серверного).
+    """
+
+    room: str | None = None
+    message: str = Field(min_length=1)
+    severity: Severity = Severity.INFO
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
 class RoomCreate(BaseModel):
     """Тело POST /rooms: завести помещение в справочнике объекта.
 

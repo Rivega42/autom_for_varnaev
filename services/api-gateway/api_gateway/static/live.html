@@ -282,6 +282,17 @@ function refreshToggles(){detectorDefs.forEach(d=>tgEls[d.key]&&tgEls[d.key].cla
 const logData=[];
 const pad=n=>String(n).padStart(2,'0');
 const stamp=d=>pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+// Отправка распознанных событий в журнал контура (→ Grafana). Параметры из URL:
+// ?cam=<id>&room=<id>&api_key=<key> (их проставляет GUI при открытии анализа).
+const _liveParams=new URLSearchParams(location.search);
+const _liveCam=_liveParams.get('cam'),_liveRoom=_liveParams.get('room'),_liveKey=_liveParams.get('api_key')||'';
+function postEvent(text){
+  if(!_liveCam)return;  // открыто вне контура — не шлём
+  fetch('/api/v1/analytics-events',{method:'POST',
+    headers:{'Content-Type':'application/json','X-API-Key':_liveKey},
+    body:JSON.stringify({room:_liveRoom,message:text,payload:{origin:'browser',camera_id:_liveCam}})
+  }).catch(()=>{});  // лента не критична — сбой отправки игнорируем
+}
 function log(text,color,isAct=false,img=null){
   const now=new Date();logData.push({iso:now.toISOString(),time:stamp(now),text,act:isAct,shot:img?true:false});
   logEmpty.style.display='none';
@@ -291,7 +302,9 @@ function log(text,color,isAct=false,img=null){
     im.onclick=()=>{const a=document.createElement('a');a.href=img;a.download='shot-'+Date.now()+'.jpg';a.click();};
     e.appendChild(im);}
   logEl.appendChild(e);logEl.scrollTop=logEl.scrollHeight;
-  countEl.textContent=logData.length+' '+plural(logData.length);}
+  countEl.textContent=logData.length+' '+plural(logData.length);
+  if(isAct)postEvent(text);   // распознанное действие → в журнал контура (Grafana)
+  if(img)clearHeat();}        // после стоп-кадра сбрасываем заливку (#2)
 function plural(n){const a=Math.abs(n)%100,b=a%10;if(a>10&&a<20)return'записей';
   if(b>1&&b<5)return'записи';if(b===1)return'запись';return'записей';}
 

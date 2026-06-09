@@ -27,6 +27,10 @@ class _FakeEventsClient:
             return self._event
         return None
 
+    def create_event(self, event: object) -> None:
+        self.created = getattr(self, "created", [])
+        self.created.append(event)
+
 
 _SETTINGS = Settings(
     log_service_url="http://log-service:8000",
@@ -80,3 +84,23 @@ def test_get_event_missing() -> None:
     resp = client.get(f"/api/v1/events/{uuid4()}")
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "EVENT_NOT_FOUND"
+
+
+def test_post_analytics_event_persisted() -> None:
+    """POST /analytics-events создаёт событие source=analytics, origin=browser."""
+    fake = _FakeEventsClient(None)
+    client = TestClient(create_app(settings=_SETTINGS, events_client=fake))
+    resp = client.post(
+        "/api/v1/analytics-events",
+        json={"room": "room-01", "message": "Стол протёрт (правой рукой, 5 с)"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"]["id"]
+    created = getattr(fake, "created", [])
+    assert len(created) == 1
+    ev = created[0]
+    assert ev.source.value == "analytics"
+    assert ev.type.value == "action_detected"
+    assert ev.room_id == "room-01"
+    assert ev.payload["origin"] == "browser"
+    assert "Стол протёрт" in ev.message

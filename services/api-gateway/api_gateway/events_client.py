@@ -12,6 +12,8 @@ from uuid import UUID
 
 import httpx
 
+from monitoring_shared import Event
+
 
 class EventsClient(Protocol):
     """Источник событий для шлюза (реализуется HTTP-клиентом или фейком)."""
@@ -22,6 +24,10 @@ class EventsClient(Protocol):
 
     def get_event(self, event_id: UUID) -> dict[str, Any] | None:
         """Вернуть одно событие или None, если его нет."""
+        ...
+
+    def create_event(self, event: Event) -> None:
+        """Записать событие в журнал (POST /events log-service)."""
         ...
 
 
@@ -56,3 +62,9 @@ class HttpEventsClient:
         resp.raise_for_status()
         data = _unwrap(resp.json())
         return data if isinstance(data, dict) else None
+
+    def create_event(self, event: Event) -> None:
+        """POST /events log-service — записать событие в единый журнал."""
+        with httpx.Client(timeout=self._timeout) as client:
+            resp = client.post(f"{self._base_url}/events", json=event.model_dump(mode="json"))
+        resp.raise_for_status()

@@ -35,6 +35,9 @@ class _FakeEventsClient:
     def get_event(self, event_id: UUID) -> dict[str, Any] | None:
         return None
 
+    def create_event(self, event: object) -> None:
+        pass
+
 
 def _client() -> TestClient:
     return TestClient(create_app(settings=_SETTINGS, events_client=_FakeEventsClient()))

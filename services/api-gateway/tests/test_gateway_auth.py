@@ -19,6 +19,9 @@ class _FakeEventsClient:
     def get_event(self, event_id: UUID) -> dict[str, Any] | None:
         return None
 
+    def create_event(self, event: object) -> None:
+        pass
+
 
 def _client(enabled_aura: bool = False) -> TestClient:
     settings = Settings(

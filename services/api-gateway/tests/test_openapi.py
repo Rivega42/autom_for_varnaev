@@ -24,6 +24,7 @@ _EXPECTED_OPERATIONS: set[tuple[str, str]] = {
     ("get", "/api/v1/health"),
     ("get", "/api/v1/events"),
     ("get", "/api/v1/events/{event_id}"),
+    ("post", "/api/v1/analytics-events"),
     ("post", "/api/v1/analysis-tasks"),
     ("get", "/api/v1/analysis-tasks"),
     ("get", "/api/v1/analysis-tasks/{task_id}"),
