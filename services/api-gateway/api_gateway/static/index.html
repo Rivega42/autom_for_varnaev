@@ -116,6 +116,7 @@
       <div class="row">
         <button id="loadFrame" class="sec">Загрузить кадр</button>
         <button id="liveToggle" class="sec">Живой просмотр</button>
+        <button id="videoToggle" class="sec">Видео (поток)</button>
         <label>тип зоны:
           <select id="zoneType">
             <option value="table">стол</option>
@@ -128,6 +129,8 @@
       </div>
       <p class="hint">Клик по кадру — добавить вершину полигона (≥3). Координаты нормируются [0..1].</p>
       <canvas id="canvas" width="640" height="360"></canvas>
+      <img id="livevideo" alt="живой поток" hidden
+           style="max-width:100%; border:1px solid var(--bd); background:#eee" />
 
       <table id="zones">
         <thead><tr><th>id</th><th>тип</th><th>вершин</th><th></th></tr></thead>

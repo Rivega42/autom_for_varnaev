@@ -119,6 +119,7 @@ function selectCamera(cam) {
   frameImg = null;
   zonePolys = [];
   stopLive();
+  stopVideo();
   $("editor").hidden = false;
   $("camname").textContent = cam.name + " · " + cam.room;
   $("enabled").checked = cam.enabled;
@@ -196,6 +197,34 @@ function toggleLive() {
   loadFrame();
   liveTimer = setInterval(loadFrame, 2000);
   $("liveToggle").textContent = "Стоп";
+}
+
+// Живой MJPEG-видеопоток камеры (плавное видео) через тег <img>.
+// Ключ передаётся в query — <img> не шлёт заголовки (медиа-авторизация).
+function stopVideo() {
+  const img = $("livevideo");
+  img.hidden = true;
+  img.src = ""; // обрывает MJPEG-соединение
+  $("canvas").style.display = "";
+  $("videoToggle").textContent = "Видео (поток)";
+}
+
+function toggleVideo() {
+  if (!current) {
+    msg("Сначала выберите камеру", false);
+    return;
+  }
+  const img = $("livevideo");
+  if (!img.hidden) {
+    stopVideo();
+    return;
+  }
+  stopLive(); // живое видео и обновление кадра — взаимоисключающие
+  const key = encodeURIComponent(keyInput.value);
+  img.src = `${API}/cameras/${current.id}/stream.mjpeg?api_key=${key}`;
+  img.hidden = false;
+  $("canvas").style.display = "none";
+  $("videoToggle").textContent = "Стоп видео";
 }
 
 // Лента событий аналитики по помещению выбранной камеры (онлайн, поллинг).
@@ -592,6 +621,7 @@ $("saveCam").onclick = saveCamera;
 $("runAnalysis").onclick = runAnalysisNow;
 $("loadFrame").onclick = loadFrame;
 $("liveToggle").onclick = toggleLive;
+$("videoToggle").onclick = toggleVideo;
 $("saveZone").onclick = saveZone;
 $("clearPoly").onclick = () => {
   points = [];

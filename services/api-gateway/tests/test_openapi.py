@@ -37,6 +37,7 @@ _EXPECTED_OPERATIONS: set[tuple[str, str]] = {
     ("get", "/api/v1/cameras/{camera_id}"),
     ("patch", "/api/v1/cameras/{camera_id}"),
     ("get", "/api/v1/cameras/{camera_id}/snapshot"),
+    ("get", "/api/v1/cameras/{camera_id}/stream.mjpeg"),
     ("get", "/api/v1/cameras/{camera_id}/zones"),
     ("post", "/api/v1/cameras/{camera_id}/zones"),
     ("patch", "/api/v1/zones/{zone_id}"),
