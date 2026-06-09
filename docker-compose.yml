@@ -180,12 +180,18 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-monitoring}
       POSTGRES_USER: ${POSTGRES_USER:-monitoring}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+      # Каталог артефактов (общий том со воркером): отдаём стоп-кадры в Grafana
+      # и складываем снимки браузерного живого анализа.
+      ARTIFACTS_DIR: ${ARTIFACTS_DIR:-/data/artifacts}
     networks:
       - internal
       - integration
     ports:
       # единственный (кроме Grafana) опубликованный наружу REST-вход
       - "8000:8000"
+    volumes:
+      # Общий том артефактов: чтение (отдача наружу) и запись (снимки из браузера).
+      - artifacts:/data/artifacts
     depends_on:
       db:
         condition: service_healthy

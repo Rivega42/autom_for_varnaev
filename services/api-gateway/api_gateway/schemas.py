@@ -51,6 +51,10 @@ class AnalyticsEventCreate(BaseModel):
     message: str = Field(min_length=1)
     severity: Severity = Severity.INFO
     payload: dict[str, Any] = Field(default_factory=dict)
+    # Необязательный стоп-кадр события (data-URL `data:image/jpeg;base64,…`).
+    # Если задан — сохраняется как артефакт-скриншот, а событие получает
+    # artifact_id и payload.artifact_url (чтобы кадр был виден в Grafana).
+    image: str | None = None
 
 
 class RoomCreate(BaseModel):

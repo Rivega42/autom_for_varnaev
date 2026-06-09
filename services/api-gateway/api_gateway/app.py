@@ -12,6 +12,14 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Engine
 
+from api_gateway.artifacts_repository import get_artifact, insert_artifact
+from api_gateway.artifacts_store import (
+    build_artifact_path,
+    decode_data_url,
+    ext_for_mime,
+    read_artifact_bytes,
+    save_bytes,
+)
 from api_gateway.auth import make_require_api_key, make_require_api_key_media
 from api_gateway.cameras_repository import (
     create_camera,
@@ -67,7 +75,15 @@ from api_gateway.thresholds_repository import (
     update_threshold,
 )
 from api_gateway.zones_repository import create_zone, delete_zone, list_zones, update_zone
-from monitoring_shared import ErrorCode, Event, EventSource, EventType, ok
+from monitoring_shared import (
+    Artifact,
+    ArtifactKind,
+    ErrorCode,
+    Event,
+    EventSource,
+    EventType,
+    ok,
+)
 
 # Каталог статического GUI (отдаётся под /ui).
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -157,19 +173,67 @@ def create_app(
 
         Источник — analytics, тип — action_detected; в payload помечаем
         origin=browser, чтобы отличать от серверного анализа по расписанию.
+        Если передан стоп-кадр (`image`) — сохраняем его как артефакт-скриншот и
+        прикрепляем к событию (artifact_id + payload.artifact_url для Grafana).
         """
+        ts = datetime.now(UTC)
+        payload: dict[str, Any] = {**body.payload, "origin": "browser"}
+        artifact_id: UUID | None = None
+
+        if body.image is not None:
+            try:
+                data, mime = decode_data_url(body.image)
+            except ValueError as exc:
+                raise api_error(ErrorCode.VALIDATION_ERROR, str(exc)) from None
+            artifact_id = uuid4()
+            path = build_artifact_path(settings.artifacts_dir, ts, artifact_id, ext_for_mime(mime))
+            save_bytes(path, data)
+            camera_id = payload.get("camera_id")
+            insert_artifact(
+                engine,
+                Artifact(
+                    id=artifact_id,
+                    created_at=ts,
+                    kind=ArtifactKind.SCREENSHOT,
+                    path=path,
+                    mime=mime,
+                    room_id=body.room,
+                    camera_id=UUID(camera_id) if isinstance(camera_id, str) else None,
+                    task_id=None,
+                    meta={"origin": "browser"},
+                ),
+            )
+            payload["artifact_url"] = f"{API_PREFIX}/artifacts/{artifact_id}"
+
         event = Event(
             id=uuid4(),
-            ts=datetime.now(UTC),
+            ts=ts,
             source=EventSource.ANALYTICS,
             type=EventType.ACTION_DETECTED,
             room_id=body.room,
             severity=body.severity,
             message=body.message,
-            payload={**body.payload, "origin": "browser"},
+            payload=payload,
+            artifact_id=artifact_id,
         )
         events.create_event(event)
-        return ok({"id": str(event.id)})
+        return ok({"id": str(event.id), "artifact_id": str(artifact_id) if artifact_id else None})
+
+    @app.get(f"{API_PREFIX}/artifacts/{{artifact_id}}", dependencies=[media_auth])
+    def get_artifact_file(artifact_id: UUID) -> Response:
+        """Отдать файл артефакта-доказательства (стоп-кадр/overlay) для Grafana/GUI.
+
+        Метаданные берём из таблицы artifacts, файл читаем с общего тома (только
+        внутри каталога артефактов). media_auth — ключ из заголовка ИЛИ ?api_key
+        (чтобы кадр грузился тегом <img> в дашборде).
+        """
+        meta = get_artifact(engine, artifact_id)
+        if meta is None:
+            raise api_error(ErrorCode.ARTIFACT_NOT_FOUND, "Артефакт не найден")
+        data = read_artifact_bytes(settings.artifacts_dir, meta["path"])
+        if data is None:
+            raise api_error(ErrorCode.ARTIFACT_NOT_FOUND, "Файл артефакта недоступен")
+        return Response(content=data, media_type=meta.get("mime") or "application/octet-stream")
 
     @app.post(f"{API_PREFIX}/analysis-tasks", dependencies=[auth])
     def post_analysis_task(body: AnalysisTaskCreate) -> dict[str, Any]:
