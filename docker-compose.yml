@@ -270,6 +270,7 @@ services:
       ARTIFACTS_DIR: ${ARTIFACTS_DIR:-/data/artifacts}
       ANALYTICS_FPS: ${ANALYTICS_FPS:-5}
       ANALYTICS_MODEL_PATH: ${ANALYTICS_MODEL_PATH:-/models/pose_landmarker.task}
+      ANALYTICS_MAX_STREAM_FRAMES: ${ANALYTICS_MAX_STREAM_FRAMES:-150}
     networks:
       - internal
     volumes:
@@ -339,6 +340,7 @@ services:
       ARTIFACTS_DIR: ${ARTIFACTS_DIR:-/data/artifacts}
       ANALYTICS_FPS: ${ANALYTICS_FPS:-5}
       ANALYTICS_MODEL_PATH: ${ANALYTICS_MODEL_PATH:-/models/pose_landmarker.task}
+      ANALYTICS_MAX_STREAM_FRAMES: ${ANALYTICS_MAX_STREAM_FRAMES:-150}
     networks:
       - internal
     volumes:

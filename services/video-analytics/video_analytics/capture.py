@@ -78,6 +78,28 @@ class FileFrameSource:
             self._capture.release()
 
 
+class LimitedFrameSource:
+    """Отдаёт не больше `max_frames` кадров из обёрнутого источника.
+
+    Нужен для live-потоков (RTSP бесконечен): без лимита `process_task` читал бы
+    кадры вечно и не доходил до отчёта о покрытии. Для конечных источников (file)
+    не применяется.
+    """
+
+    def __init__(self, inner: FrameSource, max_frames: int) -> None:
+        self._inner = inner
+        self._max_frames = max_frames
+
+    def frames(self) -> Iterator[Frame]:
+        for index, frame in enumerate(self._inner.frames()):
+            if index >= self._max_frames:
+                break
+            yield frame
+
+    def close(self) -> None:
+        self._inner.close()
+
+
 def create_frame_source(
     source_type: SourceType,
     source_ref: str,
@@ -85,8 +107,13 @@ def create_frame_source(
     capture_factory: CaptureFactory | None = None,
     src_fps: float = 25.0,
     target_fps: int = 5,
+    max_frames: int | None = None,
 ) -> FrameSource:
-    """Создать источник кадров по типу задания (stream|file) с понижением fps."""
+    """Создать источник кадров по типу задания (stream|file) с понижением fps.
+
+    Для `stream` при заданном `max_frames` (> 0) поток ограничивается этим числом
+    кадров — иначе анализ live-RTSP не завершается. Для `file` лимит игнорируется.
+    """
     inner: FrameSource
     if source_type is SourceType.STREAM:
         inner = StreamFrameSource(source_ref, capture_factory)
@@ -94,4 +121,7 @@ def create_frame_source(
         inner = FileFrameSource(source_ref, capture_factory)
     else:
         raise ValueError(f"Неизвестный тип источника: {source_type}")
-    return ThrottledFrameSource(inner, src_fps, target_fps)
+    throttled: FrameSource = ThrottledFrameSource(inner, src_fps, target_fps)
+    if source_type is SourceType.STREAM and max_frames is not None and max_frames > 0:
+        return LimitedFrameSource(throttled, max_frames)
+    return throttled
