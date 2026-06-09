@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+from urllib.parse import quote
 
 import yaml
 from pydantic import BaseModel
@@ -87,8 +88,8 @@ def _database_url() -> str:
     url = os.getenv("DATABASE_URL")
     if url:
         return url
-    user = os.getenv("POSTGRES_USER", "monitoring")
-    password = os.getenv("POSTGRES_PASSWORD", "")
+    user = quote(os.getenv("POSTGRES_USER", "monitoring"), safe="")
+    password = quote(os.getenv("POSTGRES_PASSWORD", ""), safe="")
     host = os.getenv("POSTGRES_HOST", "localhost")
     port = os.getenv("POSTGRES_PORT", "5432")
     name = os.getenv("POSTGRES_DB", "monitoring")
