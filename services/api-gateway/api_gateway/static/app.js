@@ -10,6 +10,9 @@ let cameras = [];
 let current = null; // выбранная камера
 let points = []; // вершины текущего полигона (нормированные [0..1])
 let frameImg = null; // загруженный кадр (Image)
+let zonePolys = []; // сохранённые ROI-зоны выбранной камеры (для наложения)
+let liveTimer = null; // таймер «живого» обновления кадра
+let eventsTimer = null; // таймер обновления ленты событий
 
 const keyInput = $("apikey");
 keyInput.value = localStorage.getItem("apiKey") || "";
@@ -114,6 +117,8 @@ function selectCamera(cam) {
   current = cam;
   points = [];
   frameImg = null;
+  zonePolys = [];
+  stopLive();
   $("editor").hidden = false;
   $("camname").textContent = cam.name + " · " + cam.room;
   $("enabled").checked = cam.enabled;
@@ -124,6 +129,9 @@ function selectCamera(cam) {
   renderCamList();
   draw();
   loadZones();
+  // Лента событий камеры — обновляется в фоне, пока выбрана камера.
+  loadCameraEvents();
+  if (!eventsTimer) eventsTimer = setInterval(loadCameraEvents, 3000);
 }
 
 async function saveCamera() {
@@ -165,6 +173,53 @@ async function loadFrame() {
   }
 }
 
+// «Почти живой» просмотр: периодически перезагружаем кадр-снимок (go2rtc).
+// Это не видеопоток, а обновление кадра раз в ~2 c — без стрим-прокси/нагрузки.
+function stopLive() {
+  if (liveTimer) {
+    clearInterval(liveTimer);
+    liveTimer = null;
+  }
+  const btn = $("liveToggle");
+  if (btn) btn.textContent = "Живой просмотр";
+}
+
+function toggleLive() {
+  if (!current) {
+    msg("Сначала выберите камеру", false);
+    return;
+  }
+  if (liveTimer) {
+    stopLive();
+    return;
+  }
+  loadFrame();
+  liveTimer = setInterval(loadFrame, 2000);
+  $("liveToggle").textContent = "Стоп";
+}
+
+// Лента событий аналитики по помещению выбранной камеры (онлайн, поллинг).
+async function loadCameraEvents() {
+  if (!current) return;
+  try {
+    const data = await api(`/events?room=${encodeURIComponent(current.room)}&limit=20`);
+    const tbody = $("camevents").querySelector("tbody");
+    tbody.innerHTML = "";
+    for (const ev of data.items.filter((e) => e.source === "analytics")) {
+      const tr = document.createElement("tr");
+      const cells = [new Date(ev.ts).toLocaleTimeString(), ev.type, ev.message];
+      for (const text of cells) {
+        const td = document.createElement("td");
+        td.textContent = text; // textContent: сообщение приходит из БД
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+  } catch (_) {
+    // Лента не критична — молча пропускаем сбой опроса.
+  }
+}
+
 const canvas = $("canvas");
 const ctx = canvas.getContext("2d");
 
@@ -176,12 +231,37 @@ canvas.addEventListener("click", (ev) => {
   draw();
 });
 
+// Цвета ROI-зон по типу (для наложения на кадр).
+const ZONE_COLORS = { table: "#2e7d32", floor: "#ef6c00", window: "#1565c0" };
+
+function drawPoly(poly, color, fill) {
+  if (!poly.length) return;
+  ctx.beginPath();
+  poly.forEach(([x, y], i) => {
+    const px = x * canvas.width;
+    const py = y * canvas.height;
+    i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+  });
+  if (poly.length > 2) ctx.closePath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  if (fill) {
+    ctx.fillStyle = color + "33"; // ~20% прозрачности (8-значный hex)
+    ctx.fill();
+  }
+}
+
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (frameImg) ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
   else {
     ctx.fillStyle = "#eee";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  // Сохранённые ROI-зоны поверх кадра.
+  for (const z of zonePolys) {
+    drawPoly(z.polygon, ZONE_COLORS[z.type] || "#888", true);
   }
   if (points.length) {
     ctx.beginPath();
@@ -229,6 +309,8 @@ async function loadZones() {
   tbody.innerHTML = "";
   try {
     const data = await api(`/cameras/${current.id}/zones`);
+    zonePolys = data.items.map((z) => ({ type: z.zone_type, polygon: z.polygon }));
+    draw();
     for (const z of data.items) {
       const tr = document.createElement("tr");
       tr.innerHTML = `<td>${z.id}</td><td>${z.zone_type}</td><td>${z.polygon.length}</td>`;
@@ -509,6 +591,7 @@ $("nc_save").onclick = createCamera;
 $("saveCam").onclick = saveCamera;
 $("runAnalysis").onclick = runAnalysisNow;
 $("loadFrame").onclick = loadFrame;
+$("liveToggle").onclick = toggleLive;
 $("saveZone").onclick = saveZone;
 $("clearPoly").onclick = () => {
   points = [];
