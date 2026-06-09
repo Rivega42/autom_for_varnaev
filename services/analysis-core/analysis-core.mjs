@@ -528,15 +528,17 @@ export class AnalysisEngine {
         (sec) => {
           this._log(this._endMsg(t, sec), COLORS.act, true, true, { action: t, durationS: Number(sec) });
           const rt = ACT_TO_ROI[t];
-          // Отчитываемся только по зонам, которые ВСЁ ЕЩЁ существуют (оператор мог
-          // удалить зоны во время уборки — фантомные отчёты не шлём).
-          [...this.cleanZonesHit].filter((z) => z.type === rt && this.rois.includes(z)).forEach((z) => {
+          [...this.cleanZonesHit].forEach((z) => {
+            // Зона удалена оператором во время уборки — выкидываем без отчёта.
+            if (!this.rois.includes(z)) { this.cleanZonesHit.delete(z); return; }
+            // Зона другого типа остаётся в наборе до завершения СВОЕЙ уборки (как в PoC).
+            if (z.type !== rt) return;
             z.cov = this.heat.coverage(z.pts); // считаем покрытие только для отчитываемых зон
             const name = z.name || ROI_TYPE_RU[z.type];
             this._log(name + ' ' + CLEAN_VERB[z.type] + ' на ' + (z.cov || 0) + '%', ROI_COL[z.type], false, false,
               { coverage: { zoneType: z.type, zoneName: name, pct: z.cov || 0, ...(z.zoneId != null ? { zoneId: z.zoneId } : {}) } });
+            this.cleanZonesHit.delete(z);
           });
-          this.cleanZonesHit.clear();
         }, now);
     });
 
