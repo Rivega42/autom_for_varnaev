@@ -115,6 +115,7 @@
       <h3>ROI-зоны</h3>
       <div class="row">
         <button id="loadFrame" class="sec">Загрузить кадр</button>
+        <button id="liveToggle" class="sec">Живой просмотр</button>
         <label>тип зоны:
           <select id="zoneType">
             <option value="table">стол</option>
@@ -130,6 +131,13 @@
 
       <table id="zones">
         <thead><tr><th>id</th><th>тип</th><th>вершин</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <h3>События (онлайн)</h3>
+      <p class="hint">Лента событий аналитики по помещению камеры; обновляется автоматически.</p>
+      <table id="camevents">
+        <thead><tr><th>время</th><th>тип</th><th>сообщение</th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
