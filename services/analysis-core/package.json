@@ -1,0 +1,14 @@
+{
+  "name": "analysis-core",
+  "version": "0.1.0",
+  "description": "Единое ядро видеоаналитики (порт PoC motion-log.html) для браузера и Node",
+  "type": "module",
+  "main": "analysis-core.mjs",
+  "exports": {
+    ".": "./analysis-core.mjs"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "UNLICENSED"
+}
