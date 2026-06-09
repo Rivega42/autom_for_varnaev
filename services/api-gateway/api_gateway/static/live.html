@@ -447,6 +447,7 @@ const ROI_COL={table:COLORS.arm,floor:COLORS.leg,window:COLORS.torso};
    Состояние рендера (cleanColor/cleanHandIdx/cleanClip/lastTorso/cleanActive и
    лампы) зеркалим из движка каждый кадр — функции заливки работают без изменений. */
 let engine=null;
+let prevCleanActive=false;   // фронт активности уборки — для дорисовки следа (backfill)
 function buildEngine(){
   const e=new AnalysisEngine({sens:SENS, enabled, gridWidth:200});
   e.rois=rois;            // тот же массив зон, что рисуем (детект и % по одним ROI)
@@ -456,19 +457,12 @@ function buildEngine(){
 
 /* ---------- заливка зон (heat) ---------- */
 function clearHeat(){heatCtx.clearRect(0,0,heat.width,heat.height);if(engine)engine.heat.clear();}
-/* процент покрытия КАЖДОЙ зоны: доля её площади, реально закрашенной heat-слоем; пишем в r.cov */
-const covCanvas=document.createElement('canvas');
+/* процент покрытия КАЖДОЙ зоны — из сетки движка (тот же источник, что и у
+   события «протёрто на N%»): дисплей и журнал показывают одно число, независимо
+   от того, включён ли визуальный показ heat-слоя. */
 function coverageByZone(){
-  if(!rois.length||!heat.width){return;}
-  const sw=200, sh=Math.max(1,Math.round(200*heat.height/heat.width));
-  covCanvas.width=sw;covCanvas.height=sh;const cx=covCanvas.getContext('2d',{willReadFrequently:true});
-  cx.clearRect(0,0,sw,sh);cx.drawImage(heat,0,0,sw,sh);
-  const data=cx.getImageData(0,0,sw,sh).data;
-  const ins=rois.map(()=>0), pn=rois.map(()=>0);
-  for(let py=0;py<sh;py++)for(let px=0;px<sw;px++){
-    const lx=MIRROR?1-(px+0.5)/sw:(px+0.5)/sw, ny=(py+0.5)/sh, painted=data[(py*sw+px)*4+3]>20;
-    rois.forEach((r,i)=>{if(pip(lx,ny,r.pts)){ins[i]++;if(painted)pn[i]++;}});}
-  rois.forEach((r,i)=>{r.cov=ins[i]?Math.round(100*pn[i]/ins[i]):0;});}
+  if(!engine||!rois.length){return;}
+  rois.forEach(r=>{r.cov=engine.heat.coverage(r.pts);});}
 function updateCov(){
   if(engine)engine.rois=rois;   // синхронизируем зоны движка с нарисованными (детект/покрытие)
   coverageByZone();
@@ -591,7 +585,7 @@ async function start(){
     const w=srcKind==='video'?video.videoWidth:srcImg.naturalWidth;
     const h=srcKind==='video'?video.videoHeight:srcImg.naturalHeight;
     setSizes(w,h);clearHeat();
-    smooth=null;paint=null;lastVideoTime=-1;cleanActive=false;handPrev={};trail=[];
+    smooth=null;paint=null;lastVideoTime=-1;cleanActive=false;prevCleanActive=false;handPrev={};trail=[];
     inFrame=false;lostSince=0;
     engine=buildEngine();   // свежий движок на текущие зоны/чувствительность/тумблеры — сбрасывает всё состояние
     hint.style.display='none';running=true;stopBtn.disabled=false;dot.classList.add('live');
@@ -631,9 +625,13 @@ function loop(){
         if(engine){
           cleanColor=engine.cleanColor;cleanHandIdx=engine.cleanHandIdx;cleanClip=engine.cleanClip;lastTorso=engine.lastTorso;
           cleanActive=engine.actState.wipe||engine.actState.mop||engine.actState.sweep||engine.actState.window;
+          // на фронте уборки дорисовываем накопленный след (как в PoC: backfill до подтверждения)
+          if(cleanActive&&!prevCleanActive&&heatChk.checked)backfillHeat(cleanHandIdx);
+          prevCleanActive=cleanActive;
           lamp('Lhand',engine.armZone.left!=='rest');lamp('Rhand',engine.armZone.right!=='rest');
           lamp('Lleg',engine.kneeUp.left);lamp('Rleg',engine.kneeUp.right);lamp('head',engine.headDir!=='center');
-          lamp('act',cleanActive||evs.some(e=>e.isAct));
+          // «действие» горит всё время любой активности (уборка/махи/ходьба) + мгновенные события
+          lamp('act',Object.values(engine.actState).some(Boolean)||evs.some(e=>e.isAct));
         }
         if(heatChk.checked&&cleanActive)paintHands(lm); else handPrev={};
         pushTrail(lm);
