@@ -68,6 +68,7 @@
 | `ROOM_NOT_FOUND` | 404 | помещение с таким id отсутствует (напр. при заведении узла) |
 | `ROOM_ALREADY_EXISTS` | 409 | помещение с таким id уже существует |
 | `NODE_ALREADY_EXISTS` | 409 | узел датчиков с таким id уже существует |
+| `ARTIFACT_NOT_FOUND` | 404 | артефакт-доказательство с таким id отсутствует (или файл недоступен) |
 | `NOT_IMPLEMENTED` | 501 | эндпойнт-разъём АУРА выключен в v1 |
 | `INTERNAL` | 500 | прочая внутренняя ошибка |
 
@@ -132,16 +133,28 @@ GET /api/v1/events?from=&to=&type=&room=&limit=&offset=
 ```
 GET /api/v1/events/{id} → одно событие
 POST /api/v1/analytics-events        → событие браузерного живого анализа в журнал
+GET /api/v1/artifacts/{id}           → файл артефакта-доказательства (стоп-кадр/overlay)
 ```
 
 **Тело `POST /analytics-events`** (от браузерного «Живого анализа», `live.html`):
 ```json
 { "room": "room-01", "message": "Стол протёрт (правой рукой, 5 с)", "severity": "info",
-  "payload": { "camera_id": "…" } }
+  "payload": { "camera_id": "…" },
+  "image": "data:image/jpeg;base64,…" }
 ```
 Шлюз создаёт событие `source=analytics`, `type=action_detected`, добавляя в
 `payload` метку `origin=browser` (отличить от серверного анализа по расписанию),
 и пишет его в log-service. Так распознавания из браузера попадают в Grafana.
+Поле `image` необязательно: если задан стоп-кадр (data-URL), шлюз сохраняет его
+как артефакт-скриншот, а событие получает `artifact_id` и `payload.artifact_url`
+(`/api/v1/artifacts/{id}`) — чтобы кадр был виден в Grafana. Ответ `data`:
+`{ "id": "…", "artifact_id": "…"|null }`.
+
+**`GET /artifacts/{id}`** отдаёт сам файл артефакта (`image/jpeg`/`image/png`, не
+конверт) — стоп-кадры и heat-overlay протирки для Grafana/GUI. Метаданные берутся
+из таблицы `artifacts`, файл читается с общего тома (только внутри каталога
+артефактов). Ключ принимается в заголовке `X-API-Key` ИЛИ в `?api_key=` (чтобы
+кадр грузился тегом `<img>`). Нет артефакта/файла → 404 `ARTIFACT_NOT_FOUND`.
 
 ### 3.3 Задания на анализ
 ```

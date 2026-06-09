@@ -25,6 +25,22 @@
         "includeAll": true,
         "multi": true,
         "refresh": 2
+      },
+      {
+        "name": "api_base",
+        "type": "textbox",
+        "label": "Адрес api-gateway",
+        "description": "Базовый URL api-gateway для показа стоп-кадров (напр. http://localhost:8000). Заполняется оператором.",
+        "query": "",
+        "current": { "text": "", "value": "" }
+      },
+      {
+        "name": "api_key",
+        "type": "textbox",
+        "label": "API-ключ",
+        "description": "X-API-Key для загрузки стоп-кадров (?api_key=). НЕ хранится в репозитории — вводится оператором в дашборде.",
+        "query": "",
+        "current": { "text": "", "value": "" }
       }
     ]
   },
@@ -61,6 +77,34 @@
           "format": "table",
           "rawQuery": true,
           "rawSql": "SELECT ts AS \"time\", type, room_id AS room, severity, message, payload::text AS payload FROM events WHERE source='analytics' AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) ORDER BY ts DESC LIMIT 500"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Стоп-кадры событий",
+      "type": "table",
+      "datasource": { "type": "postgres", "uid": "${DS_TIMESCALEDB}" },
+      "description": "События со стоп-кадром (payload.artifact_url). Чтобы кадры РИСОВАЛИСЬ, задайте переменные «Адрес api-gateway» и «API-ключ» вверху дашборда (ключ в репозитории не хранится).",
+      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 24 },
+      "options": { "showHeader": true, "cellHeight": "lg" },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "снимок" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "image" } },
+              { "id": "custom.width", "value": 260 }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT ts AS \"time\", room_id AS room, message, ('${api_base}' || (payload->>'artifact_url') || '?api_key=${api_key}') AS \"снимок\" FROM events WHERE source='analytics' AND (payload->>'artifact_url') IS NOT NULL AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) ORDER BY ts DESC LIMIT 50"
         }
       ]
     }

@@ -286,11 +286,13 @@ const stamp=d=>pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())
 // ?cam=<id>&room=<id>&api_key=<key> (их проставляет GUI при открытии анализа).
 const _liveParams=new URLSearchParams(location.search);
 const _liveCam=_liveParams.get('cam'),_liveRoom=_liveParams.get('room'),_liveKey=_liveParams.get('api_key')||'';
-function postEvent(text){
+function postEvent(text,img){
   if(!_liveCam)return;  // открыто вне контура — не шлём
+  const body={room:_liveRoom,message:text,payload:{origin:'browser',camera_id:_liveCam}};
+  if(img)body.image=img;  // стоп-кадр события → сохранится артефактом, видно в Grafana
   fetch('/api/v1/analytics-events',{method:'POST',
     headers:{'Content-Type':'application/json','X-API-Key':_liveKey},
-    body:JSON.stringify({room:_liveRoom,message:text,payload:{origin:'browser',camera_id:_liveCam}})
+    body:JSON.stringify(body)
   }).catch(()=>{});  // лента не критична — сбой отправки игнорируем
 }
 function log(text,color,isAct=false,img=null){
@@ -303,8 +305,8 @@ function log(text,color,isAct=false,img=null){
     e.appendChild(im);}
   logEl.appendChild(e);logEl.scrollTop=logEl.scrollHeight;
   countEl.textContent=logData.length+' '+plural(logData.length);
-  if(isAct)postEvent(text);   // распознанное действие → в журнал контура (Grafana)
-  if(img)clearHeat();}        // после стоп-кадра сбрасываем заливку (#2)
+  if(isAct)postEvent(text,img);  // распознанное действие (+стоп-кадр) → журнал контура (Grafana)
+  if(img)clearHeat();}           // после стоп-кадра сбрасываем заливку (#2)
 function plural(n){const a=Math.abs(n)%100,b=a%10;if(a>10&&a<20)return'записей';
   if(b>1&&b<5)return'записи';if(b===1)return'запись';return'записей';}
 
