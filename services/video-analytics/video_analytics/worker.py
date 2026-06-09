@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -193,24 +194,32 @@ def process_task(
                 events_sent += 1
                 coverage_zones += 1
         # Скриншот-доказательство: один артефакт на задание при наличии событий.
+        # Сбой записи артефакта НЕ валит задание: события уже отправлены в журнал,
+        # и пометка failed создала бы расхождение «задание упало, события есть»
+        # (а будущий ретрай задвоил бы события). Логируем и продолжаем без кадра.
         if evidence_frame is not None and engine is not None:
             artifact_id = uuid4()
             ats = now_fn()
             artifact_path = build_artifact_path(artifacts_dir, ats, artifact_id, "jpg")
-            save_frame(evidence_frame, artifact_path)
-            insert_artifact(
-                engine,
-                Artifact(
-                    id=artifact_id,
-                    created_at=ats,
-                    kind=ArtifactKind.SCREENSHOT,
-                    path=artifact_path,
-                    mime="image/jpeg",
-                    room_id=task.room_id,
-                    camera_id=task.camera_id,
-                    task_id=task.id,
-                ),
-            )
+            try:
+                save_frame(evidence_frame, artifact_path)
+                insert_artifact(
+                    engine,
+                    Artifact(
+                        id=artifact_id,
+                        created_at=ats,
+                        kind=ArtifactKind.SCREENSHOT,
+                        path=artifact_path,
+                        mime="image/jpeg",
+                        room_id=task.room_id,
+                        camera_id=task.camera_id,
+                        task_id=task.id,
+                    ),
+                )
+            except Exception:
+                logger.exception("Не удалось сохранить артефакт задания %s", task.id)
+                Path(artifact_path).unlink(missing_ok=True)  # не оставляем битый файл
+                artifact_path = None
     finally:
         source.close()
     return {

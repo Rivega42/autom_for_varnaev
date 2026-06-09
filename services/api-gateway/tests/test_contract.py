@@ -79,3 +79,15 @@ def test_integration_disabled_returns_501(method: str, path: str) -> None:
     body = resp.json()
     assert body["error"]["code"] == "NOT_IMPLEMENTED"
     Envelope.model_validate(body)
+
+
+def test_limit_is_capped() -> None:
+    """Запредельный limit отклоняется валидацией (защита от OOM одним запросом)."""
+    resp = _client().get("/api/v1/events", params={"limit": 999999})
+    assert resp.status_code == 422
+
+
+def test_naive_datetime_accepted_as_utc() -> None:
+    """Время без зоны в from/to принимается (трактуется как UTC), а не 500."""
+    resp = _client().get("/api/v1/events", params={"from": "2026-06-01T10:00:00"})
+    assert resp.status_code == 200

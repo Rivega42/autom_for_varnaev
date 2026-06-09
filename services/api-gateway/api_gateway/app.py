@@ -90,15 +90,20 @@ _STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 def _parse_query_dt(value: str | None) -> datetime | None:
-    """Разобрать ISO-8601 из query-параметра или вернуть 422 VALIDATION_ERROR."""
+    """Разобрать ISO-8601 из query-параметра или вернуть 422 VALIDATION_ERROR.
+
+    Время без зоны трактуем как UTC (контракт §1): иначе naive datetime в
+    сравнении с timestamptz-колонкой роняет запрос в 500 на стороне БД.
+    """
     if value is None:
         return None
     try:
-        return datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(value)
     except ValueError:
         raise api_error(
             ErrorCode.VALIDATION_ERROR, "Неверный формат даты (ожидается ISO-8601)"
         ) from None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 # Базовый префикс контракта (docs/03_API_CONTRACT.md §1).
@@ -143,8 +148,8 @@ def create_app(
         to: str | None = None,
         type: str | None = None,
         room: str | None = None,
-        limit: int = 50,
-        offset: int = 0,
+        limit: int = Query(default=50, ge=1, le=1000),
+        offset: int = Query(default=0, ge=0),
     ) -> dict[str, Any]:
         """Лента событий журнала (проксируется к log-service)."""
         data = events.list_events(
@@ -258,8 +263,8 @@ def create_app(
         status: str | None = None,
         from_: str | None = Query(default=None, alias="from"),
         to: str | None = None,
-        limit: int = 50,
-        offset: int = 0,
+        limit: int = Query(default=50, ge=1, le=1000),
+        offset: int = Query(default=0, ge=0),
     ) -> dict[str, Any]:
         """Список заданий с фильтром по статусу/времени."""
         from_ts = _parse_query_dt(from_)
@@ -288,7 +293,7 @@ def create_app(
         metric: str | None = None,
         from_: str | None = Query(default=None, alias="from"),
         to: str | None = None,
-        limit: int = 500,
+        limit: int = Query(default=500, ge=1, le=10000),
     ) -> dict[str, Any]:
         """Показания датчиков (проверочный путь; основной — Grafana)."""
         from_ts = _parse_query_dt(from_)
@@ -375,9 +380,13 @@ def create_app(
             raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
         return ok(item)
 
-    @app.get(f"{API_PREFIX}/cameras/{{camera_id}}/snapshot", dependencies=[auth])
+    @app.get(f"{API_PREFIX}/cameras/{{camera_id}}/snapshot", dependencies=[media_auth])
     def camera_snapshot(camera_id: UUID) -> Response:
-        """JPEG-кадр камеры от go2rtc (фон для разметки ROI в GUI)."""
+        """JPEG-кадр камеры от go2rtc (фон для разметки ROI в GUI).
+
+        media_auth: ключ из заголовка ИЛИ ?api_key= — кадр грузится тегом <img>
+        (контракт §3.5 относит snapshot к медиа-эндпойнтам).
+        """
         camera = get_camera(engine, camera_id)
         if camera is None:
             raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
@@ -480,10 +489,10 @@ def create_app(
         """Изменить расписание или 404 SCHEDULE_NOT_FOUND / 409 при дубле имени."""
         try:
             item = update_schedule(engine, schedule_id, body)
-        except DuplicateScheduleNameError as exc:
+        except DuplicateScheduleNameError:
             raise api_error(
                 ErrorCode.SCHEDULE_DUPLICATE_NAME,
-                f"Расписание с именем «{exc}» уже существует",
+                f"Расписание с именем «{body.name}» уже существует",
             ) from None
         if item is None:
             raise api_error(ErrorCode.SCHEDULE_NOT_FOUND, "Расписание не найдено")

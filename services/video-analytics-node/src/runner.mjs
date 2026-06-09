@@ -19,12 +19,16 @@ export async function runAnalysis({ frames, engine, sink, roomId = null, cameraI
   const eng = engine ?? new AnalysisEngine();
   let framesProcessed = 0;
   let emitted = 0;
+  let lastEngineNow = 0;
 
   for await (const frame of frames) {
     // engineNow — МОНОТОННОЕ время кадра (для таймингов активностей внутри движка);
     // wallTs — СТЕННЫЕ часы момента съёмки (идут в ts события журнала). Это два
     // разных времени: путать их нельзя, иначе события улетят в 1970-й год.
-    const engineNow = frame.ts ?? framesProcessed * 33; // ~30 fps, если не задано
+    // Монотонность гарантируем даже при смешанных источниках ts (часть кадров с
+    // PTS, часть без): время не откатывается назад — иначе duration_s ломается.
+    const engineNow = Math.max(frame.ts ?? lastEngineNow + 33, lastEngineNow + 1);
+    lastEngineNow = engineNow;
     const wallTs = frame.wallTs ?? Date.now();
     const raw = eng.analyze(frame.lm, frame.world ?? null, engineNow);
     framesProcessed++;

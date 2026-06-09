@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 
 from ingest_sensors.events import (
     EventSink,
@@ -39,6 +39,7 @@ class SilenceTracker:
         *,
         monitor: SilenceMonitor | None = None,
         describe_room: RoomDescriber = default_room_describer,
+        now_fn: Callable[[], datetime] | None = None,
     ) -> None:
         self._sink = sink
         self._resolve_room = resolve_room
@@ -49,6 +50,8 @@ class SilenceTracker:
         )
         self._monitor = monitor or SilenceMonitor()
         self._describe_room = describe_room
+        # Серверные часы (инъекция для тестов): активность узла фиксируется ИМИ.
+        self._now_fn: Callable[[], datetime] = now_fn or (lambda: datetime.now(UTC))
         self._lock = threading.Lock()
 
     def _silent_min_for_node(self, node_id: str) -> int:
@@ -56,9 +59,14 @@ class SilenceTracker:
         return self._silent_min_for_room(self._resolve_room(node_id))
 
     def record(self, reading: Reading) -> None:
-        """Отметить активность узла по показанию (сбрасывает признак тишины)."""
+        """Отметить активность узла по показанию (сбрасывает признак тишины).
+
+        Фиксируем СЕРВЕРНОЕ время приёма, а не `reading.ts` с часов узла: ESP32
+        без NTP может отставать на минуты, и сравнение его часов с серверными в
+        `check()` давало бы вечные ложные sensor_silent на каждом тике.
+        """
         with self._lock:
-            self._monitor.record(reading.node_id, reading.ts)
+            self._monitor.record(reading.node_id, self._now_fn())
 
     def check(self, now: datetime) -> int:
         """Проверить тишину и эмитить sensor_silent; вернуть число событий."""

@@ -78,6 +78,7 @@ function fillCameraSelect() {
 // скелет, распознавание, журнал, стоп-кадры поверх MJPEG-потока, на едином ядре
 // analysis-core (то же, что и сервер). Монтируется в #liveMount.
 let liveHandle = null;
+let liveOpening = false; // защёлка от двойного клика, пока идёт async-открытие
 function stopLiveAnalysis() {
   if (liveHandle) {
     liveHandle.stop();
@@ -101,6 +102,8 @@ async function openLiveAnalysis() {
     stopLiveAnalysis();
     return;
   }
+  if (liveOpening) return; // второй клик до завершения await — второй движок не монтируем
+  liveOpening = true;
   const key = keyInput.value;
   try {
     // ROI-зоны камеры из БД — те же полигоны, что и серверная разметка.
@@ -119,6 +122,8 @@ async function openLiveAnalysis() {
     $("liveAnalysis").textContent = "Скрыть анализ";
   } catch (e) {
     msg("Ошибка живого анализа: " + e.message, false);
+  } finally {
+    liveOpening = false;
   }
 }
 

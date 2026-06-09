@@ -308,8 +308,9 @@ function log(text,color,isAct=false,img=null){
     e.appendChild(im);}
   logEl.appendChild(e);logEl.scrollTop=logEl.scrollHeight;
   countEl.textContent=logData.length+' '+plural(logData.length);
-  if(isAct)postEvent(text,img);  // распознанное действие (+стоп-кадр) → журнал контура (Grafana)
-  if(img)clearHeat();}           // после стоп-кадра сбрасываем заливку (#2)
+  if(isAct)postEvent(text,img);} // распознанное действие (+стоп-кадр) → журнал контура (Grafana)
+  // ВАЖНО: заливку здесь НЕ сбрасываем — иначе стоп-кадр падения/SOS посреди
+  // уборки обнулил бы её покрытие. Сброс — в цикле, после завершения уборки.
 function plural(n){const a=Math.abs(n)%100,b=a%10;if(a>10&&a<20)return'записей';
   if(b>1&&b<5)return'записи';if(b===1)return'запись';return'записей';}
 
@@ -621,7 +622,13 @@ function loop(){
         draw(lm);
         // единое ядро: разбор кадра → события; затем зеркалим состояние в рендер
         const evs=engine?engine.analyze(lm,world,performance.now()):[];
-        for(const e of evs)log(e.text,e.color,e.isAct,e.snapshot?snapshot():null);
+        let resetHeat=false;
+        for(const e of evs){
+          log(e.text,e.color,e.isAct,e.snapshot?snapshot():null);
+          // сброс заливки/процента — ТОЛЬКО после завершения уборки (не падение/SOS)
+          if(e.snapshot&&['wipe','mop','sweep','window'].includes(e.action))resetHeat=true;
+        }
+        if(resetHeat)clearHeat();
         if(engine){
           cleanColor=engine.cleanColor;cleanHandIdx=engine.cleanHandIdx;cleanClip=engine.cleanClip;lastTorso=engine.lastTorso;
           cleanActive=engine.actState.wipe||engine.actState.mop||engine.actState.sweep||engine.actState.window;

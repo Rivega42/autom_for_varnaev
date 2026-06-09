@@ -24,14 +24,16 @@ def claim_next_task(engine: Engine, now: datetime) -> AnalysisTask | None:
     """Взять старейшее задание `queued` и атомарно перевести его в `running`.
 
     Возвращает задание (уже со статусом `running` и `started_at=now`) или None,
-    если очередь пуста. В v1 воркер один, поэтому select+update в одной
-    транзакции достаточно.
+    если очередь пуста. FOR UPDATE SKIP LOCKED защищает от двойного захвата
+    одного задания при нескольких воркерах (PostgreSQL; SQLite в тестах этот
+    хинт игнорирует — там воркер один по определению).
     """
     select_stmt = (
         select(analysis_tasks)
         .where(analysis_tasks.c.status == TaskStatus.QUEUED.value)
         .order_by(analysis_tasks.c.created_at)
         .limit(1)
+        .with_for_update(skip_locked=True)
     )
     with engine.begin() as conn:
         row = conn.execute(select_stmt).mappings().first()

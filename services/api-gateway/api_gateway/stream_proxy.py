@@ -34,7 +34,11 @@ class Go2rtcStreamProxy:
         Клиент и ответ держатся открытыми, пока итератор отдаёт байты, и
         закрываются в `finally` (в т.ч. при разрыве со стороны браузера).
         """
-        client = httpx.AsyncClient(timeout=None)
+        # Чтение бесконечного потока не ограничиваем (read=None), но подключение/
+        # запись/пул — ограничиваем, чтобы зависший go2rtc не копил соединения.
+        client = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10.0, read=None, write=10.0, pool=10.0)
+        )
         url = f"{self._base}/api/stream.mjpeg"
         try:
             request = client.build_request("GET", url, params={"src": src})

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from collections.abc import Callable
 
 from fastapi import Header, HTTPException, Query
@@ -15,6 +16,11 @@ from fastapi import Header, HTTPException, Query
 from api_gateway.config import Settings
 
 logger = logging.getLogger(__name__)
+
+
+def _key_ok(received: str | None, expected: str) -> bool:
+    """Сравнить ключи за постоянное время (без тайминг-оракула)."""
+    return received is not None and secrets.compare_digest(received, expected)
 
 
 def make_require_api_key_media(settings: Settings) -> Callable[[str | None, str | None], None]:
@@ -33,7 +39,7 @@ def make_require_api_key_media(settings: Settings) -> Callable[[str | None, str 
         """Пропустить запрос с верным ключом из заголовка или query (или если ключ не настроен)."""
         if settings.api_key is None:
             return
-        if x_api_key == settings.api_key or api_key == settings.api_key:
+        if _key_ok(x_api_key, settings.api_key) or _key_ok(api_key, settings.api_key):
             return
         raise HTTPException(
             status_code=401,
@@ -59,7 +65,7 @@ def make_require_api_key(settings: Settings) -> Callable[[str | None], None]:
         """Пропустить запрос только с верным ключом (либо если ключ не настроен)."""
         if settings.api_key is None:
             return
-        if x_api_key != settings.api_key:
+        if not _key_ok(x_api_key, settings.api_key):
             raise HTTPException(
                 status_code=401,
                 detail={
