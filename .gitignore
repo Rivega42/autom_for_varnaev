@@ -34,6 +34,8 @@ htmlcov/
 # Рантайм-ассеты контура (объектные, не в репозитории)
 models/*.task
 config/schedules.json
+# Вендоренные веб-ассеты MediaPipe/hls/модель для live.html (качает fetch_web_assets.sh)
+services/api-gateway/api_gateway/static/vendor/
 # Реальный конфиг объекта для сидинга (адреса камер и т.п.); в репо — только пример.
 db/seeds/object.yaml
 

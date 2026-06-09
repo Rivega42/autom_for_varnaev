@@ -19,8 +19,12 @@ else
   python scripts/init_env.py
 fi
 
+echo "[2] Веб-ассеты для живого анализа (MediaPipe/модель/hls — локально, без CDN)"
+bash scripts/fetch_web_assets.sh \
+  || echo "    ВНИМАНИЕ: веб-ассеты не скачаны (нет сети?). Браузерный «Живой анализ» без них не загрузится."
+
 if [ "$DEMO" = "1" ]; then
-  echo "[2] Демо-режим: сборка и запуск контура с синтетическими датчиками"
+  echo "[3] Демо-режим: сборка и запуск контура с синтетическими датчиками"
   docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build
   echo
   echo "Готово (демо). Данные пойдут сами через ~10–60 с (показания, затем события)."
@@ -30,7 +34,7 @@ if [ "$DEMO" = "1" ]; then
   exit 0
 fi
 
-echo "[2] Модель видеоаналитики"
+echo "[3] Модель видеоаналитики"
 if [ -f models/pose_landmarker.task ]; then
   echo "    models/pose_landmarker.task уже есть — пропуск"
 else
@@ -38,7 +42,7 @@ else
     || echo "    ВНИМАНИЕ: модель не скачана (нет сети?). video-analytics без неё не стартует."
 fi
 
-echo "[3] Справочники объекта (помещения/узлы/камеры)"
+echo "[4] Справочники объекта (помещения/узлы/камеры)"
 if [ -f db/seeds/object.yaml ]; then
   # Сид зависит от db+migrate — поднимет их и применит справочники ДО старта
   # ingest-sensors (тот читает узлы один раз на старте).
@@ -48,7 +52,7 @@ else
   echo "    или скопируйте db/seeds/object.example.yaml в object.yaml и повторите."
 fi
 
-echo "[4] Сборка и запуск стека"
+echo "[5] Сборка и запуск стека"
 docker compose up -d --build
 echo
 echo "Готово."
