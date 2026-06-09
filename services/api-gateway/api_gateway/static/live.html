@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="vendor/hls.min.js"></script>
 <style>
   :root{
     --bg:#0a0d0c;--panel:#0f1413;--panel-2:#121a18;--line:#1d2926;--line-2:#2a3a36;
@@ -223,7 +223,7 @@
 
 <script type="module">
 import { PoseLandmarker, FilesetResolver }
-  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs";
+  from "./vendor/mediapipe/vision_bundle.mjs";
 
 /* ---------- элементы ---------- */
 const video=document.getElementById('video'), srcImg=document.getElementById('srcImg');
@@ -680,9 +680,9 @@ let inFrame=false, lostSince=0;
 
 async function initModel(){
   statusText.textContent='загрузка модели…';
-  const fileset=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
+  const fileset=await FilesetResolver.forVisionTasks("vendor/mediapipe/wasm");
   landmarker=await PoseLandmarker.createFromOptions(fileset,{
-    baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",delegate:"GPU"},
+    baseOptions:{modelAssetPath:"vendor/model/pose_landmarker.task",delegate:"GPU"},
     runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:0.5,minTrackingConfidence:0.5,minPosePresenceConfidence:0.5});}
 
 function showEl(kind){video.style.display=kind==='video'?'block':'none';srcImg.style.display=kind==='img'?'block':'none';}
