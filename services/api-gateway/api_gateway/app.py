@@ -8,10 +8,11 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Query, Response
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Engine
 
-from api_gateway.auth import make_require_api_key
+from api_gateway.auth import make_require_api_key, make_require_api_key_media
 from api_gateway.cameras_repository import (
     create_camera,
     get_camera,
@@ -56,6 +57,7 @@ from api_gateway.sensor_nodes_repository import (
     list_nodes,
 )
 from api_gateway.snapshot import Go2rtcSnapshotFetcher, SnapshotFetcher
+from api_gateway.stream_proxy import Go2rtcStreamProxy, StreamProxy
 from api_gateway.tasks_repository import create_task, get_task, list_tasks
 from api_gateway.thresholds_repository import (
     create_threshold,
@@ -91,23 +93,27 @@ def create_app(
     events_client: EventsClient | None = None,
     engine: Engine | None = None,
     snapshot_fetcher: SnapshotFetcher | None = None,
+    stream_proxy: StreamProxy | None = None,
 ) -> FastAPI:
     """Создать приложение api-gateway.
 
-    `settings`/`events_client`/`engine`/`snapshot_fetcher` можно передать (для
-    тестов); по умолчанию берутся из окружения, поднимается HTTP-клиент к
-    log-service, engine БД и источник кадров go2rtc.
+    `settings`/`events_client`/`engine`/`snapshot_fetcher`/`stream_proxy` можно
+    передать (для тестов); по умолчанию берутся из окружения, поднимается
+    HTTP-клиент к log-service, engine БД, источник кадров и видеопотока go2rtc.
     """
     settings = settings or Settings.from_env()
     events = events_client or HttpEventsClient(settings.log_service_url)
     engine = engine if engine is not None else build_engine()
     snapshots = snapshot_fetcher or Go2rtcSnapshotFetcher(settings.go2rtc_url)
+    streams = stream_proxy or Go2rtcStreamProxy(settings.go2rtc_url)
 
     app = FastAPI(title="api-gateway")
     register_error_handlers(app)
 
     # Зависимость X-API-Key для публичных и /integration/* (docs/03_API_CONTRACT.md §1).
     auth = Depends(make_require_api_key(settings))
+    # Для медиа-эндпойнтов (кадр/видеопоток): ключ из заголовка ИЛИ query (<img>).
+    media_auth = Depends(make_require_api_key_media(settings))
 
     @app.get(f"{API_PREFIX}/health")
     def health() -> dict[str, Any]:
@@ -281,6 +287,18 @@ def create_app(
         if image is None:
             raise api_error(ErrorCode.INTERNAL, "Кадр-превью недоступен (go2rtc)")
         return Response(content=image, media_type="image/jpeg")
+
+    @app.get(f"{API_PREFIX}/cameras/{{camera_id}}/stream.mjpeg", dependencies=[media_auth])
+    async def camera_stream(camera_id: UUID) -> StreamingResponse:
+        """Живой MJPEG-видеопоток камеры (прокси go2rtc) для тега <img> в GUI."""
+        camera = get_camera(engine, camera_id)
+        if camera is None:
+            raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
+        opened = await streams.open(camera["name"])
+        if opened is None:
+            raise api_error(ErrorCode.INTERNAL, "Видеопоток недоступен (go2rtc)")
+        media_type, body = opened
+        return StreamingResponse(body, media_type=media_type)
 
     @app.get(f"{API_PREFIX}/cameras/{{camera_id}}/zones", dependencies=[auth])
     def get_camera_zones(camera_id: UUID) -> dict[str, Any]:

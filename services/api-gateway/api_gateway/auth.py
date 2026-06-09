@@ -10,11 +10,37 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from fastapi import Header, HTTPException
+from fastapi import Header, HTTPException, Query
 
 from api_gateway.config import Settings
 
 logger = logging.getLogger(__name__)
+
+
+def make_require_api_key_media(settings: Settings) -> Callable[[str | None, str | None], None]:
+    """Зависимость проверки ключа для МЕДИА-эндпойнтов (кадр/видеопоток).
+
+    Принимает ключ из заголовка X-API-Key ИЛИ из query-параметра `api_key` —
+    тег <img>/видео в браузере не умеет слать заголовки. Ключ в URL — осознанный
+    компромисс для внутреннего GUI (LAN): медиа-эндпойнты наружу за пределы
+    контура не публикуются, а сам GUI уже работает с ключом.
+    """
+
+    def require_api_key_media(
+        x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+        api_key: str | None = Query(default=None),
+    ) -> None:
+        """Пропустить запрос с верным ключом из заголовка или query (или если ключ не настроен)."""
+        if settings.api_key is None:
+            return
+        if x_api_key == settings.api_key or api_key == settings.api_key:
+            return
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "UNAUTHORIZED", "message": "Неверный или отсутствующий API-ключ"},
+        )
+
+    return require_api_key_media
 
 
 def make_require_api_key(settings: Settings) -> Callable[[str | None], None]:
