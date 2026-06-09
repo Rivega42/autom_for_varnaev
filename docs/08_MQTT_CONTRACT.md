@@ -17,7 +17,7 @@
 | Доступность узла (LWT) | `<prefix>/<node_id>/status` | узел → брокер |
 
 - `<node_id>` — идентификатор узла из справочника `sensor_nodes` (напр. `node-01`).
-- `<metric>` — одна из метрик v1: `air_temp` | `humidity` | `surface_ir`.
+- `<metric>` — одна из метрик v1: `air_temp` | `humidity` | `surface_ir` | `uv_index` | `uv_c`.
 - `room_id` в payload **не передаётся**: помещение определяется по связи
   `sensor_nodes.room_id` на стороне `ingest-sensors`.
 
@@ -46,10 +46,15 @@
 monitoring/node-01/air_temp     {"value": 23.4, "unit": "C"}
 monitoring/node-01/humidity     {"value": 41.0, "unit": "%"}
 monitoring/node-01/surface_ir   {"value": 4.2,  "unit": "C", "ts": "2026-06-05T10:30:00Z"}
+monitoring/node-01/uv_index     {"value": 1.2,  "unit": "index"}
+monitoring/node-01/uv_c         {"value": 2.5,  "unit": "mW/cm2"}
 monitoring/node-02/status       online
 ```
 
 - `surface_ir` — бесконтактная ИК-температура поверхности (MLX90614).
+- `uv_index` — общий УФ-индекс / УФ-A (LTR390, I²C), безразмерный.
+- `uv_c` — бактерицидный УФ-C 254 нм (GUVC-S10GD, аналоговый), мВт/см² — контроль
+  работы кварцевых ламп (ППК).
 - `status` (LWT) — `online` при подключении, `offline` (retained, Last Will) при
   обрыве; полезно как дополнительный сигнал к контролю «тишины» узла
   (`sensor_silent`), но основной критерий тишины — отсутствие показаний дольше
