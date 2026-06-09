@@ -46,9 +46,49 @@ async function loadCameras() {
     const data = await api("/cameras");
     cameras = data.items;
     renderCamList();
+    fillCameraSelect();
     msg(`Камер: ${cameras.length}`);
   } catch (e) {
     msg("Ошибка загрузки камер: " + e.message, false);
+  }
+}
+
+// Поток для воркера: go2rtc ретранслирует камеру по имени.
+function streamRef(cam) {
+  return `rtsp://media-gateway:8554/${cam.name}`;
+}
+
+// Выпадающий список камер в форме расписания (для привязки camera_id).
+function fillCameraSelect() {
+  const sel = $("sc_camera");
+  if (!sel) return;
+  sel.innerHTML = '<option value="">камера (опц.)</option>';
+  for (const cam of cameras) {
+    const opt = document.createElement("option");
+    opt.value = cam.id;
+    opt.textContent = cam.name;
+    sel.appendChild(opt);
+  }
+}
+
+// Разовый запуск анализа выбранной камеры (без curl/UUID).
+async function runAnalysisNow() {
+  if (!current) {
+    msg("Сначала выберите камеру", false);
+    return;
+  }
+  const body = {
+    source_type: "stream",
+    source_ref: streamRef(current),
+    pipeline: "pose_v1",
+    room: current.room,
+    camera_id: current.id,
+  };
+  try {
+    await api("/analysis-tasks", { method: "POST", body: JSON.stringify(body) });
+    msg("Анализ запущен — события появятся через ~30–60 с");
+  } catch (e) {
+    msg("Ошибка запуска анализа: " + e.message, false);
   }
 }
 
@@ -344,19 +384,25 @@ async function loadSchedules() {
 
 async function createSchedule() {
   const interval = parseInt($("sc_interval").value, 10);
+  const camId = $("sc_camera").value || null;
+  const cam = camId ? cameras.find((c) => c.id === camId) : null;
+  // Источник: из поля, иначе — поток выбранной камеры (go2rtc по имени).
+  const sourceRef = $("sc_ref").value.trim() || (cam ? streamRef(cam) : "");
   const body = {
     name: $("sc_name").value.trim(),
-    source_ref: $("sc_ref").value.trim(),
-    room: $("sc_room").value.trim() || null,
+    source_ref: sourceRef,
+    room: $("sc_room").value.trim() || (cam ? cam.room : null),
+    camera_id: camId, // нужен воркеру, чтобы взять ROI-зоны для % покрытия
     interval_min: interval,
   };
   if (!body.name || !body.source_ref || !(interval > 0)) {
-    msg("Заполните имя, источник и интервал (> 0)", false);
+    msg("Заполните имя, источник (или выберите камеру) и интервал (> 0)", false);
     return;
   }
   try {
     await api("/schedules", { method: "POST", body: JSON.stringify(body) });
     $("sc_name").value = $("sc_ref").value = $("sc_room").value = $("sc_interval").value = "";
+    $("sc_camera").value = "";
     loadSchedules();
     msg("Расписание добавлено");
   } catch (e) {
@@ -461,6 +507,7 @@ $("rm_add").onclick = createRoom;
 $("nd_add").onclick = createNode;
 $("nc_save").onclick = createCamera;
 $("saveCam").onclick = saveCamera;
+$("runAnalysis").onclick = runAnalysisNow;
 $("loadFrame").onclick = loadFrame;
 $("saveZone").onclick = saveZone;
 $("clearPoly").onclick = () => {

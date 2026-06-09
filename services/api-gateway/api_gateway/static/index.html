@@ -109,6 +109,7 @@
         <label class="flag"><input type="checkbox" id="f_uniform" /> спецодежда</label>
         <label class="flag"><input type="checkbox" id="f_coverage" /> покрытие</label>
         <button id="saveCam">Сохранить настройки</button>
+        <button id="runAnalysis" class="sec">Запустить анализ сейчас</button>
       </div>
 
       <h3>ROI-зоны</h3>
@@ -171,7 +172,8 @@
       <p class="hint">Периодический запуск анализа. Изменения подхватываются планировщиком на следующем тике.</p>
       <div class="row">
         <input id="sc_name" placeholder="имя (уникальное)" />
-        <input id="sc_ref" placeholder="rtsp://… или путь к файлу" style="min-width:240px" />
+        <input id="sc_ref" placeholder="rtsp://… (или выберите камеру)" style="min-width:240px" />
+        <select id="sc_camera"><option value="">камера (опц.)</option></select>
         <input id="sc_room" placeholder="помещение" />
         <input id="sc_interval" type="number" placeholder="интервал, мин" style="width:130px" />
         <button id="sc_add">Добавить расписание</button>
