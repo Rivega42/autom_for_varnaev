@@ -224,6 +224,9 @@
 <script type="module">
 import { PoseLandmarker, FilesetResolver }
   from "./vendor/mediapipe/vision_bundle.mjs";
+// Единое ядро анализа (то же, что и на сервере). Браузер больше НЕ держит свою
+// копию детекторов — вся логика распознавания и % покрытия живёт в analysis-core.
+import { AnalysisEngine } from "./analysis-core.mjs";
 
 /* ---------- элементы ---------- */
 const video=document.getElementById('video'), srcImg=document.getElementById('srcImg');
@@ -275,7 +278,7 @@ covEl.style.cssText='margin-left:auto;font-family:"IBM Plex Mono",monospace;font
 covEl.textContent='покрытие: —';lampsEl.appendChild(covEl);
 const tgEls={};
 detectorDefs.forEach(d=>{const el=document.createElement('div');el.className='tg on';el.textContent=d.label;tgEls[d.key]=el;
-  el.onclick=()=>{enabled[d.key]=!enabled[d.key];el.classList.toggle('on',enabled[d.key]);};togglesEl.appendChild(el);});
+  el.onclick=()=>{enabled[d.key]=!enabled[d.key];el.classList.toggle('on',enabled[d.key]);if(engine)engine.enabled[d.key]=enabled[d.key];};togglesEl.appendChild(el);});
 function refreshToggles(){detectorDefs.forEach(d=>tgEls[d.key]&&tgEls[d.key].classList.toggle('on',enabled[d.key]));}
 
 /* ---------- журнал ---------- */
@@ -438,223 +441,30 @@ const CLEAN_VERB={table:'протёрт',floor:'вымыт',window:'вымыто
 const ACT_TO_ROI={wipe:'table',window:'window',mop:'floor',sweep:'floor'};
 const ROI_COL={table:COLORS.arm,floor:COLORS.leg,window:COLORS.torso};
 
-/* ---------- разбор кадра ---------- */
-function analyze(lm,world){
-  curWorld=world;
-  const g=i=>lm[i];
-  const shMidY=(g(L.L_SH).y+g(L.R_SH).y)/2, shMidX=(g(L.L_SH).x+g(L.R_SH).x)/2;
-  const shW=Math.max(0.05,dist(g(L.L_SH),g(L.R_SH)));
-  const hipMidY=(g(L.L_HIP).y+g(L.R_HIP).y)/2, torso=Math.max(0.08,Math.abs(hipMidY-shMidY));
-  const noseY=g(L.NOSE).y, k=SENS; lastTorso=torso;
+/* ---------- движок анализа (единое ядро) ----------
+   Детекторы/стейт-машины/покрытие — в analysis-core. Здесь только хост:
+   источники видео, отрисовка скелета, визуальная heat-заливка, журнал, стоп-кадры.
+   Состояние рендера (cleanColor/cleanHandIdx/cleanClip/lastTorso/cleanActive и
+   лампы) зеркалим из движка каждый кадр — функции заливки работают без изменений. */
+let engine=null;
+let prevCleanActive=false;   // фронт активности уборки — для дорисовки следа (backfill)
+function buildEngine(){
+  const e=new AnalysisEngine({sens:SENS, enabled, gridWidth:200});
+  e.rois=rois;            // тот же массив зон, что рисуем (детект и % по одним ROI)
+  return e;
+}
 
-  if(enabled.arms){
-    [['left',L.L_WR,L.L_SH,'левая'],['right',L.R_WR,L.R_SH,'правая']].forEach(([side,wi,si,word])=>{
-      const wr=g(wi),sh=g(si);let z='rest';
-      if(vis(wr)>0.5){const om=0.02/k,um=0.03/k;
-        if(wr.y<noseY-om)z='over';else if(wr.y<shMidY-um)z='up';
-        else if(Math.abs(wr.x-sh.x)>shW*1.05/k&&wr.y<shMidY+0.10)z='side';else z='rest';}
-      const cd=armCand[side];if(z===cd.z)cd.n++;else{cd.z=z;cd.n=1;}
-      if(cd.n>=3&&z!==armZone[side]){const prev=armZone[side];armZone[side]=z;
-        if(z==='rest'){if(prev!=='rest')log('Опущена '+word+' рука',COLORS.arm);}
-        else{const w={over:'над головой',up:'вверх',side:'в сторону'}[z];log('Поднята '+word+' рука — '+w,COLORS.arm);}}
-      lamp(side==='left'?'Lhand':'Rhand',armZone[side]!=='rest');});
-    const bu=armZone.left!=='rest'&&armZone.right!=='rest'&&armZone.left!=='side'&&armZone.right!=='side';
-    if(bu&&!bothUp){bothUp=true;log('Подняты обе руки',COLORS.arm);}if(!bu&&bothUp)bothUp=false;}
-
-  if(enabled.legs){
-    [['left',L.L_KNEE,'левое','Lleg'],['right',L.R_KNEE,'правое','Rleg']].forEach(([side,ki,word,lk])=>{
-      const kn=g(ki);let up=false;if(vis(kn)>0.5)up=kn.y<hipMidY+torso*(0.55/k);
-      if(up&&!kneeUp[side]){kneeUp[side]=true;log('Поднято '+word+' колено',COLORS.leg);
-        walkSeq.push({side,t:performance.now()});if(walkSeq.length>6)walkSeq.shift();}
-      if(!up)kneeUp[side]=false;lamp(lk,kneeUp[side]);});}
-
-  if(enabled.head){
-    const le=vis(g(L.L_EAR)),re=vis(g(L.R_EAR)),off=(g(L.NOSE).x-shMidX)/shW;let d='center';
-    if(re<0.4&&le>0.5)d='right';else if(le<0.4&&re>0.5)d='left';
-    else if(off>0.22/k)d='right';else if(off<-0.22/k)d='left';
-    if(d===headCand.d)headCand.n++;else{headCand.d=d;headCand.n=1;}
-    if(headCand.n>=4&&d!==headDir){headDir=d;
-      if(d==='center')log('Голова — прямо',COLORS.head);else log('Голова повёрнута '+(d==='left'?'влево':'вправо'),COLORS.head);}
-    lamp('head',headDir!=='center');}
-
-  if(enabled.torso){
-    const W=world, vok=i=>vis(g(i))>0.5;
-    let cr=false, ln='none', known=false;
-    if(W){
-      // присед = реальный угол в колене (видимая нога). наклон над столом колено НЕ сгибает -> не присед
-      const ang=[];
-      if(vok(L.L_HIP)&&vok(L.L_KNEE)&&vok(L.L_ANK))ang.push(angleAt(W[L.L_HIP],W[L.L_KNEE],W[L.L_ANK]));
-      if(vok(L.R_HIP)&&vok(L.R_KNEE)&&vok(L.R_ANK))ang.push(angleAt(W[L.R_HIP],W[L.R_KNEE],W[L.R_ANK]));
-      if(ang.length){known=true;cr=Math.min(...ang)<115;}
-      if(vok(L.L_SH)&&vok(L.R_SH)&&vok(L.L_HIP)&&vok(L.R_HIP)){
-        const sx=(W[L.L_SH].x+W[L.R_SH].x)/2, sy=(W[L.L_SH].y+W[L.R_SH].y)/2;
-        const hx=(W[L.L_HIP].x+W[L.R_HIP].x)/2, hy=(W[L.L_HIP].y+W[L.R_HIP].y)/2;
-        const lat=Math.abs(sy-hy)>1e-3?(sx-hx)/Math.abs(sy-hy):0;
-        if(lat>0.35/k)ln='right';else if(lat<-0.35/k)ln='left';
-      }
-    }
-    if(known){ // ноги не видны (заслонены столом) -> присед не трогаем, ложных не будет
-      if(cr&&!crouch){crouch=true;log('Приседание',COLORS.torso);}
-      if(!cr&&crouch){crouch=false;log('Подъём из приседа',COLORS.torso);}}
-    if(ln!==lean&&ln!=='none')log('Наклон корпуса '+(ln==='left'?'влево':'вправо'),COLORS.torso);lean=ln;}
-
-  /* неподвижность: энергия движения ключевых точек */
-  if(enabled.still){
-    const ks=[L.NOSE,L.L_WR,L.R_WR,L.L_SH,L.R_SH,L.L_ANK,L.R_ANK];
-    let m=0,c=0;ks.forEach(i=>{const p=lm[i];if(prevKey[i]){m+=Math.hypot(p.x-prevKey[i].x,p.y-prevKey[i].y);c++;}prevKey[i]={x:p.x,y:p.y};});
-    motionEMA=motionEMA*0.8+(c?m/c:0)*0.2;const now=performance.now();
-    if(motionEMA>0.004){if(stillFlagged){stillFlagged=false;log('Движение возобновилось',COLORS.head);}lastMoveT=now;}
-    else if(!stillFlagged&&lastMoveT&&now-lastMoveT>6000){stillFlagged=true;log('Нет движения более 6 с',COLORS.head);}
-  }
-
-  const fr={t:performance.now(),lwx:g(L.L_WR).x,lwy:g(L.L_WR).y,rwx:g(L.R_WR).x,rwy:g(L.R_WR).y,
-    lwv:vis(g(L.L_WR)),rwv:vis(g(L.R_WR)),ny:noseY,shMidY,hipMidY,torso,wd:dist(g(L.L_WR),g(L.R_WR))};
-  hist.push(fr);if(hist.length>WIN)hist.shift();
-  if(hist.length>=WIN-2)detectActivities();else{lamp('act',false);paint=null;}}
-
-/* ---------- активности ---------- */
-function startMsg(t){return t==='mop'?'Начато мытьё пола шваброй…':t==='sweep'?'Начато подметание…':
-  t==='wipe'?'Начато протирание стола ('+cleanLabel+')…':'Начато протирание окна ('+cleanLabel+')…';}
-function endMsg(t,sec){return t==='mop'?'Пол вымыт (шваброй, '+sec+' с)':t==='sweep'?'Подметание завершено ('+sec+' с)':
-  t==='wipe'?'Стол протёрт ('+cleanLabel+', '+sec+' с)':'Окно протёрто ('+cleanLabel+', '+sec+' с)';}
-
-function detectActivities(){
-  const h=hist,k=SENS,last=h[h.length-1];
-  const lwx=h.map(f=>f.lwx),lwy=h.map(f=>f.lwy),rwx=h.map(f=>f.rwx),rwy=h.map(f=>f.rwy);
-  const shMidY=last.shMidY,hipMidY=last.hipMidY,torso=last.torso,noseY=last.ny;
-  const dz=0.004/k,lRev=countReversals(lwx,dz),rRev=countReversals(rwx,dz);let anyAct=false;
-  paint=null;
-
-  /* ---------- семейство УБОРКИ ----------
-     Ключ для косого/верхнего ракурса: швабра/веник = ОБЕ кисти на одном черенке,
-     значит расстояние между кистями почти постоянно и они едут вместе (жёсткая связка).
-     Свободная рука (стол/окно) такого не даёт. Нет связки -> по умолчанию это стол. */
-  const visBoth=h.every(f=>f.lwv>0.4&&f.rwv>0.4);
-  const wdArr=h.map(f=>f.wd);
-  const mx=h.map(f=>(f.lwx+f.rwx)/2), my=h.map(f=>(f.lwy+f.rwy)/2);
-  const midRevX=countReversals(mx,dz), midRevY=countReversals(my,dz);
-  const rigid=visBoth && std(wdArr)<0.035*k && range(wdArr)<0.07;            // постоянная база между кистями
-  const implement=rigid && Math.max(range(mx),range(my))>0.06/k && Math.max(midRevX,midRevY)>=3;
-  const lowZone=mean(my)>(shMidY+hipMidY)/2;                                  // кисти ниже середины торса (в кадре)
-
-  const visFrac=arr=>arr.filter(v=>v>0.3).length/arr.length;
-  const Lh={vis:visFrac(h.map(f=>f.lwv))>=0.6,xr:lRev,yr:countReversals(lwy,dz),rx:range(lwx),ry:range(lwy),shape:motionShape(lwx,lwy),my:mean(lwy)};
-  const Rh={vis:visFrac(h.map(f=>f.rwv))>=0.6,xr:rRev,yr:countReversals(rwy,dz),rx:range(rwx),ry:range(rwy),shape:motionShape(rwx,rwy),my:mean(rwy)};
-
-  let activeType=null, pts=[], hidx=[], clipType=null, cleanZoneNow=null;
-  if(rois.length){                                   // КАЛИБРОВКА: тип берём по зоне, в которой кисть
-    const consider=(x,y,Hh,name)=>{
-      if(!(Hh.vis&&(Hh.xr>=3||Hh.yr>=3||Hh.shape==='circle')))return null;
-      const z=roiObjAt(x,y);return z?{zone:z,name,shape:Hh.shape,rx:Hh.rx,ry:Hh.ry,x,y}:null;};
-    const hs=[consider(last.lwx,last.lwy,Lh,'левой рукой'),consider(last.rwx,last.rwy,Rh,'правой рукой')].filter(Boolean);
-    if(hs.length){
-      const cnt=new Map();hs.forEach(o=>cnt.set(o.zone,(cnt.get(o.zone)||0)+1));
-      let zone=hs[0].zone,best=-1;cnt.forEach((c,z)=>{if(c>best){best=c;zone=z;}});
-      const sel=hs.filter(o=>o.zone===zone);pts=sel.map(o=>({x:o.x,y:o.y}));
-      hidx=sel.map(o=>o.name==='левой рукой'?15:16);clipType=zone.type;cleanZoneNow=zone;
-      const rt=zone.type;
-      if(rt==='table')activeType='wipe';else if(rt==='window')activeType='window';
-      else activeType=sel.some(o=>o.rx>=o.ry)?'sweep':'mop';
-      if(activeType==='wipe'||activeType==='window'){
-        const handsTxt=sel.length>1?'двумя руками':sel[0].name;
-        const shp=sel.length>1?(sel[0].shape===sel[1].shape?sel[0].shape:'mixed'):sel[0].shape;
-        cleanLabel=handsTxt+', '+shapeText(shp);}
-    }
-  }
-  else if(implement && lowZone){
-    // широкие горизонтальные махи -> веник; продольное «толкание» -> швабра
-    activeType = range(mx)>=range(my)*1.1 ? 'sweep' : 'mop';
-    pts=[{x:last.lwx,y:last.lwy},{x:last.rwx,y:last.rwy}];hidx=[15,16];
-  } else {
-    // свободные руки. окно = верхняя зона + вертикаль/круг; иначе стол
-    const upTop=noseY-0.10, upLow=shMidY+0.05;
-    const Lwin=Lh.vis&&inBand(lwy,upTop,upLow)&&(Lh.yr>=3||Lh.shape==='circle')&&Lh.ry>0.05;
-    const Rwin=Rh.vis&&inBand(rwy,upTop,upLow)&&(Rh.yr>=3||Rh.shape==='circle')&&Rh.ry>0.05;
-    // стол: кисть ниже линии плеч + колебания (горизонталь или круг) — работает и при наклоне над столом
-    const Ltab=Lh.vis&&mean(lwy)>shMidY&&(Lh.xr>=3||Lh.shape==='circle')&&(Lh.rx>0.05||Lh.shape==='circle');
-    const Rtab=Rh.vis&&mean(rwy)>shMidY&&(Rh.xr>=3||Rh.shape==='circle')&&(Rh.rx>0.05||Rh.shape==='circle');
-    if(Ltab||Rtab){activeType='wipe';
-      const hands=(Ltab&&Rtab)?'двумя руками':Ltab?'левой рукой':'правой рукой';
-      const shp=(Ltab&&Rtab)?(Lh.shape===Rh.shape?Lh.shape:'mixed'):(Ltab?Lh.shape:Rh.shape);
-      cleanLabel=hands+', '+shapeText(shp);
-      if(Ltab){pts.push({x:last.lwx,y:last.lwy});hidx.push(15);}if(Rtab){pts.push({x:last.rwx,y:last.rwy});hidx.push(16);}}
-    else if(Lwin||Rwin){activeType='window';
-      const hands=(Lwin&&Rwin)?'двумя руками':Lwin?'левой рукой':'правой рукой';
-      const shp=(Lwin&&Rwin)?(Lh.shape===Rh.shape?Lh.shape:'mixed'):(Lwin?Lh.shape:Rh.shape);
-      cleanLabel=hands+', '+shapeText(shp);
-      if(Lwin){pts.push({x:last.lwx,y:last.lwy});hidx.push(15);}if(Rwin){pts.push({x:last.rwx,y:last.rwy});hidx.push(16);}}
-  }
-  if(activeType&&!enabled[activeType])activeType=null;
-  const palette={mop:COLORS.leg,sweep:COLORS.head,wipe:COLORS.arm,window:COLORS.torso};
-  if(activeType){cleanColor=palette[activeType];anyAct=true;cleanHandIdx=hidx;
-    cleanClip=(rois.length&&clipType)?rois.filter(r=>r.type===clipType).map(r=>r.pts):null;
-    if(cleanZoneNow)cleanZonesHit.add(cleanZoneNow);}
-  ['mop','sweep','wipe','window'].forEach(t=>{
-    transition(t,activeType===t,
-      ()=>{log(startMsg(t),COLORS.act,true);cleanZonesHit.clear();if(heatChk.checked)backfillHeat(cleanHandIdx);},
-      sec=>{log(endMsg(t,sec),COLORS.act,true,snapshot());
-        coverageByZone();const rt=ACT_TO_ROI[t];
-        [...cleanZonesHit].filter(z=>z.type===rt).forEach(z=>{
-          log((z.name||ROI_TYPE_RU[z.type])+' '+CLEAN_VERB[z.type]+' на '+(z.cov||0)+'%',ROI_COL[z.type]);
-          cleanZonesHit.delete(z);});});});
-  cleanActive=actState.wipe||actState.mop||actState.sweep||actState.window;
-
-  /* ---------- прочие действия ---------- */
-  if(enabled.wave){
-    const lUp=h.every(f=>f.lwy<f.shMidY)&&lRev>=3&&range(lwx)>0.04;
-    const rUp=h.every(f=>f.rwy<f.shMidY)&&rRev>=3&&range(rwx)>0.04;const waving=lUp||rUp;
-    transition('wave',waving,()=>log('Машет рукой',COLORS.act,true),sec=>log('Помахивание завершено ('+sec+' с)',COLORS.act,true));
-    if(waving)anyAct=true;}
-
-  if(enabled.clap){
-    const prev=h[h.length-2]||last;const near=last.wd<0.07*k,frontY=last.lwy<last.hipMidY&&last.rwy<last.hipMidY;
-    if(near&&clapArmed&&frontY&&performance.now()-lastClap>250){
-      log('Хлопок в ладоши',COLORS.act,true);lastClap=performance.now();clapArmed=false;anyAct=true;}
-    if(last.wd>0.13*k)clapArmed=true;}
-
-  if(enabled.walk){
-    const recent=walkSeq.filter(s=>performance.now()-s.t<2500);let alt=0;
-    for(let i=1;i<recent.length;i++)if(recent[i].side!==recent[i-1].side)alt++;const walking=alt>=2;
-    transition('walk',walking,()=>log('Ходьба на месте',COLORS.act,true),sec=>log('Остановился (ходьба '+sec+' с)',COLORS.act,true));
-    if(walking)anyAct=true;}
-
-  /* ---------- мониторинг ---------- */
-  if(enabled.fall){
-    const drop=last.shMidY-h[0].shMidY, torsoVert=Math.abs(last.hipMidY-last.shMidY);
-    const horizontal=torsoVert<0.12||last.ny>last.hipMidY;
-    if(drop>0.22/k&&horizontal&&performance.now()-fallCD>5000){fallCD=performance.now();
-      log('⚠ Возможное падение',COLORS.alert,true,snapshot());}}
-
-  if(enabled.sos){
-    const overhead=h.every(f=>f.lwy<f.ny&&f.rwy<f.ny), waving=lRev>=3&&rRev>=3;
-    if(overhead&&waving&&performance.now()-sosCD>4000){sosCD=performance.now();
-      log('⚠ Сигнал бедствия (обе руки над головой)',COLORS.alert,true,snapshot());}}
-
-  lamp('act',anyAct);}
-
-const onF={},offF={};
-function transition(key,active,onStart,onEnd){
-  onF[key]=onF[key]||0;offF[key]=offF[key]||0;
-  if(active){onF[key]++;offF[key]=0;}else{offF[key]++;onF[key]=0;}
-  if(!actState[key]&&onF[key]>=6){actState[key]=true;actStart[key]=performance.now();onStart();}
-  if(actState[key]&&offF[key]>=18){actState[key]=false;onEnd(((performance.now()-actStart[key])/1000).toFixed(1));}}
 
 /* ---------- заливка зон (heat) ---------- */
-function clearHeat(){heatCtx.clearRect(0,0,heat.width,heat.height);}
-/* процент покрытия КАЖДОЙ зоны: доля её площади, реально закрашенной heat-слоем; пишем в r.cov */
-const covCanvas=document.createElement('canvas');
+function clearHeat(){heatCtx.clearRect(0,0,heat.width,heat.height);if(engine)engine.heat.clear();}
+/* процент покрытия КАЖДОЙ зоны — из сетки движка (тот же источник, что и у
+   события «протёрто на N%»): дисплей и журнал показывают одно число, независимо
+   от того, включён ли визуальный показ heat-слоя. */
 function coverageByZone(){
-  if(!rois.length||!heat.width){return;}
-  const sw=200, sh=Math.max(1,Math.round(200*heat.height/heat.width));
-  covCanvas.width=sw;covCanvas.height=sh;const cx=covCanvas.getContext('2d',{willReadFrequently:true});
-  cx.clearRect(0,0,sw,sh);cx.drawImage(heat,0,0,sw,sh);
-  const data=cx.getImageData(0,0,sw,sh).data;
-  const ins=rois.map(()=>0), pn=rois.map(()=>0);
-  for(let py=0;py<sh;py++)for(let px=0;px<sw;px++){
-    const lx=MIRROR?1-(px+0.5)/sw:(px+0.5)/sw, ny=(py+0.5)/sh, painted=data[(py*sw+px)*4+3]>20;
-    rois.forEach((r,i)=>{if(pip(lx,ny,r.pts)){ins[i]++;if(painted)pn[i]++;}});}
-  rois.forEach((r,i)=>{r.cov=ins[i]?Math.round(100*pn[i]/ins[i]):0;});}
+  if(!engine||!rois.length){return;}
+  rois.forEach(r=>{r.cov=engine.heat.coverage(r.pts);});}
 function updateCov(){
+  if(engine)engine.rois=rois;   // синхронизируем зоны движка с нарисованными (детект/покрытие)
   coverageByZone();
   covEl.textContent=rois.length?('покрытие · '+rois.map(r=>(r.name||ROI_TYPE_RU[r.type])+' '+(r.cov||0)+'%').join(' · ')):'покрытие: нарисуй зону';}
 
@@ -775,8 +585,9 @@ async function start(){
     const w=srcKind==='video'?video.videoWidth:srcImg.naturalWidth;
     const h=srcKind==='video'?video.videoHeight:srcImg.naturalHeight;
     setSizes(w,h);clearHeat();
-    hist.length=0;smooth=null;paint=null;lastVideoTime=-1;cleanActive=false;handPrev={};trail=[];
-    inFrame=false;lostSince=0;stillFlagged=false;lastMoveT=performance.now();motionEMA=0;prevKey={};fallCD=0;sosCD=0;
+    smooth=null;paint=null;lastVideoTime=-1;cleanActive=false;prevCleanActive=false;handPrev={};trail=[];
+    inFrame=false;lostSince=0;
+    engine=buildEngine();   // свежий движок на текущие зоны/чувствительность/тумблеры — сбрасывает всё состояние
     hint.style.display='none';running=true;stopBtn.disabled=false;dot.classList.add('live');
     log('Сессия начата ('+({webcam:'веб-камера',file:'видеофайл',ip:'IP-поток'}[mode])+')',COLORS.act,true);
     loop();
@@ -807,7 +618,21 @@ function loop(){
         if(enabled.presence&&!inFrame){inFrame=true;log('Человек появился в кадре',COLORS.head);}lostSince=0;
         const world=res.worldLandmarks&&res.worldLandmarks[0];
         const lm=smoothPts(res.landmarks[0]);statusText.textContent='трекинг активен';
-        draw(lm);analyze(lm,world);
+        draw(lm);
+        // единое ядро: разбор кадра → события; затем зеркалим состояние в рендер
+        const evs=engine?engine.analyze(lm,world,performance.now()):[];
+        for(const e of evs)log(e.text,e.color,e.isAct,e.snapshot?snapshot():null);
+        if(engine){
+          cleanColor=engine.cleanColor;cleanHandIdx=engine.cleanHandIdx;cleanClip=engine.cleanClip;lastTorso=engine.lastTorso;
+          cleanActive=engine.actState.wipe||engine.actState.mop||engine.actState.sweep||engine.actState.window;
+          // на фронте уборки дорисовываем накопленный след (как в PoC: backfill до подтверждения)
+          if(cleanActive&&!prevCleanActive&&heatChk.checked)backfillHeat(cleanHandIdx);
+          prevCleanActive=cleanActive;
+          lamp('Lhand',engine.armZone.left!=='rest');lamp('Rhand',engine.armZone.right!=='rest');
+          lamp('Lleg',engine.kneeUp.left);lamp('Rleg',engine.kneeUp.right);lamp('head',engine.headDir!=='center');
+          // «действие» горит всё время любой активности (уборка/махи/ходьба) + мгновенные события
+          lamp('act',Object.values(engine.actState).some(Boolean)||evs.some(e=>e.isAct));
+        }
         if(heatChk.checked&&cleanActive)paintHands(lm); else handPrev={};
         pushTrail(lm);
         if(recording){recBuffer.push({t:Math.round(performance.now()-recT0),lm:packLM(res.landmarks[0]),w:packLM(world)});
@@ -836,7 +661,7 @@ clearBtn.onclick=()=>{logData.length=0;logEl.querySelectorAll('.entry').forEach(
   logEmpty.style.display='';countEl.textContent='0 записей';clearHeat();updateCov();};
 shotBtn.onclick=()=>{const d=snapshot();if(d){const a=document.createElement('a');a.href=d;a.download='shot-'+Date.now()+'.jpg';a.click();}};
 startBtn.onclick=start;stopBtn.onclick=stop;
-sens.oninput=()=>{SENS=parseFloat(sens.value);sensVal.textContent=SENS.toFixed(2)+'×';};
+sens.oninput=()=>{SENS=parseFloat(sens.value);sensVal.textContent=SENS.toFixed(2)+'×';if(engine)engine.SENS=SENS;};
 heatChk.onchange=()=>{if(!heatChk.checked)clearHeat();};
 mirrorChk.onchange=()=>{MIRROR=mirrorChk.checked;applyMirror();drawROIs();};
 srcSel.onchange=()=>{
