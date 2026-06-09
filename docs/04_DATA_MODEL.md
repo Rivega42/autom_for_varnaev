@@ -49,7 +49,7 @@ note         text
 ts           timestamptz NOT NULL          -- момент измерения (UTC)
 node_id      text REFERENCES sensor_nodes(id)
 room_id      text REFERENCES rooms(id)
-metric       text NOT NULL                 -- "air_temp" | "humidity" | "surface_ir"
+metric       text NOT NULL                 -- "air_temp"|"humidity"|"surface_ir"|"uv_index"|"uv_c"
 value        double precision NOT NULL
 unit         text NOT NULL                 -- "C" | "%" | "C"
 ```
@@ -59,7 +59,8 @@ unit         text NOT NULL                 -- "C" | "%" | "C"
   заказчика по сроку хранения; см. открытые вопросы решения по датчикам).
 
 Метрики v1: `air_temp` (°C), `humidity` (%), `surface_ir` (°C — бесконтактная
-температура поверхности, MLX90614).
+температура поверхности, MLX90614), `uv_index` (общий УФ-индекс/УФ-A, LTR390),
+`uv_c` (бактерицидный УФ-C 254 нм, мВт/см², GUVC-S10GD — контроль кварцевых ламп).
 
 ---
 

@@ -21,6 +21,8 @@ METRIC_UNITS: dict[Metric, str] = {
     Metric.AIR_TEMP: "C",
     Metric.HUMIDITY: "%",
     Metric.SURFACE_IR: "C",
+    Metric.UV_INDEX: "index",
+    Metric.UV_C: "mW/cm2",
 }
 
 
@@ -80,6 +82,9 @@ def default_nodes() -> list[NodeProfile]:
                 MetricProfile(Metric.AIR_TEMP, base=22.0, jitter=1.5),
                 MetricProfile(Metric.HUMIDITY, base=45.0, jitter=6.0, spike=82.0),
                 MetricProfile(Metric.SURFACE_IR, base=20.0, jitter=1.0),
+                # УФ: общий индекс (низкий в помещении) и бактерицидный УФ-C лампы.
+                MetricProfile(Metric.UV_INDEX, base=1.0, jitter=0.6),
+                MetricProfile(Metric.UV_C, base=2.0, jitter=0.5),
             ],
         ),
         NodeProfile(

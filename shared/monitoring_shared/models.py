@@ -20,6 +20,8 @@ class Metric(StrEnum):
     AIR_TEMP = "air_temp"  # температура воздуха, °C
     HUMIDITY = "humidity"  # влажность, %
     SURFACE_IR = "surface_ir"  # бесконтактная ИК-температура поверхности, °C
+    UV_INDEX = "uv_index"  # общий УФ-индекс / УФ-A (LTR390), безразмерный
+    UV_C = "uv_c"  # бактерицидный УФ-C 254 нм (GUVC-S10GD), мВт/см²
 
 
 class Room(BaseModel):

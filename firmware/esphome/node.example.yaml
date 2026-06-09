@@ -80,6 +80,37 @@ sensor:
                 return "{\"value\": " + to_string(x) + ", \"unit\": \"C\"}";
     update_interval: 60s
 
+  # Общий УФ-индекс / УФ-A (LTR390, I²C). НЕ видит бактерицидный УФ-C — для этого
+  # ниже отдельный аналоговый датчик GUVC-S10GD.
+  - platform: ltr390
+    uv_index:
+      id: uv_index
+      internal: true
+      on_value:
+        then:
+          - mqtt.publish:
+              topic: ${topic_base}/uv_index
+              payload: !lambda |-
+                return "{\"value\": " + to_string(x) + ", \"unit\": \"index\"}";
+    update_interval: 60s
+
+  # Бактерицидный УФ-C 254 нм (GUVC-S10GD, аналоговый) через АЦП ESP32-C3.
+  # Калибровку напряжение→мВт/см² подобрать под свою схему усиления (лямбда ниже —
+  # ПРИМЕР). Наводить датчик на зону действия лампы.
+  - platform: adc
+    pin: GPIO3
+    id: uv_c
+    internal: true
+    update_interval: 60s
+    filters:
+      - lambda: return x * 10.0;  # ПРИМЕР калибровки — заменить под свой модуль
+    on_value:
+      then:
+        - mqtt.publish:
+            topic: ${topic_base}/uv_c
+            payload: !lambda |-
+              return "{\"value\": " + to_string(x) + ", \"unit\": \"mW/cm2\"}";
+
 # Пример secrets.yaml (НЕ коммитить реальные значения):
 #   wifi_ssid: "..."
 #   wifi_password: "..."
