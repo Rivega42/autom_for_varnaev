@@ -74,31 +74,52 @@ function fillCameraSelect() {
   }
 }
 
-// Открыть браузерный живой анализ (порт PoC): скелет, распознавание, журнал,
-// стоп-кадры — всё в браузере поверх MJPEG-потока камеры (страница live.html).
+// Браузерный живой анализ (порт PoC) — НАТИВНО в карточке камеры (без iframe):
+// скелет, распознавание, журнал, стоп-кадры поверх MJPEG-потока, на едином ядре
+// analysis-core (то же, что и сервер). Монтируется в #liveMount.
+let liveHandle = null;
 function stopLiveAnalysis() {
-  const frame = $("liveframe");
-  frame.hidden = true;
-  frame.removeAttribute("src"); // остановить браузерный анализ/поток
-  $("liveAnalysis").textContent = "Живой анализ (скелет)";
+  if (liveHandle) {
+    liveHandle.stop();
+    liveHandle = null;
+  }
+  const mount = $("liveMount");
+  if (mount) {
+    mount.hidden = true;
+    mount.innerHTML = "";
+  }
+  const btn = $("liveAnalysis");
+  if (btn) btn.textContent = "Живой анализ (скелет)";
 }
 
-function openLiveAnalysis() {
+async function openLiveAnalysis() {
   if (!current) {
     msg("Сначала выберите камеру", false);
     return;
   }
-  const frame = $("liveframe");
-  if (!frame.hidden) {
+  if (liveHandle) {
     stopLiveAnalysis();
     return;
   }
-  const key = encodeURIComponent(keyInput.value);
-  const room = encodeURIComponent(current.room);
-  // Встроенный браузерный анализ (live.html) для выбранной камеры; события → журнал.
-  frame.src = `live.html?cam=${current.id}&room=${room}&api_key=${key}`;
-  frame.hidden = false;
-  $("liveAnalysis").textContent = "Скрыть анализ";
+  const key = keyInput.value;
+  try {
+    // ROI-зоны камеры из БД — те же полигоны, что и серверная разметка.
+    const z = await api(`/cameras/${current.id}/zones`);
+    const { mountLiveAnalysis } = await import("./live-embed.mjs");
+    const streamUrl = `${API}/cameras/${current.id}/stream.mjpeg?api_key=${encodeURIComponent(key)}`;
+    const mount = $("liveMount");
+    mount.hidden = false;
+    liveHandle = mountLiveAnalysis(mount, {
+      streamUrl,
+      zones: z.items || [],
+      room: current.room,
+      cameraId: current.id,
+      apiKey: key,
+    });
+    $("liveAnalysis").textContent = "Скрыть анализ";
+  } catch (e) {
+    msg("Ошибка живого анализа: " + e.message, false);
+  }
 }
 
 // Разовый запуск анализа выбранной камеры (без curl/UUID).
