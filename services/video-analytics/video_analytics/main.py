@@ -33,11 +33,18 @@ def _now_utc() -> datetime:
     return datetime.now(UTC)
 
 
-def _default_source_factory(
-    source_type: SourceType, source_ref: str, target_fps: int
-) -> FrameSource:
-    """Боевая фабрика источника кадров (stream|file) с понижением до target_fps."""
-    return create_frame_source(source_type, source_ref, target_fps=target_fps)
+def _make_source_factory(settings: Settings) -> SourceFactory:
+    """Боевая фабрика источника кадров с понижением fps и лимитом кадров для stream."""
+
+    def factory(source_type: SourceType, source_ref: str, target_fps: int) -> FrameSource:
+        return create_frame_source(
+            source_type,
+            source_ref,
+            target_fps=target_fps,
+            max_frames=settings.max_stream_frames,
+        )
+
+    return factory
 
 
 def run_forever(
@@ -92,7 +99,7 @@ def main() -> None:
         settings,
         detector=detector,
         sink=sink,
-        source_factory=_default_source_factory,
+        source_factory=_make_source_factory(settings),
     )
 
 
