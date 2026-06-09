@@ -135,6 +135,7 @@ export const handPoint = (lm, wr) => {
 export class HeatGrid {
   constructor(sw = 200, aspect = 16 / 9) {
     this.sw = sw;
+    this.aspect = aspect; // W/H кадра — нужен, чтобы диск был круглым в пикселях
     this.sh = Math.max(1, Math.round(sw / aspect));
     this.cells = new Uint8Array(this.sw * this.sh);
   }
@@ -143,27 +144,32 @@ export class HeatGrid {
     this.cells.fill(0);
   }
 
-  /* закрасить диск радиуса r (в нормированных landmark-единицах по X) вокруг точки */
+  /* Закрасить диск вокруг точки (x,y в landmark-координатах 0..1).
+   * r — радиус в долях ШИРИНЫ кадра (как в PoC, где радиус считается из пикселей
+   * heat-канваса). По Y та же доля ширины соответствует r*aspect в нормированных
+   * Y-единицах, поэтому диск получается круглым в пикселях, а не вытянутым. */
   stamp(x, y, r) {
-    const { sw, sh } = this;
-    const rad = Math.max(0.02, r);
+    const { sw, sh, aspect } = this;
+    const rad = Math.max(0.01, r);
+    const radY = rad * aspect;
     const x0 = Math.max(0, Math.floor((x - rad) * sw)), x1 = Math.min(sw - 1, Math.ceil((x + rad) * sw));
-    const y0 = Math.max(0, Math.floor((y - rad) * sw)), y1 = Math.min(sh - 1, Math.ceil((y + rad) * sw));
+    const y0 = Math.max(0, Math.floor((y - radY) * sh)), y1 = Math.min(sh - 1, Math.ceil((y + radY) * sh));
     for (let py = y0; py <= y1; py++) {
       for (let px = x0; px <= x1; px++) {
-        const lx = (px + 0.5) / sw, ly = (py + 0.5) / sw;
-        if (Math.hypot(lx - x, ly - y) <= rad) this.cells[py * sw + px] = 1;
+        const dx = (px + 0.5) / sw - x;
+        const dy = ((py + 0.5) / sh - y) / aspect; // в долях ширины
+        if (Math.hypot(dx, dy) <= rad) this.cells[py * sw + px] = 1;
       }
     }
   }
 
-  /* доля закрашенных ячеек внутри полигона pts (0..100) */
+  /* доля закрашенных ячеек внутри полигона pts (0..100); X→sw, Y→sh */
   coverage(pts) {
     const { sw, sh, cells } = this;
     let inside = 0, painted = 0;
     for (let py = 0; py < sh; py++) {
       for (let px = 0; px < sw; px++) {
-        const lx = (px + 0.5) / sw, ny = (py + 0.5) / sw;
+        const lx = (px + 0.5) / sw, ny = (py + 0.5) / sh;
         if (pip(lx, ny, pts)) {
           inside++;
           if (cells[py * sw + px]) painted++;
@@ -190,7 +196,8 @@ export class AnalysisEngine {
     this.SENS = opts.sens ?? 1;
     /* зоны: [{type:'table'|'floor'|'window', pts:[[x,y]*4], name?}] */
     this.rois = (opts.rois ?? []).map((r) => ({ ...r, cov: 0 }));
-    this.heat = new HeatGrid(opts.gridWidth ?? 200, opts.aspect ?? 16 / 9);
+    this.aspect = opts.aspect ?? 16 / 9; // W/H кадра (для радиуса заливки)
+    this.heat = new HeatGrid(opts.gridWidth ?? 200, this.aspect);
 
     /* состояния (дословно из PoC) */
     this.armZone = { left: 'rest', right: 'rest' };
@@ -399,7 +406,8 @@ export class AnalysisEngine {
       const pt = handPoint(lm, wr);
       // красим только если попадает в зону уборки (аналог clip по cleanClip)
       const inClip = !this.cleanClip || this.cleanClip.some((poly) => pip(pt.x, pt.y, poly));
-      if (inClip) this.heat.stamp(pt.x, pt.y, this.lastTorso * 0.62);
+      // радиус как в PoC: min(W,H)*lastTorso*0.62 пикселей = lastTorso*0.62/aspect доли ШИРИНЫ
+      if (inClip) this.heat.stamp(pt.x, pt.y, (this.lastTorso * 0.62) / this.aspect);
       this.handPrev[wr] = pt;
     });
   }
@@ -494,15 +502,15 @@ export class AnalysisEngine {
     }
     ['mop', 'sweep', 'wipe', 'window'].forEach((t) => {
       this._transition(t, activeType === t,
-        () => { this._log(this._startMsg(t), COLORS.act, true); this.cleanZonesHit.clear(); },
+        () => { this._log(this._startMsg(t), COLORS.act, true, false, { action: t }); this.cleanZonesHit.clear(); },
         (sec) => {
-          this._log(this._endMsg(t, sec), COLORS.act, true, true);
-          this._coverageByZone();
+          this._log(this._endMsg(t, sec), COLORS.act, true, true, { action: t, durationS: Number(sec) });
           const rt = ACT_TO_ROI[t];
           [...this.cleanZonesHit].filter((z) => z.type === rt).forEach((z) => {
+            z.cov = this.heat.coverage(z.pts); // считаем покрытие только для отчитываемых зон
             const name = z.name || ROI_TYPE_RU[z.type];
             this._log(name + ' ' + CLEAN_VERB[z.type] + ' на ' + (z.cov || 0) + '%', ROI_COL[z.type], false, false,
-              { coverage: { zoneType: z.type, zoneName: name, pct: z.cov || 0 } });
+              { coverage: { zoneType: z.type, zoneName: name, pct: z.cov || 0, ...(z.zoneId != null ? { zoneId: z.zoneId } : {}) } });
             this.cleanZonesHit.delete(z);
           });
         }, now);
@@ -513,15 +521,15 @@ export class AnalysisEngine {
       const lUp = h.every((f) => f.lwy < f.shMidY) && lRev >= 3 && range(lwx) > 0.04;
       const rUp = h.every((f) => f.rwy < f.shMidY) && rRev >= 3 && range(rwx) > 0.04;
       const waving = lUp || rUp;
-      this._transition('wave', waving, () => this._log('Машет рукой', COLORS.act, true),
-        (sec) => this._log('Помахивание завершено (' + sec + ' с)', COLORS.act, true), now);
+      this._transition('wave', waving, () => this._log('Машет рукой', COLORS.act, true, false, { action: 'wave' }),
+        (sec) => this._log('Помахивание завершено (' + sec + ' с)', COLORS.act, true, false, { action: 'wave', durationS: Number(sec) }), now);
       if (waving) anyAct = true;
     }
 
     if (this.enabled.clap) {
       const near = last.wd < 0.07 * k, frontY = last.lwy < last.hipMidY && last.rwy < last.hipMidY;
       if (near && this.clapArmed && frontY && now - this.lastClap > 250) {
-        this._log('Хлопок в ладоши', COLORS.act, true);
+        this._log('Хлопок в ладоши', COLORS.act, true, false, { action: 'clap' });
         this.lastClap = now; this.clapArmed = false; anyAct = true;
       }
       if (last.wd > 0.13 * k) this.clapArmed = true;
@@ -532,8 +540,8 @@ export class AnalysisEngine {
       let alt = 0;
       for (let i = 1; i < recent.length; i++) if (recent[i].side !== recent[i - 1].side) alt++;
       const walking = alt >= 2;
-      this._transition('walk', walking, () => this._log('Ходьба на месте', COLORS.act, true),
-        (sec) => this._log('Остановился (ходьба ' + sec + ' с)', COLORS.act, true), now);
+      this._transition('walk', walking, () => this._log('Ходьба на месте', COLORS.act, true, false, { action: 'walk' }),
+        (sec) => this._log('Остановился (ходьба ' + sec + ' с)', COLORS.act, true, false, { action: 'walk', durationS: Number(sec) }), now);
       if (walking) anyAct = true;
     }
 
@@ -543,7 +551,7 @@ export class AnalysisEngine {
       const horizontal = torsoVert < 0.12 || last.ny > last.hipMidY;
       if (drop > 0.22 / k && horizontal && now - this.fallCD > 5000) {
         this.fallCD = now;
-        this._log('⚠ Возможное падение', COLORS.alert, true, true);
+        this._log('⚠ Возможное падение', COLORS.alert, true, true, { action: 'fall' });
       }
     }
 
@@ -551,7 +559,7 @@ export class AnalysisEngine {
       const overhead = h.every((f) => f.lwy < f.ny && f.rwy < f.ny), waving = lRev >= 3 && rRev >= 3;
       if (overhead && waving && now - this.sosCD > 4000) {
         this.sosCD = now;
-        this._log('⚠ Сигнал бедствия (обе руки над головой)', COLORS.alert, true, true);
+        this._log('⚠ Сигнал бедствия (обе руки над головой)', COLORS.alert, true, true, { action: 'sos' });
       }
     }
 
