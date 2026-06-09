@@ -131,7 +131,17 @@ GET /api/v1/events?from=&to=&type=&room=&limit=&offset=
 
 ```
 GET /api/v1/events/{id} → одно событие
+POST /api/v1/analytics-events        → событие браузерного живого анализа в журнал
 ```
+
+**Тело `POST /analytics-events`** (от браузерного «Живого анализа», `live.html`):
+```json
+{ "room": "room-01", "message": "Стол протёрт (правой рукой, 5 с)", "severity": "info",
+  "payload": { "camera_id": "…" } }
+```
+Шлюз создаёт событие `source=analytics`, `type=action_detected`, добавляя в
+`payload` метку `origin=browser` (отличить от серверного анализа по расписанию),
+и пишет его в log-service. Так распознавания из браузера попадают в Grafana.
 
 ### 3.3 Задания на анализ
 ```

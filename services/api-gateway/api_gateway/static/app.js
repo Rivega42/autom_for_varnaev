@@ -76,13 +76,29 @@ function fillCameraSelect() {
 
 // Открыть браузерный живой анализ (порт PoC): скелет, распознавание, журнал,
 // стоп-кадры — всё в браузере поверх MJPEG-потока камеры (страница live.html).
+function stopLiveAnalysis() {
+  const frame = $("liveframe");
+  frame.hidden = true;
+  frame.removeAttribute("src"); // остановить браузерный анализ/поток
+  $("liveAnalysis").textContent = "Живой анализ (скелет)";
+}
+
 function openLiveAnalysis() {
   if (!current) {
     msg("Сначала выберите камеру", false);
     return;
   }
+  const frame = $("liveframe");
+  if (!frame.hidden) {
+    stopLiveAnalysis();
+    return;
+  }
   const key = encodeURIComponent(keyInput.value);
-  window.open(`live.html?cam=${current.id}&api_key=${key}`, "_blank");
+  const room = encodeURIComponent(current.room);
+  // Встроенный браузерный анализ (live.html) для выбранной камеры; события → журнал.
+  frame.src = `live.html?cam=${current.id}&room=${room}&api_key=${key}`;
+  frame.hidden = false;
+  $("liveAnalysis").textContent = "Скрыть анализ";
 }
 
 // Разовый запуск анализа выбранной камеры (без curl/UUID).
@@ -131,6 +147,7 @@ function selectCamera(cam) {
   zonePolys = [];
   stopLive();
   stopVideo();
+  stopLiveAnalysis();
   $("editor").hidden = false;
   $("camname").textContent = cam.name + " · " + cam.room;
   $("enabled").checked = cam.enabled;

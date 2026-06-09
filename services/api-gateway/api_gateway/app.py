@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Query, Response
 from fastapi.responses import StreamingResponse
@@ -39,6 +39,7 @@ from api_gateway.schedules_repository import (
 )
 from api_gateway.schemas import (
     AnalysisTaskCreate,
+    AnalyticsEventCreate,
     CameraCreate,
     CameraUpdate,
     CameraZoneCreate,
@@ -66,7 +67,7 @@ from api_gateway.thresholds_repository import (
     update_threshold,
 )
 from api_gateway.zones_repository import create_zone, delete_zone, list_zones, update_zone
-from monitoring_shared import ErrorCode, ok
+from monitoring_shared import ErrorCode, Event, EventSource, EventType, ok
 
 # Каталог статического GUI (отдаётся под /ui).
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -149,6 +150,26 @@ def create_app(
         if item is None:
             raise api_error(ErrorCode.EVENT_NOT_FOUND, "Событие не найдено")
         return ok(item)
+
+    @app.post(f"{API_PREFIX}/analytics-events", dependencies=[auth])
+    def post_analytics_event(body: AnalyticsEventCreate) -> dict[str, Any]:
+        """Записать событие браузерного живого анализа в журнал (→ Grafana).
+
+        Источник — analytics, тип — action_detected; в payload помечаем
+        origin=browser, чтобы отличать от серверного анализа по расписанию.
+        """
+        event = Event(
+            id=uuid4(),
+            ts=datetime.now(UTC),
+            source=EventSource.ANALYTICS,
+            type=EventType.ACTION_DETECTED,
+            room_id=body.room,
+            severity=body.severity,
+            message=body.message,
+            payload={**body.payload, "origin": "browser"},
+        )
+        events.create_event(event)
+        return ok({"id": str(event.id)})
 
     @app.post(f"{API_PREFIX}/analysis-tasks", dependencies=[auth])
     def post_analysis_task(body: AnalysisTaskCreate) -> dict[str, Any]:
