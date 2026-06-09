@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MOTION LOG — трекинг тела с журналом событий</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+  :root{
+    --bg:#0a0d0c;--panel:#0f1413;--panel-2:#121a18;--line:#1d2926;--line-2:#2a3a36;
+    --text:#cfe8df;--muted:#6f8b82;--phos:#3ef0a0;--phos-dim:#1a7a52;
+    --amber:#ffb23e;--cyan:#46d6ff;--violet:#b78bff;--red:#ff5d6c;--grid:rgba(62,240,160,0.045);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      linear-gradient(0deg,var(--grid) 1px,transparent 1px) 0 0/100% 28px,
+      linear-gradient(90deg,var(--grid) 1px,transparent 1px) 0 0/28px 100%,
+      radial-gradient(120% 90% at 70% -10%, #10201a 0%, var(--bg) 55%);
+    color:var(--text);font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden;
+  }
+  .wrap{display:flex;flex-direction:column;height:100vh;height:100dvh}
+  header{display:flex;align-items:center;gap:18px;padding:12px 18px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(20,30,27,.7),transparent)}
+  .brand{display:flex;align-items:baseline;gap:10px}
+  .brand h1{font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:18px;letter-spacing:.18em;margin:0;
+    color:var(--phos);text-shadow:0 0 14px rgba(62,240,160,.35)}
+  .brand .sub{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);letter-spacing:.1em}
+  .status{margin-left:auto;display:flex;align-items:center;gap:8px;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red);transition:.2s}
+  .dot.live{background:var(--phos);box-shadow:0 0 10px var(--phos)}
+  .fps{color:var(--text);min-width:62px;text-align:right}
+  main{flex:1;display:grid;grid-template-columns:1fr 420px;min-height:0}
+  .stage{position:relative;display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
+  .video-area{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#060807}
+  .layer{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  #srcImg{display:none}
+  .scanlines{position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px);mix-blend-mode:multiply;opacity:.45}
+  .vignette{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 140px rgba(0,0,0,.6)}
+  .hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;
+    color:var(--muted);font-family:"IBM Plex Mono",monospace;text-align:center;padding:24px}
+  .hint .big{font-size:15px;color:var(--text);letter-spacing:.05em}
+  .hint .reticle{width:54px;height:54px;border:1px solid var(--phos-dim);border-radius:50%;position:relative;animation:pulse 2s infinite}
+  .hint .reticle::before,.hint .reticle::after{content:"";position:absolute;background:var(--phos-dim)}
+  .hint .reticle::before{left:50%;top:-8px;width:1px;height:70px;transform:translateX(-50%)}
+  .hint .reticle::after{top:50%;left:-8px;height:1px;width:70px;transform:translateY(-50%)}
+  @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+  .lamps{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;border-top:1px solid var(--line);background:var(--panel)}
+  .lamp{display:flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid var(--line-2);border-radius:6px;
+    font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);background:var(--panel-2);transition:.12s}
+  .lamp i{width:8px;height:8px;border-radius:2px;background:#243430;transition:.12s}
+  .lamp.on{color:var(--text);border-color:var(--c)}
+  .lamp.on i{background:var(--c);box-shadow:0 0 9px var(--c)}
+  .side{display:flex;flex-direction:column;min-height:0;background:var(--panel)}
+  .side-head{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .side-head h2{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.16em;margin:0;color:var(--text)}
+  .count{margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted)}
+  .log{flex:1;overflow-y:auto;padding:6px 0;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+  .log::-webkit-scrollbar{width:8px}.log::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:4px}
+  .entry{display:grid;grid-template-columns:78px 14px 1fr;gap:8px;align-items:start;padding:5px 14px;
+    font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.35;border-left:2px solid transparent;animation:slidein .22s ease}
+  @keyframes slidein{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}
+  .entry .t{color:var(--muted)}
+  .entry .b{width:8px;height:8px;border-radius:50%;margin-top:4px;background:var(--c);box-shadow:0 0 7px var(--c)}
+  .entry .txt{color:var(--text)}
+  .entry.act{background:linear-gradient(90deg,rgba(62,240,160,.07),transparent);border-left-color:var(--c)}
+  .entry.act .txt{color:#fff;font-weight:600}
+  .entry img.shot{grid-column:1/-1;justify-self:start;margin-top:6px;width:100%;max-width:240px;
+    border:1px solid var(--line-2);border-radius:6px;cursor:pointer}
+  .entry img.shot:hover{border-color:var(--phos-dim)}
+  .empty{padding:30px 18px;color:var(--muted);font-family:"IBM Plex Mono",monospace;font-size:12px;text-align:center;line-height:1.7}
+  .controls{border-top:1px solid var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:11px;background:var(--panel-2)}
+  .src{display:flex;flex-direction:column;gap:8px}
+  select,input[type=text],input[type=file]{font-family:"IBM Plex Mono",monospace;font-size:12px;background:var(--panel);color:var(--text);
+    border:1px solid var(--line-2);border-radius:7px;padding:8px 10px;width:100%}
+  input[type=file]{padding:6px 8px}
+  select:focus,input:focus{outline:none;border-color:var(--phos-dim)}
+  .ip-row{display:flex;gap:8px}
+  .ip-row select{width:auto;flex:0 0 130px}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.05em;cursor:pointer;background:var(--panel);
+    color:var(--text);border:1px solid var(--line-2);border-radius:7px;padding:9px 13px;transition:.13s}
+  button:hover{border-color:var(--phos-dim);color:var(--phos)}
+  button.primary{background:var(--phos);color:#04140d;border-color:var(--phos);font-weight:700}
+  button.primary:hover{background:#5cffb5;color:#04140d}
+  button.danger:hover{border-color:var(--red);color:var(--red)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .chk{display:flex;align-items:center;gap:6px;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);cursor:pointer}
+  .chk input{accent-color:var(--phos)}
+  .sens{display:flex;align-items:center;gap:10px;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted)}
+  .sens input[type=range]{flex:1;accent-color:var(--phos)}
+  .toggles{display:flex;flex-wrap:wrap;gap:6px}
+  .tg{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--muted);border:1px solid var(--line);border-radius:5px;
+    padding:4px 8px;cursor:pointer;user-select:none;transition:.12s}
+  .tg.on{color:var(--text);border-color:var(--phos-dim);background:rgba(62,240,160,.06)}
+  .note{font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--muted);line-height:1.5}
+  #roi{pointer-events:none}
+  .video-area.calib #roi{pointer-events:auto;cursor:crosshair}
+  .seg{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:11px}
+  .seg .hd{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.14em;color:var(--muted)}
+  .brushes{display:flex;gap:6px}
+  .brush{flex:1;text-align:center;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);
+    border:1px solid var(--line-2);border-radius:6px;padding:6px;cursor:pointer;transition:.12s}
+  .brush.on{color:#04140d;font-weight:700;border-color:transparent}
+  .brush[data-t=table].on{background:var(--phos)}
+  .brush[data-t=floor].on{background:var(--cyan)}
+  .brush[data-t=window].on{background:var(--violet)}
+  button.rec.on{background:var(--red);color:#fff;border-color:var(--red)}
+  button.calib.on{background:var(--amber);color:#04140d;border-color:var(--amber);font-weight:700}
+  @media (max-width:880px){main{grid-template-columns:1fr;grid-template-rows:1fr auto}.side{max-height:48vh}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><h1>MOTION&nbsp;LOG</h1><span class="sub">// трекинг тела · журнал действий</span></div>
+    <div class="status">
+      <span class="dot" id="dot"></span><span id="statusText">источник не выбран</span>
+      <span class="fps" id="fps">— fps</span>
+    </div>
+  </header>
+  <main>
+    <section class="stage">
+      <div class="video-area" id="videoArea">
+        <video id="video" class="layer" autoplay playsinline muted></video>
+        <img id="srcImg" class="layer" crossorigin="anonymous" alt="">
+        <canvas class="layer" id="heat"></canvas>
+        <canvas class="layer" id="canvas"></canvas>
+        <canvas class="layer" id="roi"></canvas>
+        <div class="scanlines"></div><div class="vignette"></div>
+        <div class="hint" id="hint">
+          <div class="reticle"></div>
+          <div class="big">Выбери источник и нажми «СТАРТ»</div>
+          <div>веб-камера · видеофайл · IP-поток</div>
+        </div>
+      </div>
+      <div class="lamps" id="lamps"></div>
+    </section>
+    <aside class="side">
+      <div class="side-head"><h2>ЖУРНАЛ СОБЫТИЙ</h2><span class="count" id="count">0 записей</span></div>
+      <div class="log" id="log">
+        <div class="empty" id="logEmpty">журнал пуст<br>события появятся здесь<br>с меткой времени</div>
+      </div>
+      <div class="controls">
+        <div class="src">
+          <select id="srcSel">
+            <option value="webcam">Источник: веб-камера</option>
+            <option value="file">Источник: видеофайл</option>
+            <option value="ip">Источник: IP-камера / поток</option>
+          </select>
+          <div id="fileBox" style="display:none"><input type="file" id="fileInput" accept="video/*"></div>
+          <div id="ipBox" style="display:none">
+            <input type="text" id="ipUrl" placeholder="URL потока, напр. http://192.168.1.50/video.mjpg">
+            <div class="ip-row" style="margin-top:8px">
+              <select id="ipType">
+                <option value="auto">тип: авто</option>
+                <option value="mjpeg">MJPEG</option>
+                <option value="hls">HLS (.m3u8)</option>
+                <option value="whep">WebRTC (WHEP)</option>
+                <option value="video">видео-URL</option>
+              </select>
+              <span class="note" style="flex:1">RTSP → go2rtc / MediaMTX → вставь его WHEP или HLS адрес</span>
+            </div>
+          </div>
+        </div>
+        <div class="seg" style="border-top:none;padding-top:0">
+          <div class="hd">РАКУРС КАМЕРЫ</div>
+          <select id="vpSel">
+            <option value="custom">произвольный — все детекторы</option>
+            <option value="front">фронтальный</option>
+            <option value="overhead">сверху под углом</option>
+            <option value="side">сбоку</option>
+          </select>
+        </div>
+        <div class="btn-row">
+          <button class="primary" id="startBtn">▶ СТАРТ</button>
+          <button id="stopBtn" disabled>■ СТОП</button>
+          <button class="danger" id="clearBtn">очистить</button>
+          <button id="txtBtn">⬇ .txt</button>
+          <button id="jsonBtn">⬇ .json</button>
+        </div>
+        <div class="btn-row">
+          <button id="shotBtn">📷 скриншот</button>
+          <label class="chk"><input type="checkbox" id="heatChk" checked> заливка зон</label>
+          <label class="chk"><input type="checkbox" id="mirrorChk" checked> зеркало</label>
+        </div>
+        <div class="sens">
+          <span>чувствительность</span>
+          <input type="range" id="sens" min="0.6" max="1.6" step="0.05" value="1">
+          <span id="sensVal">1.00×</span>
+        </div>
+        <div class="toggles" id="toggles"></div>
+        <div class="seg">
+          <div class="hd">КАЛИБРОВКА ЗОН (для фикс. камеры)</div>
+          <div class="brushes" id="brushes">
+            <div class="brush on" data-t="table">стол</div>
+            <div class="brush" data-t="floor">пол</div>
+            <div class="brush" data-t="window">окно</div>
+          </div>
+          <div class="btn-row">
+            <button class="calib" id="calibBtn">✏ рисовать зоны</button>
+            <button id="clearRoiBtn">убрать зоны</button>
+            <span class="note" id="roiNote" style="flex:1">зон нет — работает авто-режим</span>
+          </div>
+        </div>
+        <div class="seg">
+          <div class="hd">ЗАПИСЬ КООРДИНАТ СКЕЛЕТА</div>
+          <input type="text" id="recLabel" placeholder="метка, напр.: протирание стола правой рукой, боковой ракурс">
+          <div class="btn-row">
+            <button class="rec" id="recBtn">● запись</button>
+            <span class="note" id="recNote" style="flex:1">пишет 2D+3D точки всех кадров → JSON</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script type="module">
+import { PoseLandmarker, FilesetResolver }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs";
+
+/* ---------- элементы ---------- */
+const video=document.getElementById('video'), srcImg=document.getElementById('srcImg');
+const canvas=document.getElementById('canvas'), ctx=canvas.getContext('2d');
+const heat=document.getElementById('heat'), heatCtx=heat.getContext('2d');
+const logEl=document.getElementById('log'), logEmpty=document.getElementById('logEmpty');
+const countEl=document.getElementById('count'), dot=document.getElementById('dot');
+const statusText=document.getElementById('statusText'), fpsEl=document.getElementById('fps'), hint=document.getElementById('hint');
+const startBtn=document.getElementById('startBtn'), stopBtn=document.getElementById('stopBtn'), clearBtn=document.getElementById('clearBtn');
+const txtBtn=document.getElementById('txtBtn'), jsonBtn=document.getElementById('jsonBtn'), shotBtn=document.getElementById('shotBtn');
+const sens=document.getElementById('sens'), sensVal=document.getElementById('sensVal');
+const lampsEl=document.getElementById('lamps'), togglesEl=document.getElementById('toggles');
+const srcSel=document.getElementById('srcSel'), ipBox=document.getElementById('ipBox'),
+      ipUrl=document.getElementById('ipUrl'), ipType=document.getElementById('ipType');
+const fileBox=document.getElementById('fileBox'), fileInput=document.getElementById('fileInput');
+const heatChk=document.getElementById('heatChk'), mirrorChk=document.getElementById('mirrorChk');
+const roi=document.getElementById('roi'), roiCtx=roi.getContext('2d'), videoArea=document.getElementById('videoArea');
+const brushes=document.getElementById('brushes'), calibBtn=document.getElementById('calibBtn'),
+      clearRoiBtn=document.getElementById('clearRoiBtn'), roiNote=document.getElementById('roiNote');
+const recLabelEl=document.getElementById('recLabel'), recBtn=document.getElementById('recBtn'), recNote=document.getElementById('recNote');
+const vpSel=document.getElementById('vpSel');
+
+/* ---------- индексы точек ---------- */
+const L={NOSE:0,L_EAR:7,R_EAR:8,L_SH:11,R_SH:12,L_EL:13,R_EL:14,L_WR:15,R_WR:16,
+  L_HIP:23,R_HIP:24,L_KNEE:25,R_KNEE:26,L_ANK:27,R_ANK:28};
+const CONN=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],
+  [23,25],[25,27],[24,26],[26,28],[15,17],[15,19],[15,21],[16,18],[16,20],[16,22],
+  [27,29],[27,31],[28,30],[28,32],[7,0],[8,0]];
+
+/* ---------- детекторы ---------- */
+const COLORS={arm:'#3ef0a0',leg:'#46d6ff',head:'#ffb23e',torso:'#b78bff',act:'#ffffff',alert:'#ff5d6c'};
+const detectorDefs=[
+  {key:'arms',label:'руки'},{key:'legs',label:'ноги'},{key:'head',label:'голова'},{key:'torso',label:'корпус'},
+  {key:'wipe',label:'стол'},{key:'mop',label:'пол(швабра)'},{key:'sweep',label:'подметание'},{key:'window',label:'окно'},
+  {key:'wave',label:'махи'},{key:'clap',label:'хлопки'},{key:'walk',label:'ходьба'},
+  {key:'presence',label:'вход/выход'},{key:'fall',label:'падение'},{key:'still',label:'неподвижность'},{key:'sos',label:'SOS'}];
+const enabled={}; detectorDefs.forEach(d=>enabled[d.key]=true);
+let SENS=1;
+
+const lampMap={};
+[['Lhand','лев.рука',COLORS.arm],['Rhand','прав.рука',COLORS.arm],
+ ['Lleg','лев.нога',COLORS.leg],['Rleg','прав.нога',COLORS.leg],
+ ['head','голова',COLORS.head],['act','действие',COLORS.act]].forEach(([k,t,c])=>{
+  const el=document.createElement('div');el.className='lamp';el.style.setProperty('--c',c);
+  el.innerHTML='<i></i>'+t;lampsEl.appendChild(el);lampMap[k]=el;});
+function lamp(k,on){const e=lampMap[k];if(e)e.classList.toggle('on',on);}
+const covEl=document.createElement('div');covEl.id='covEl';
+covEl.style.cssText='margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--text)';
+covEl.textContent='покрытие: —';lampsEl.appendChild(covEl);
+const tgEls={};
+detectorDefs.forEach(d=>{const el=document.createElement('div');el.className='tg on';el.textContent=d.label;tgEls[d.key]=el;
+  el.onclick=()=>{enabled[d.key]=!enabled[d.key];el.classList.toggle('on',enabled[d.key]);};togglesEl.appendChild(el);});
+function refreshToggles(){detectorDefs.forEach(d=>tgEls[d.key]&&tgEls[d.key].classList.toggle('on',enabled[d.key]));}
+
+/* ---------- журнал ---------- */
+const logData=[];
+const pad=n=>String(n).padStart(2,'0');
+const stamp=d=>pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+function log(text,color,isAct=false,img=null){
+  const now=new Date();logData.push({iso:now.toISOString(),time:stamp(now),text,act:isAct,shot:img?true:false});
+  logEmpty.style.display='none';
+  const e=document.createElement('div');e.className='entry'+(isAct?' act':'');e.style.setProperty('--c',color);
+  e.innerHTML='<span class="t">'+stamp(now)+'</span><span class="b"></span><span class="txt">'+text+'</span>';
+  if(img){const im=document.createElement('img');im.className='shot';im.src=img;im.title='клик — скачать PNG';
+    im.onclick=()=>{const a=document.createElement('a');a.href=img;a.download='shot-'+Date.now()+'.jpg';a.click();};
+    e.appendChild(im);}
+  logEl.appendChild(e);logEl.scrollTop=logEl.scrollHeight;
+  countEl.textContent=logData.length+' '+plural(logData.length);}
+function plural(n){const a=Math.abs(n)%100,b=a%10;if(a>10&&a<20)return'записей';
+  if(b>1&&b<5)return'записи';if(b===1)return'запись';return'записей';}
+
+/* ---------- утилиты ---------- */
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const vis=p=>p&&(p.visibility===undefined?1:p.visibility);
+const SM=0.5; let smooth=null;
+function smoothPts(lm){if(!smooth){smooth=lm.map(p=>({...p}));return smooth;}
+  for(let i=0;i<lm.length;i++){smooth[i].x+=(lm[i].x-smooth[i].x)*SM;smooth[i].y+=(lm[i].y-smooth[i].y)*SM;
+    smooth[i].z=lm[i].z;smooth[i].visibility=lm[i].visibility;}return smooth;}
+function countReversals(arr,dz){let c=0,last=0;for(let i=1;i<arr.length;i++){const d=arr[i]-arr[i-1];
+  if(Math.abs(d)<dz)continue;const s=Math.sign(d);if(last!==0&&s!==last)c++;last=s;}return c;}
+const range=a=>Math.max(...a)-Math.min(...a);
+const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+const std=a=>{const m=mean(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/a.length);};
+const inBand=(ys,a,b)=>ys.every(v=>v>a&&v<b);
+/* форма траектории: 'circle' (петля) | 'line' (вдоль одной оси / возвратно-поступательно) */
+function motionShape(xs,ys){
+  const n=xs.length; if(n<6)return'line';
+  const cx=mean(xs),cy=mean(ys);
+  let sxx=0,syy=0,sxy=0;
+  for(let i=0;i<n;i++){const dx=xs[i]-cx,dy=ys[i]-cy;sxx+=dx*dx;syy+=dy*dy;sxy+=dx*dy;}
+  sxx/=n;syy/=n;sxy/=n;
+  const tr=sxx+syy, disc=Math.sqrt(Math.max(0,tr*tr/4-(sxx*syy-sxy*sxy)));
+  const l1=tr/2+disc, l2=tr/2-disc, aspect=l1>1e-9?l2/l1:0;
+  let prev=null, net=0, abs=0;
+  for(let i=0;i<n;i++){const a=Math.atan2(ys[i]-cy,xs[i]-cx);
+    if(prev!==null){let d=a-prev;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;net+=d;abs+=Math.abs(d);}prev=a;}
+  const circ=abs>1e-3?Math.abs(net)/abs:0;
+  return (aspect>0.4 && circ>0.55 && Math.abs(net)>Math.PI)?'circle':'line';
+}
+const shapeText=s=>s==='circle'?'по кругу':s==='mixed'?'разнонаправленно':'вперёд-назад';
+const clamp01=v=>Math.max(0,Math.min(1,v));
+const r4=v=>Math.round((v==null?0:v)*1e4)/1e4;
+function packLM(a){return a?a.map(p=>[r4(p.x),r4(p.y),r4(p.z),r4(p.visibility==null?1:p.visibility)]):null;}
+/* угол в точке b между b->a и b->c (3D, в градусах) */
+function angleAt(a,b,c){
+  const v1=[a.x-b.x,a.y-b.y,a.z-b.z], v2=[c.x-b.x,c.y-b.y,c.z-b.z];
+  const d=v1[0]*v2[0]+v1[1]*v2[1]+v1[2]*v2[2], m1=Math.hypot(...v1), m2=Math.hypot(...v2);
+  return (m1&&m2)?Math.acos(Math.max(-1,Math.min(1,d/(m1*m2))))*180/Math.PI:180;}
+/* точка в многоугольнике (ray casting), pts = [[x,y]*4] в landmark-координатах */
+function pip(px,py,pts){let c=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+  const xi=pts[i][0],yi=pts[i][1],xj=pts[j][0],yj=pts[j][1];
+  if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi))c=!c;}return c;}
+function roiAt(x,y){for(const r of rois)if(pip(x,y,r.pts))return r.type;return null;}
+function roiObjAt(x,y){for(const r of rois)if(pip(x,y,r.pts))return r;return null;}
+/* экранные координаты события -> landmark-координаты (учёт object-fit:contain и зеркала) */
+function evtToLandmark(ev){
+  const rect=roi.getBoundingClientRect(), cw=roi.width||16, ch=roi.height||9;
+  const scale=Math.min(rect.width/cw,rect.height/ch), dw=cw*scale, dh=ch*scale;
+  const ox=rect.left+(rect.width-dw)/2, oy=rect.top+(rect.height-dh)/2;
+  const cx=(ev.touches?ev.touches[0].clientX:ev.clientX), cy=(ev.touches?ev.touches[0].clientY:ev.clientY);
+  let nx=clamp01((cx-ox)/dw), ny=clamp01((cy-oy)/dh);
+  return {x:MIRROR?1-nx:nx, y:ny};}
+/* ближайший угол зоны к точке (для перетаскивания) */
+function findCorner(pt){let best=null,bd=0.04;
+  rois.forEach((r,ri)=>r.pts.forEach((p,ci)=>{const d=Math.hypot(p[0]-pt.x,p[1]-pt.y);if(d<bd){bd=d;best={ri,ci};}}));
+  return best;}
+/* отрисовка зон (четырёхугольники + ручки углов в режиме калибровки) */
+function drawROIs(){
+  const W=roi.width,H=roi.height;roiCtx.clearRect(0,0,W,H);
+  const list=rois.slice();
+  if(drawStart&&drawCur){const x0=Math.min(drawStart.x,drawCur.x),x1=Math.max(drawStart.x,drawCur.x),
+    y0=Math.min(drawStart.y,drawCur.y),y1=Math.max(drawStart.y,drawCur.y);
+    list.push({type:roiBrush,pts:[[x0,y0],[x1,y0],[x1,y1],[x0,y1]],tmp:true});}
+  list.forEach(r=>{const col=ROI_COL[r.type];const P=r.pts.map(p=>[mapX(p[0])*W,p[1]*H]);
+    roiCtx.lineWidth=2;roiCtx.setLineDash(r.tmp?[6,5]:[]);roiCtx.strokeStyle=col;roiCtx.fillStyle=col+'1f';
+    roiCtx.beginPath();P.forEach((p,i)=>i?roiCtx.lineTo(p[0],p[1]):roiCtx.moveTo(p[0],p[1]));roiCtx.closePath();
+    roiCtx.fill();roiCtx.stroke();roiCtx.setLineDash([]);
+    roiCtx.font='600 '+Math.max(12,W*0.013)+'px "IBM Plex Mono",monospace';roiCtx.fillStyle=col;
+    roiCtx.fillText(r.name||ROI_TYPE_RU[r.type],P[0][0]+6,P[0][1]+Math.max(16,W*0.016));
+    if(calibMode&&!r.tmp)P.forEach(p=>{roiCtx.fillStyle=col;roiCtx.strokeStyle='#04140d';roiCtx.lineWidth=1.5;
+      roiCtx.beginPath();roiCtx.arc(p[0],p[1],Math.max(5,W*0.006),0,7);roiCtx.fill();roiCtx.stroke();});});}
+/* мазок: полупрозрачная заливка (видно с первого прохода, не выжигает в белое) */
+function stampHeat(a,b,color){
+  const W=heat.width,H=heat.height,r=Math.max(14,Math.min(W,H)*lastTorso*0.62);
+  heatCtx.globalCompositeOperation='source-over';
+  const bx=mapX(b.x)*W,by=b.y*H;
+  if(a){const ax=mapX(a.x)*W,ay=a.y*H;
+    if(Math.hypot(bx-ax,by-ay)<W*0.3){heatCtx.strokeStyle=color+'33';heatCtx.lineWidth=r*1.4;heatCtx.lineCap='round';
+      heatCtx.beginPath();heatCtx.moveTo(ax,ay);heatCtx.lineTo(bx,by);heatCtx.stroke();}}
+  const g=heatCtx.createRadialGradient(bx,by,0,bx,by,r);
+  g.addColorStop(0,color+'4d');g.addColorStop(1,color+'00');
+  heatCtx.fillStyle=g;heatCtx.beginPath();heatCtx.arc(bx,by,r,0,7);heatCtx.fill();}
+/* путь обрезки по полигонам зоны (слегка расширен — терпимость к краю), в координатах heat-канваса */
+function heatClipPath(polys){const W=heat.width,H=heat.height;heatCtx.beginPath();
+  polys.forEach(p=>{const cx=p.reduce((a,q)=>a+q[0],0)/p.length, cy=p.reduce((a,q)=>a+q[1],0)/p.length;
+    p.forEach((pt,i)=>{const ex=cx+(pt[0]-cx)*1.08, ey=cy+(pt[1]-cy)*1.08, x=mapX(ex)*W, y=ey*H;
+      i?heatCtx.lineTo(x,y):heatCtx.moveTo(x,y);});heatCtx.closePath();});}
+/* точка покраски = проекция на кисть/тряпку: продлеваем «локоть→запястье» за запястье
+   (на косом ракурсе запястье выше реальной кисти, поэтому сдвигаем к пальцам) */
+const handPoint=(lm,wr)=>{const w=lm[wr],e=lm[wr===16?14:13]||w;
+  return {x:w.x+(w.x-e.x)*0.45, y:w.y+(w.y-e.y)*0.45};};
+/* крашу ТОЛЬКО рабочую кисть(и), КАЖДЫЙ активный кадр (развороты тоже), обрезая по зоне */
+function paintHands(lm){
+  const idx=cleanHandIdx&&cleanHandIdx.length?cleanHandIdx:[];if(!idx.length)return;
+  const clip=cleanClip&&cleanClip.length;if(clip){heatCtx.save();heatClipPath(cleanClip);heatCtx.clip();}
+  idx.forEach(wr=>{const pt=handPoint(lm,wr);stampHeat(handPrev[wr],pt,cleanColor);handPrev[wr]=pt;});
+  if(clip)heatCtx.restore();}
+/* при старте уборки дорисовываю накопленный след (первые движения до подтверждения детекта) */
+function backfillHeat(idx){
+  if(!idx||!idx.length||!trail.length)return;
+  const clip=cleanClip&&cleanClip.length;if(clip){heatCtx.save();heatClipPath(cleanClip);heatCtx.clip();}
+  idx.forEach(wr=>{const key=wr===16?'p16':'p15';let prev=null;
+    trail.forEach(t=>{if(t[key]){stampHeat(prev,t[key],cleanColor);prev=t[key];}});
+    if(prev)handPrev[wr]=prev;});
+  if(clip)heatCtx.restore();}
+function pushTrail(lm){trail.push({p15:handPoint(lm,15),p16:handPoint(lm,16)});if(trail.length>60)trail.shift();}
+
+/* ---------- состояния ---------- */
+const armZone={left:'rest',right:'rest'}, armCand={left:{z:'rest',n:0},right:{z:'rest',n:0}};
+let bothUp=false; const kneeUp={left:false,right:false};
+let headDir='center', headCand={d:'center',n:0};
+let crouch=false, hipBase=null, lean='none';
+const hist=[]; const WIN=42;
+const actState={mop:false,sweep:false,wipe:false,window:false,wave:false,walk:false}, actStart={};
+let lastClap=0, clapArmed=true; let walkSeq=[]; let cleanLabel='';
+let prevKey={}, motionEMA=0, lastMoveT=0, stillFlagged=false, fallCD=0, sosCD=0;
+let MIRROR=true; const mapX=x=>MIRROR?(1-x):x;
+let paint=null; let lastTorso=0.25;
+let curWorld=null;                                   // 3D world-точки текущего кадра
+let rois=[]; let calibMode=false, roiBrush='table'; let drawStart=null, drawCur=null, dragCorner=null;
+let recording=false, recBuffer=[], recT0=0;
+let viewpoint='custom';
+let cleanActive=false, cleanColor=COLORS.arm, handPrev={}, cleanHandIdx=[], cleanClip=null, trail=[];
+let cleanZonesHit=new Set();
+const ROI_TYPE_RU={table:'стол',floor:'пол',window:'окно'};
+const CLEAN_VERB={table:'протёрт',floor:'вымыт',window:'вымыто'};
+const ACT_TO_ROI={wipe:'table',window:'window',mop:'floor',sweep:'floor'};
+const ROI_COL={table:COLORS.arm,floor:COLORS.leg,window:COLORS.torso};
+
+/* ---------- разбор кадра ---------- */
+function analyze(lm,world){
+  curWorld=world;
+  const g=i=>lm[i];
+  const shMidY=(g(L.L_SH).y+g(L.R_SH).y)/2, shMidX=(g(L.L_SH).x+g(L.R_SH).x)/2;
+  const shW=Math.max(0.05,dist(g(L.L_SH),g(L.R_SH)));
+  const hipMidY=(g(L.L_HIP).y+g(L.R_HIP).y)/2, torso=Math.max(0.08,Math.abs(hipMidY-shMidY));
+  const noseY=g(L.NOSE).y, k=SENS; lastTorso=torso;
+
+  if(enabled.arms){
+    [['left',L.L_WR,L.L_SH,'левая'],['right',L.R_WR,L.R_SH,'правая']].forEach(([side,wi,si,word])=>{
+      const wr=g(wi),sh=g(si);let z='rest';
+      if(vis(wr)>0.5){const om=0.02/k,um=0.03/k;
+        if(wr.y<noseY-om)z='over';else if(wr.y<shMidY-um)z='up';
+        else if(Math.abs(wr.x-sh.x)>shW*1.05/k&&wr.y<shMidY+0.10)z='side';else z='rest';}
+      const cd=armCand[side];if(z===cd.z)cd.n++;else{cd.z=z;cd.n=1;}
+      if(cd.n>=3&&z!==armZone[side]){const prev=armZone[side];armZone[side]=z;
+        if(z==='rest'){if(prev!=='rest')log('Опущена '+word+' рука',COLORS.arm);}
+        else{const w={over:'над головой',up:'вверх',side:'в сторону'}[z];log('Поднята '+word+' рука — '+w,COLORS.arm);}}
+      lamp(side==='left'?'Lhand':'Rhand',armZone[side]!=='rest');});
+    const bu=armZone.left!=='rest'&&armZone.right!=='rest'&&armZone.left!=='side'&&armZone.right!=='side';
+    if(bu&&!bothUp){bothUp=true;log('Подняты обе руки',COLORS.arm);}if(!bu&&bothUp)bothUp=false;}
+
+  if(enabled.legs){
+    [['left',L.L_KNEE,'левое','Lleg'],['right',L.R_KNEE,'правое','Rleg']].forEach(([side,ki,word,lk])=>{
+      const kn=g(ki);let up=false;if(vis(kn)>0.5)up=kn.y<hipMidY+torso*(0.55/k);
+      if(up&&!kneeUp[side]){kneeUp[side]=true;log('Поднято '+word+' колено',COLORS.leg);
+        walkSeq.push({side,t:performance.now()});if(walkSeq.length>6)walkSeq.shift();}
+      if(!up)kneeUp[side]=false;lamp(lk,kneeUp[side]);});}
+
+  if(enabled.head){
+    const le=vis(g(L.L_EAR)),re=vis(g(L.R_EAR)),off=(g(L.NOSE).x-shMidX)/shW;let d='center';
+    if(re<0.4&&le>0.5)d='right';else if(le<0.4&&re>0.5)d='left';
+    else if(off>0.22/k)d='right';else if(off<-0.22/k)d='left';
+    if(d===headCand.d)headCand.n++;else{headCand.d=d;headCand.n=1;}
+    if(headCand.n>=4&&d!==headDir){headDir=d;
+      if(d==='center')log('Голова — прямо',COLORS.head);else log('Голова повёрнута '+(d==='left'?'влево':'вправо'),COLORS.head);}
+    lamp('head',headDir!=='center');}
+
+  if(enabled.torso){
+    const W=world, vok=i=>vis(g(i))>0.5;
+    let cr=false, ln='none', known=false;
+    if(W){
+      // присед = реальный угол в колене (видимая нога). наклон над столом колено НЕ сгибает -> не присед
+      const ang=[];
+      if(vok(L.L_HIP)&&vok(L.L_KNEE)&&vok(L.L_ANK))ang.push(angleAt(W[L.L_HIP],W[L.L_KNEE],W[L.L_ANK]));
+      if(vok(L.R_HIP)&&vok(L.R_KNEE)&&vok(L.R_ANK))ang.push(angleAt(W[L.R_HIP],W[L.R_KNEE],W[L.R_ANK]));
+      if(ang.length){known=true;cr=Math.min(...ang)<115;}
+      if(vok(L.L_SH)&&vok(L.R_SH)&&vok(L.L_HIP)&&vok(L.R_HIP)){
+        const sx=(W[L.L_SH].x+W[L.R_SH].x)/2, sy=(W[L.L_SH].y+W[L.R_SH].y)/2;
+        const hx=(W[L.L_HIP].x+W[L.R_HIP].x)/2, hy=(W[L.L_HIP].y+W[L.R_HIP].y)/2;
+        const lat=Math.abs(sy-hy)>1e-3?(sx-hx)/Math.abs(sy-hy):0;
+        if(lat>0.35/k)ln='right';else if(lat<-0.35/k)ln='left';
+      }
+    }
+    if(known){ // ноги не видны (заслонены столом) -> присед не трогаем, ложных не будет
+      if(cr&&!crouch){crouch=true;log('Приседание',COLORS.torso);}
+      if(!cr&&crouch){crouch=false;log('Подъём из приседа',COLORS.torso);}}
+    if(ln!==lean&&ln!=='none')log('Наклон корпуса '+(ln==='left'?'влево':'вправо'),COLORS.torso);lean=ln;}
+
+  /* неподвижность: энергия движения ключевых точек */
+  if(enabled.still){
+    const ks=[L.NOSE,L.L_WR,L.R_WR,L.L_SH,L.R_SH,L.L_ANK,L.R_ANK];
+    let m=0,c=0;ks.forEach(i=>{const p=lm[i];if(prevKey[i]){m+=Math.hypot(p.x-prevKey[i].x,p.y-prevKey[i].y);c++;}prevKey[i]={x:p.x,y:p.y};});
+    motionEMA=motionEMA*0.8+(c?m/c:0)*0.2;const now=performance.now();
+    if(motionEMA>0.004){if(stillFlagged){stillFlagged=false;log('Движение возобновилось',COLORS.head);}lastMoveT=now;}
+    else if(!stillFlagged&&lastMoveT&&now-lastMoveT>6000){stillFlagged=true;log('Нет движения более 6 с',COLORS.head);}
+  }
+
+  const fr={t:performance.now(),lwx:g(L.L_WR).x,lwy:g(L.L_WR).y,rwx:g(L.R_WR).x,rwy:g(L.R_WR).y,
+    lwv:vis(g(L.L_WR)),rwv:vis(g(L.R_WR)),ny:noseY,shMidY,hipMidY,torso,wd:dist(g(L.L_WR),g(L.R_WR))};
+  hist.push(fr);if(hist.length>WIN)hist.shift();
+  if(hist.length>=WIN-2)detectActivities();else{lamp('act',false);paint=null;}}
+
+/* ---------- активности ---------- */
+function startMsg(t){return t==='mop'?'Начато мытьё пола шваброй…':t==='sweep'?'Начато подметание…':
+  t==='wipe'?'Начато протирание стола ('+cleanLabel+')…':'Начато протирание окна ('+cleanLabel+')…';}
+function endMsg(t,sec){return t==='mop'?'Пол вымыт (шваброй, '+sec+' с)':t==='sweep'?'Подметание завершено ('+sec+' с)':
+  t==='wipe'?'Стол протёрт ('+cleanLabel+', '+sec+' с)':'Окно протёрто ('+cleanLabel+', '+sec+' с)';}
+
+function detectActivities(){
+  const h=hist,k=SENS,last=h[h.length-1];
+  const lwx=h.map(f=>f.lwx),lwy=h.map(f=>f.lwy),rwx=h.map(f=>f.rwx),rwy=h.map(f=>f.rwy);
+  const shMidY=last.shMidY,hipMidY=last.hipMidY,torso=last.torso,noseY=last.ny;
+  const dz=0.004/k,lRev=countReversals(lwx,dz),rRev=countReversals(rwx,dz);let anyAct=false;
+  paint=null;
+
+  /* ---------- семейство УБОРКИ ----------
+     Ключ для косого/верхнего ракурса: швабра/веник = ОБЕ кисти на одном черенке,
+     значит расстояние между кистями почти постоянно и они едут вместе (жёсткая связка).
+     Свободная рука (стол/окно) такого не даёт. Нет связки -> по умолчанию это стол. */
+  const visBoth=h.every(f=>f.lwv>0.4&&f.rwv>0.4);
+  const wdArr=h.map(f=>f.wd);
+  const mx=h.map(f=>(f.lwx+f.rwx)/2), my=h.map(f=>(f.lwy+f.rwy)/2);
+  const midRevX=countReversals(mx,dz), midRevY=countReversals(my,dz);
+  const rigid=visBoth && std(wdArr)<0.035*k && range(wdArr)<0.07;            // постоянная база между кистями
+  const implement=rigid && Math.max(range(mx),range(my))>0.06/k && Math.max(midRevX,midRevY)>=3;
+  const lowZone=mean(my)>(shMidY+hipMidY)/2;                                  // кисти ниже середины торса (в кадре)
+
+  const visFrac=arr=>arr.filter(v=>v>0.3).length/arr.length;
+  const Lh={vis:visFrac(h.map(f=>f.lwv))>=0.6,xr:lRev,yr:countReversals(lwy,dz),rx:range(lwx),ry:range(lwy),shape:motionShape(lwx,lwy),my:mean(lwy)};
+  const Rh={vis:visFrac(h.map(f=>f.rwv))>=0.6,xr:rRev,yr:countReversals(rwy,dz),rx:range(rwx),ry:range(rwy),shape:motionShape(rwx,rwy),my:mean(rwy)};
+
+  let activeType=null, pts=[], hidx=[], clipType=null, cleanZoneNow=null;
+  if(rois.length){                                   // КАЛИБРОВКА: тип берём по зоне, в которой кисть
+    const consider=(x,y,Hh,name)=>{
+      if(!(Hh.vis&&(Hh.xr>=3||Hh.yr>=3||Hh.shape==='circle')))return null;
+      const z=roiObjAt(x,y);return z?{zone:z,name,shape:Hh.shape,rx:Hh.rx,ry:Hh.ry,x,y}:null;};
+    const hs=[consider(last.lwx,last.lwy,Lh,'левой рукой'),consider(last.rwx,last.rwy,Rh,'правой рукой')].filter(Boolean);
+    if(hs.length){
+      const cnt=new Map();hs.forEach(o=>cnt.set(o.zone,(cnt.get(o.zone)||0)+1));
+      let zone=hs[0].zone,best=-1;cnt.forEach((c,z)=>{if(c>best){best=c;zone=z;}});
+      const sel=hs.filter(o=>o.zone===zone);pts=sel.map(o=>({x:o.x,y:o.y}));
+      hidx=sel.map(o=>o.name==='левой рукой'?15:16);clipType=zone.type;cleanZoneNow=zone;
+      const rt=zone.type;
+      if(rt==='table')activeType='wipe';else if(rt==='window')activeType='window';
+      else activeType=sel.some(o=>o.rx>=o.ry)?'sweep':'mop';
+      if(activeType==='wipe'||activeType==='window'){
+        const handsTxt=sel.length>1?'двумя руками':sel[0].name;
+        const shp=sel.length>1?(sel[0].shape===sel[1].shape?sel[0].shape:'mixed'):sel[0].shape;
+        cleanLabel=handsTxt+', '+shapeText(shp);}
+    }
+  }
+  else if(implement && lowZone){
+    // широкие горизонтальные махи -> веник; продольное «толкание» -> швабра
+    activeType = range(mx)>=range(my)*1.1 ? 'sweep' : 'mop';
+    pts=[{x:last.lwx,y:last.lwy},{x:last.rwx,y:last.rwy}];hidx=[15,16];
+  } else {
+    // свободные руки. окно = верхняя зона + вертикаль/круг; иначе стол
+    const upTop=noseY-0.10, upLow=shMidY+0.05;
+    const Lwin=Lh.vis&&inBand(lwy,upTop,upLow)&&(Lh.yr>=3||Lh.shape==='circle')&&Lh.ry>0.05;
+    const Rwin=Rh.vis&&inBand(rwy,upTop,upLow)&&(Rh.yr>=3||Rh.shape==='circle')&&Rh.ry>0.05;
+    // стол: кисть ниже линии плеч + колебания (горизонталь или круг) — работает и при наклоне над столом
+    const Ltab=Lh.vis&&mean(lwy)>shMidY&&(Lh.xr>=3||Lh.shape==='circle')&&(Lh.rx>0.05||Lh.shape==='circle');
+    const Rtab=Rh.vis&&mean(rwy)>shMidY&&(Rh.xr>=3||Rh.shape==='circle')&&(Rh.rx>0.05||Rh.shape==='circle');
+    if(Ltab||Rtab){activeType='wipe';
+      const hands=(Ltab&&Rtab)?'двумя руками':Ltab?'левой рукой':'правой рукой';
+      const shp=(Ltab&&Rtab)?(Lh.shape===Rh.shape?Lh.shape:'mixed'):(Ltab?Lh.shape:Rh.shape);
+      cleanLabel=hands+', '+shapeText(shp);
+      if(Ltab){pts.push({x:last.lwx,y:last.lwy});hidx.push(15);}if(Rtab){pts.push({x:last.rwx,y:last.rwy});hidx.push(16);}}
+    else if(Lwin||Rwin){activeType='window';
+      const hands=(Lwin&&Rwin)?'двумя руками':Lwin?'левой рукой':'правой рукой';
+      const shp=(Lwin&&Rwin)?(Lh.shape===Rh.shape?Lh.shape:'mixed'):(Lwin?Lh.shape:Rh.shape);
+      cleanLabel=hands+', '+shapeText(shp);
+      if(Lwin){pts.push({x:last.lwx,y:last.lwy});hidx.push(15);}if(Rwin){pts.push({x:last.rwx,y:last.rwy});hidx.push(16);}}
+  }
+  if(activeType&&!enabled[activeType])activeType=null;
+  const palette={mop:COLORS.leg,sweep:COLORS.head,wipe:COLORS.arm,window:COLORS.torso};
+  if(activeType){cleanColor=palette[activeType];anyAct=true;cleanHandIdx=hidx;
+    cleanClip=(rois.length&&clipType)?rois.filter(r=>r.type===clipType).map(r=>r.pts):null;
+    if(cleanZoneNow)cleanZonesHit.add(cleanZoneNow);}
+  ['mop','sweep','wipe','window'].forEach(t=>{
+    transition(t,activeType===t,
+      ()=>{log(startMsg(t),COLORS.act,true);cleanZonesHit.clear();if(heatChk.checked)backfillHeat(cleanHandIdx);},
+      sec=>{log(endMsg(t,sec),COLORS.act,true,snapshot());
+        coverageByZone();const rt=ACT_TO_ROI[t];
+        [...cleanZonesHit].filter(z=>z.type===rt).forEach(z=>{
+          log((z.name||ROI_TYPE_RU[z.type])+' '+CLEAN_VERB[z.type]+' на '+(z.cov||0)+'%',ROI_COL[z.type]);
+          cleanZonesHit.delete(z);});});});
+  cleanActive=actState.wipe||actState.mop||actState.sweep||actState.window;
+
+  /* ---------- прочие действия ---------- */
+  if(enabled.wave){
+    const lUp=h.every(f=>f.lwy<f.shMidY)&&lRev>=3&&range(lwx)>0.04;
+    const rUp=h.every(f=>f.rwy<f.shMidY)&&rRev>=3&&range(rwx)>0.04;const waving=lUp||rUp;
+    transition('wave',waving,()=>log('Машет рукой',COLORS.act,true),sec=>log('Помахивание завершено ('+sec+' с)',COLORS.act,true));
+    if(waving)anyAct=true;}
+
+  if(enabled.clap){
+    const prev=h[h.length-2]||last;const near=last.wd<0.07*k,frontY=last.lwy<last.hipMidY&&last.rwy<last.hipMidY;
+    if(near&&clapArmed&&frontY&&performance.now()-lastClap>250){
+      log('Хлопок в ладоши',COLORS.act,true);lastClap=performance.now();clapArmed=false;anyAct=true;}
+    if(last.wd>0.13*k)clapArmed=true;}
+
+  if(enabled.walk){
+    const recent=walkSeq.filter(s=>performance.now()-s.t<2500);let alt=0;
+    for(let i=1;i<recent.length;i++)if(recent[i].side!==recent[i-1].side)alt++;const walking=alt>=2;
+    transition('walk',walking,()=>log('Ходьба на месте',COLORS.act,true),sec=>log('Остановился (ходьба '+sec+' с)',COLORS.act,true));
+    if(walking)anyAct=true;}
+
+  /* ---------- мониторинг ---------- */
+  if(enabled.fall){
+    const drop=last.shMidY-h[0].shMidY, torsoVert=Math.abs(last.hipMidY-last.shMidY);
+    const horizontal=torsoVert<0.12||last.ny>last.hipMidY;
+    if(drop>0.22/k&&horizontal&&performance.now()-fallCD>5000){fallCD=performance.now();
+      log('⚠ Возможное падение',COLORS.alert,true,snapshot());}}
+
+  if(enabled.sos){
+    const overhead=h.every(f=>f.lwy<f.ny&&f.rwy<f.ny), waving=lRev>=3&&rRev>=3;
+    if(overhead&&waving&&performance.now()-sosCD>4000){sosCD=performance.now();
+      log('⚠ Сигнал бедствия (обе руки над головой)',COLORS.alert,true,snapshot());}}
+
+  lamp('act',anyAct);}
+
+const onF={},offF={};
+function transition(key,active,onStart,onEnd){
+  onF[key]=onF[key]||0;offF[key]=offF[key]||0;
+  if(active){onF[key]++;offF[key]=0;}else{offF[key]++;onF[key]=0;}
+  if(!actState[key]&&onF[key]>=6){actState[key]=true;actStart[key]=performance.now();onStart();}
+  if(actState[key]&&offF[key]>=18){actState[key]=false;onEnd(((performance.now()-actStart[key])/1000).toFixed(1));}}
+
+/* ---------- заливка зон (heat) ---------- */
+function clearHeat(){heatCtx.clearRect(0,0,heat.width,heat.height);}
+/* процент покрытия КАЖДОЙ зоны: доля её площади, реально закрашенной heat-слоем; пишем в r.cov */
+const covCanvas=document.createElement('canvas');
+function coverageByZone(){
+  if(!rois.length||!heat.width){return;}
+  const sw=200, sh=Math.max(1,Math.round(200*heat.height/heat.width));
+  covCanvas.width=sw;covCanvas.height=sh;const cx=covCanvas.getContext('2d',{willReadFrequently:true});
+  cx.clearRect(0,0,sw,sh);cx.drawImage(heat,0,0,sw,sh);
+  const data=cx.getImageData(0,0,sw,sh).data;
+  const ins=rois.map(()=>0), pn=rois.map(()=>0);
+  for(let py=0;py<sh;py++)for(let px=0;px<sw;px++){
+    const lx=MIRROR?1-(px+0.5)/sw:(px+0.5)/sw, ny=(py+0.5)/sh, painted=data[(py*sw+px)*4+3]>20;
+    rois.forEach((r,i)=>{if(pip(lx,ny,r.pts)){ins[i]++;if(painted)pn[i]++;}});}
+  rois.forEach((r,i)=>{r.cov=ins[i]?Math.round(100*pn[i]/ins[i]):0;});}
+function updateCov(){
+  coverageByZone();
+  covEl.textContent=rois.length?('покрытие · '+rois.map(r=>(r.name||ROI_TYPE_RU[r.type])+' '+(r.cov||0)+'%').join(' · ')):'покрытие: нарисуй зону';}
+
+/* ---------- скриншот (видео + заливка) ---------- */
+const snapCanvas=document.createElement('canvas');
+let snapWarned=false;
+function snapshot(){
+  const W=canvas.width,H=canvas.height;if(!W||!H)return null;
+  const srcReady = srcKind==='video' ? (video.readyState>=2&&video.videoWidth>0) : (srcImg.complete&&srcImg.naturalWidth>0);
+  const maxW=720,sc=W>maxW?maxW/W:1,cw=Math.round(W*sc),ch=Math.round(H*sc);
+  snapCanvas.width=cw;snapCanvas.height=ch;const x=snapCanvas.getContext('2d');
+  x.clearRect(0,0,cw,ch);
+  try{
+    if(srcReady){x.save();if(MIRROR){x.translate(cw,0);x.scale(-1,1);}x.drawImage(srcEl,0,0,cw,ch);x.restore();}
+    x.drawImage(heat,0,0,cw,ch);
+    return snapCanvas.toDataURL('image/jpeg',0.8);
+  }catch(e){if(!snapWarned){snapWarned=true;log('Скриншот недоступен (поток без CORS-заголовков)',COLORS.alert);}return null;}}
+
+/* ---------- отрисовка скелета ---------- */
+function draw(lm){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const W=canvas.width,H=canvas.height,X=p=>mapX(p.x)*W,Y=p=>p.y*H;
+  ctx.lineWidth=Math.max(2,W*0.0035);ctx.strokeStyle='rgba(62,240,160,0.55)';
+  ctx.shadowColor='rgba(62,240,160,0.8)';ctx.shadowBlur=8;
+  CONN.forEach(([a,b])=>{const p=lm[a],q=lm[b];if(vis(p)<0.4||vis(q)<0.4)return;
+    ctx.beginPath();ctx.moveTo(X(p),Y(p));ctx.lineTo(X(q),Y(q));ctx.stroke();});
+  ctx.shadowBlur=0;
+  lm.forEach((p,i)=>{if(vis(p)<0.4)return;const key=[15,16].includes(i);
+    ctx.beginPath();ctx.fillStyle=key?'#fff':'#3ef0a0';ctx.arc(X(p),Y(p),key?W*0.007:W*0.004,0,7);ctx.fill();});}
+
+/* ====================================================================
+   ИСТОЧНИКИ ВИДЕО  (srcEl скармливается MediaPipe; srcKind: 'video'|'img')
+   ==================================================================== */
+let landmarker=null, running=false, lastVideoTime=-1, lastImgT=0;
+let frames=0, fpsT=performance.now(), covT=0;
+let srcEl=video, srcKind='video', pc=null, hls=null, currentStream=null, selectedFile=null;
+let inFrame=false, lostSince=0;
+
+async function initModel(){
+  statusText.textContent='загрузка модели…';
+  const fileset=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
+  landmarker=await PoseLandmarker.createFromOptions(fileset,{
+    baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",delegate:"GPU"},
+    runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:0.5,minTrackingConfidence:0.5,minPosePresenceConfidence:0.5});}
+
+function showEl(kind){video.style.display=kind==='video'?'block':'none';srcImg.style.display=kind==='img'?'block':'none';}
+function applyMirror(){const tr=MIRROR?'scaleX(-1)':'none';video.style.transform=tr;srcImg.style.transform=tr;}
+function waitEvent(el,ev,ms=12000){return new Promise((res,rej)=>{
+  const ok=()=>{el.removeEventListener(ev,ok);clearTimeout(t);res();};
+  const t=setTimeout(()=>{el.removeEventListener(ev,ok);rej(new Error('таймаут источника'));},ms);
+  el.addEventListener(ev,ok);});}
+
+async function startWebcam(){
+  currentStream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720}},audio:false});
+  video.srcObject=currentStream;await video.play();
+  if(!video.videoWidth)await waitEvent(video,'loadedmetadata');srcEl=video;srcKind='video';showEl('video');}
+
+async function startFile(){
+  if(!selectedFile)throw new Error('выбери видеофайл');
+  video.srcObject=null;video.src=URL.createObjectURL(selectedFile);video.loop=false;video.muted=true;
+  await video.play();if(!video.videoWidth)await waitEvent(video,'loadedmetadata');
+  video.onended=()=>{if(running){log('Видео закончилось',COLORS.act,true);stop();}};
+  srcEl=video;srcKind='video';showEl('video');}
+
+async function startWhep(url){
+  pc=new RTCPeerConnection();pc.addTransceiver('video',{direction:'recvonly'});
+  pc.ontrack=e=>{video.srcObject=e.streams[0];};
+  const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/sdp'},body:offer.sdp});
+  if(!r.ok)throw new Error('WHEP '+r.status);
+  await pc.setRemoteDescription({type:'answer',sdp:await r.text()});
+  await video.play().catch(()=>{});if(!video.videoWidth)await waitEvent(video,'loadedmetadata');
+  srcEl=video;srcKind='video';showEl('video');}
+
+async function startHls(url){
+  if(window.Hls&&window.Hls.isSupported()){
+    hls=new window.Hls({lowLatencyMode:true});hls.loadSource(url);hls.attachMedia(video);
+    await new Promise((res,rej)=>{hls.on(window.Hls.Events.MANIFEST_PARSED,res);
+      hls.on(window.Hls.Events.ERROR,(_,d)=>{if(d.fatal)rej(new Error('HLS: '+d.details));});});
+  }else if(video.canPlayType('application/vnd.apple.mpegurl')){video.src=url;}
+  else throw new Error('HLS не поддерживается');
+  await video.play();if(!video.videoWidth)await waitEvent(video,'loadedmetadata');srcEl=video;srcKind='video';showEl('video');}
+
+async function startVideoUrl(url){
+  video.srcObject=null;video.src=url;video.loop=true;await video.play();
+  if(!video.videoWidth)await waitEvent(video,'loadedmetadata');srcEl=video;srcKind='video';showEl('video');}
+
+async function startMjpeg(url){
+  srcImg.src=url;
+  await waitEvent(srcImg,'load',12000).catch(()=>{if(!srcImg.naturalWidth)throw new Error('MJPEG не загрузился');});
+  srcEl=srcImg;srcKind='img';showEl('img');}
+
+function inferType(u){u=u.toLowerCase();
+  if(u.includes('.m3u8'))return'hls';if(u.includes('whep')||u.includes('webrtc'))return'whep';
+  if(u.includes('mjpg')||u.includes('mjpeg')||u.includes('/video')||u.includes('snapshot'))return'mjpeg';
+  if(u.endsWith('.mp4')||u.endsWith('.webm'))return'video';return'mjpeg';}
+
+async function startIP(){
+  const url=ipUrl.value.trim();if(!url)throw new Error('укажи URL потока');
+  let t=ipType.value;if(t==='auto')t=inferType(url);
+  if(location.protocol==='https:'&&url.startsWith('http:'))
+    log('⚠ Страница https, поток http — браузер может заблокировать. Открой файл по http://localhost.',COLORS.alert);
+  statusText.textContent='подключение к потоку…';
+  if(t==='hls')await startHls(url);else if(t==='whep')await startWhep(url);
+  else if(t==='mjpeg')await startMjpeg(url);else await startVideoUrl(url);}
+
+function setSizes(w,h){if(w&&h&&(canvas.width!==w||canvas.height!==h)){
+  canvas.width=w;canvas.height=h;heat.width=w;heat.height=h;roi.width=w;roi.height=h;drawROIs();}}
+
+async function start(){
+  startBtn.disabled=true;
+  try{
+    if(!landmarker)await initModel();
+    const mode=srcSel.value;
+    if(mode==='webcam'){statusText.textContent='запрос камеры…';await startWebcam();}
+    else if(mode==='file'){statusText.textContent='загрузка файла…';await startFile();}
+    else await startIP();
+    const w=srcKind==='video'?video.videoWidth:srcImg.naturalWidth;
+    const h=srcKind==='video'?video.videoHeight:srcImg.naturalHeight;
+    setSizes(w,h);clearHeat();
+    hist.length=0;smooth=null;paint=null;lastVideoTime=-1;cleanActive=false;handPrev={};trail=[];
+    inFrame=false;lostSince=0;stillFlagged=false;lastMoveT=performance.now();motionEMA=0;prevKey={};fallCD=0;sosCD=0;
+    hint.style.display='none';running=true;stopBtn.disabled=false;dot.classList.add('live');
+    log('Сессия начата ('+({webcam:'веб-камера',file:'видеофайл',ip:'IP-поток'}[mode])+')',COLORS.act,true);
+    loop();
+  }catch(e){statusText.textContent='ошибка источника';startBtn.disabled=false;log('Ошибка: '+e.message,COLORS.alert);}}
+
+function stop(){
+  running=false;stopBtn.disabled=true;startBtn.disabled=false;dot.classList.remove('live');statusText.textContent='пауза';
+  if(currentStream){currentStream.getTracks().forEach(t=>t.stop());currentStream=null;}
+  if(video.srcObject){video.srcObject.getTracks&&video.srcObject.getTracks().forEach(t=>t.stop());video.srcObject=null;}
+  if(hls){hls.destroy();hls=null;}if(pc){pc.close();pc=null;}
+  video.onended=null;video.removeAttribute('src');srcImg.removeAttribute('src');video.loop=false;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  Object.keys(lampMap).forEach(k=>lamp(k,false));
+  log('Сессия остановлена',COLORS.act,true);}
+
+function loop(){
+  if(!running)return;
+  let ready=false,w=0,h=0;
+  if(srcKind==='video'){w=video.videoWidth;h=video.videoHeight;
+    if(video.currentTime!==lastVideoTime){lastVideoTime=video.currentTime;ready=true;}}
+  else{w=srcImg.naturalWidth;h=srcImg.naturalHeight;
+    if(w>0&&performance.now()-lastImgT>=30){lastImgT=performance.now();ready=true;}}
+  if(ready){
+    setSizes(w,h);
+    try{
+      const res=landmarker.detectForVideo(srcEl,performance.now());
+      if(res.landmarks&&res.landmarks.length){
+        if(enabled.presence&&!inFrame){inFrame=true;log('Человек появился в кадре',COLORS.head);}lostSince=0;
+        const world=res.worldLandmarks&&res.worldLandmarks[0];
+        const lm=smoothPts(res.landmarks[0]);statusText.textContent='трекинг активен';
+        draw(lm);analyze(lm,world);
+        if(heatChk.checked&&cleanActive)paintHands(lm); else handPrev={};
+        pushTrail(lm);
+        if(recording){recBuffer.push({t:Math.round(performance.now()-recT0),lm:packLM(res.landmarks[0]),w:packLM(world)});
+          recBtn.textContent='■ стоп ('+recBuffer.length+')';}
+      }else{
+        ctx.clearRect(0,0,canvas.width,canvas.height);statusText.textContent='не вижу человека';paint=null;
+        Object.keys(lampMap).forEach(k=>lamp(k,false));
+        if(inFrame){const now=performance.now();if(!lostSince)lostSince=now;
+          else if(now-lostSince>1200){inFrame=false;if(enabled.presence)log('Человек вышел из кадра',COLORS.head);}}
+      }
+    }catch(err){statusText.textContent='кадр недоступен (CORS?)';}
+    frames++;const now=performance.now();
+    if(now-fpsT>=500){fpsEl.textContent=Math.round(frames*1000/(now-fpsT))+' fps';frames=0;fpsT=now;}
+    if(now-covT>=1000){covT=now;updateCov();}
+  }
+  requestAnimationFrame(loop);}
+
+/* ---------- экспорт / управление ---------- */
+function download(name,content,type){const b=new Blob([content],{type});const u=URL.createObjectURL(b);
+  const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),500);}
+txtBtn.onclick=()=>{if(!logData.length)return;
+  download('motion-log-'+Date.now()+'.txt',logData.map(e=>'['+e.time+'] '+e.text).join('\n'),'text/plain');};
+jsonBtn.onclick=()=>{if(!logData.length)return;
+  download('motion-log-'+Date.now()+'.json',JSON.stringify(logData.map(({iso,time,text,act,shot})=>({iso,time,text,act,shot})),null,2),'application/json');};
+clearBtn.onclick=()=>{logData.length=0;logEl.querySelectorAll('.entry').forEach(e=>e.remove());
+  logEmpty.style.display='';countEl.textContent='0 записей';clearHeat();updateCov();};
+shotBtn.onclick=()=>{const d=snapshot();if(d){const a=document.createElement('a');a.href=d;a.download='shot-'+Date.now()+'.jpg';a.click();}};
+startBtn.onclick=start;stopBtn.onclick=stop;
+sens.oninput=()=>{SENS=parseFloat(sens.value);sensVal.textContent=SENS.toFixed(2)+'×';};
+heatChk.onchange=()=>{if(!heatChk.checked)clearHeat();};
+mirrorChk.onchange=()=>{MIRROR=mirrorChk.checked;applyMirror();drawROIs();};
+srcSel.onchange=()=>{
+  ipBox.style.display=srcSel.value==='ip'?'block':'none';
+  fileBox.style.display=srcSel.value==='file'?'block':'none';
+  MIRROR=srcSel.value!=='file';mirrorChk.checked=MIRROR;applyMirror();drawROIs();
+  statusText.textContent={webcam:'веб-камера',file:'видеофайл',ip:'IP-источник'}[srcSel.value];};
+fileInput.onchange=()=>{selectedFile=fileInput.files[0]||null;
+  if(selectedFile)statusText.textContent='файл: '+selectedFile.name;};
+
+/* --- калибровка зон --- */
+function updateRoiNote(){roiNote.textContent=rois.length?(rois.length+' зон(ы) — режим по зонам'):'зон нет — работает авто-режим';}
+brushes.querySelectorAll('.brush').forEach(b=>b.onclick=()=>{
+  roiBrush=b.dataset.t;brushes.querySelectorAll('.brush').forEach(x=>x.classList.toggle('on',x===b));});
+calibBtn.onclick=()=>{calibMode=!calibMode;calibBtn.classList.toggle('on',calibMode);
+  videoArea.classList.toggle('calib',calibMode);calibBtn.textContent=calibMode?'✓ готово':'✏ рисовать зоны';};
+clearRoiBtn.onclick=()=>{rois=[];drawROIs();updateRoiNote();updateCov();};
+roi.addEventListener('mousedown',e=>{if(!calibMode)return;e.preventDefault();const pt=evtToLandmark(e);
+  const c=findCorner(pt);if(c){dragCorner=c;}else{drawStart=pt;drawCur=pt;}drawROIs();});
+window.addEventListener('mousemove',e=>{if(!calibMode)return;
+  if(!dragCorner&&!drawStart)return;const pt=evtToLandmark(e);
+  if(dragCorner){rois[dragCorner.ri].pts[dragCorner.ci]=[pt.x,pt.y];drawROIs();}
+  else{drawCur=pt;drawROIs();}});
+window.addEventListener('mouseup',e=>{if(!calibMode)return;
+  if(dragCorner){dragCorner=null;return;}
+  if(!drawStart)return;const a=drawStart,b=evtToLandmark(e);drawStart=drawCur=null;
+  if(Math.abs(b.x-a.x)>0.02&&Math.abs(b.y-a.y)>0.02){
+    const x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),y0=Math.min(a.y,b.y),y1=Math.max(a.y,b.y);
+    const def=ROI_TYPE_RU[roiBrush]+' '+(rois.filter(r=>r.type===roiBrush).length+1);
+    const z={type:roiBrush,pts:[[x0,y0],[x1,y0],[x1,y1],[x0,y1]],name:def,cov:0};
+    rois.push(z);
+    const nm=prompt('Название зоны (для журнала):',def);if(nm&&nm.trim())z.name=nm.trim();
+    log('Зона добавлена: '+z.name+' — тяни углы под трапецию, двойной клик = переименовать',ROI_COL[roiBrush]);}
+  drawROIs();updateRoiNote();updateCov();});
+roi.addEventListener('dblclick',e=>{if(!calibMode)return;e.preventDefault();
+  const pt=evtToLandmark(e),z=roiObjAt(pt.x,pt.y);
+  if(!z)return;const nm=prompt('Название зоны:',z.name||ROI_TYPE_RU[z.type]);
+  if(nm&&nm.trim()){z.name=nm.trim();drawROIs();updateCov();log('Зона переименована: '+z.name,ROI_COL[z.type]);}});
+
+/* --- запись координат скелета --- */
+function exportRecording(){
+  if(!recBuffer.length){log('Запись пуста (трекинг шёл?)',COLORS.alert);return;}
+  const meta={app:'motion-log',createdAt:new Date().toISOString(),label:recLabelEl.value.trim()||'(без метки)',
+    mirror:MIRROR,width:canvas.width,height:canvas.height,frames:recBuffer.length,
+    durationSec:+(recBuffer[recBuffer.length-1].t/1000).toFixed(2),
+    pointOrder:'MediaPipe Pose 33',
+    viewpoint,
+    format:'lm = нормированные 2D [x,y,z,visibility]; w = метрические 3D world [x,y,z,visibility]; t = мс от старта записи',
+    rois:rois.map(r=>({type:r.type,name:r.name||ROI_TYPE_RU[r.type],pts:r.pts.map(p=>[r4(p[0]),r4(p[1])])}))};
+  const safe=meta.label.replace(/[^0-9a-zа-яё_-]+/gi,'_').slice(0,40);
+  download('skeleton-'+safe+'-'+Date.now()+'.json',JSON.stringify({meta,frames:recBuffer}),'application/json');
+  log('Запись выгружена: '+recBuffer.length+' кадров',COLORS.act,true);}
+recBtn.onclick=()=>{
+  if(!recording){recording=true;recBuffer=[];recT0=performance.now();
+    recBtn.classList.add('on');recBtn.textContent='■ стоп (0)';recNote.textContent='идёт запись…';}
+  else{recording=false;recBtn.classList.remove('on');recBtn.textContent='● запись';
+    recNote.textContent=recBuffer.length+' кадров → JSON';exportRecording();}};
+
+applyMirror();updateRoiNote();
+
+/* --- пресеты ракурса --- */
+const PRESETS={
+  custom:{vp:'custom'},
+  front:{vp:'front',all:true},
+  overhead:{vp:'overhead-side',off:['arms','legs','torso','wave','clap','walk']},
+  side:{vp:'side',off:['torso','legs']}
+};
+function applyPreset(name){const p=PRESETS[name];if(!p)return;viewpoint=p.vp;
+  if(p.all)detectorDefs.forEach(d=>enabled[d.key]=true);
+  else if(p.off){detectorDefs.forEach(d=>enabled[d.key]=true);p.off.forEach(k=>enabled[k]=false);}
+  refreshToggles();
+  if(name!=='custom')log('Ракурс: '+({front:'фронтальный',overhead:'сверху под углом',side:'сбоку'}[name])+
+    ' — пресет применён (viewpoint='+viewpoint+')',COLORS.act);
+  if(name==='overhead')roiNote.textContent='нарисуй зоны стол/пол/окно — так точнее';}
+vpSel.onchange=()=>applyPreset(vpSel.value);
+window.addEventListener('beforeunload',()=>{try{stop();}catch(e){}});
+</script>
+<script>
+/* Автонастройка источника на камеру контура (?cam=<id>&api_key=<key>).
+   Перенос браузерной аналитики PoC: видео берём из MJPEG-прокси api-gateway. */
+window.addEventListener('load', function () {
+  var q = new URLSearchParams(location.search);
+  var cam = q.get('cam');
+  if (!cam) return;
+  var key = q.get('api_key') || '';
+  var srcSel = document.getElementById('srcSel');
+  var ipBox = document.getElementById('ipBox');
+  var ipUrl = document.getElementById('ipUrl');
+  var ipType = document.getElementById('ipType');
+  var startBtn = document.getElementById('startBtn');
+  if (!srcSel || !ipUrl || !startBtn) return;
+  srcSel.value = 'ip';
+  if (ipBox) ipBox.style.display = 'block';
+  ipUrl.value = location.origin + '/api/v1/cameras/' + cam +
+    '/stream.mjpeg?api_key=' + encodeURIComponent(key);
+  ipType.value = 'mjpeg';
+  startBtn.click();
+});
+</script>
+</body>
+</html>
