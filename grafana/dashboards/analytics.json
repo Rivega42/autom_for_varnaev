@@ -104,7 +104,7 @@
         {
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT ts AS \"time\", room_id AS room, message, ('${api_base}' || (payload->>'artifact_url') || '?api_key=${api_key}') AS \"снимок\" FROM events WHERE source='analytics' AND payload ? 'artifact_url' AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) ORDER BY ts DESC LIMIT 50"
+          "rawSql": "SELECT ts AS \"time\", room_id AS room, message, ('${api_base}' || (payload->>'artifact_url') || '?api_key=${api_key}') AS \"снимок\" FROM events WHERE source='analytics' AND (payload->>'artifact_url') IS NOT NULL AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) ORDER BY ts DESC LIMIT 50"
         }
       ]
     }

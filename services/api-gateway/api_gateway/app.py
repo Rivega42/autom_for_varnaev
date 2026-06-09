@@ -185,24 +185,37 @@ def create_app(
                 data, mime = decode_data_url(body.image)
             except ValueError as exc:
                 raise api_error(ErrorCode.VALIDATION_ERROR, str(exc)) from None
+            # camera_id из payload может быть не-UUID (идентификатор-человекочитаемый
+            # или мусор) — не валим запрос 500-кой, просто не привязываем камеру.
+            raw_cam = payload.get("camera_id")
+            camera_uuid: UUID | None = None
+            if isinstance(raw_cam, str):
+                try:
+                    camera_uuid = UUID(raw_cam)
+                except ValueError:
+                    camera_uuid = None
             artifact_id = uuid4()
             path = build_artifact_path(settings.artifacts_dir, ts, artifact_id, ext_for_mime(mime))
             save_bytes(path, data)
-            camera_id = payload.get("camera_id")
-            insert_artifact(
-                engine,
-                Artifact(
-                    id=artifact_id,
-                    created_at=ts,
-                    kind=ArtifactKind.SCREENSHOT,
-                    path=path,
-                    mime=mime,
-                    room_id=body.room,
-                    camera_id=UUID(camera_id) if isinstance(camera_id, str) else None,
-                    task_id=None,
-                    meta={"origin": "browser"},
-                ),
-            )
+            try:
+                insert_artifact(
+                    engine,
+                    Artifact(
+                        id=artifact_id,
+                        created_at=ts,
+                        kind=ArtifactKind.SCREENSHOT,
+                        path=path,
+                        mime=mime,
+                        room_id=body.room,
+                        camera_id=camera_uuid,
+                        task_id=None,
+                        meta={"origin": "browser"},
+                    ),
+                )
+            except Exception:
+                # метаданные не записались — не оставляем файл-сироту на томе
+                Path(path).unlink(missing_ok=True)
+                raise
             payload["artifact_url"] = f"{API_PREFIX}/artifacts/{artifact_id}"
 
         event = Event(

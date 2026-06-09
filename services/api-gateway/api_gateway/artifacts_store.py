@@ -24,18 +24,28 @@ def build_artifact_path(artifacts_dir: str, ts: datetime, artifact_id: UUID, ext
     return f"{artifacts_dir}/{ts:%Y-%m-%d}/{artifact_id}.{ext}"
 
 
-def decode_data_url(data_url: str) -> tuple[bytes, str]:
+# Предел размера стоп-кадра (декодированного) — защита от переполнения диска/памяти.
+MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
+
+def decode_data_url(data_url: str, max_bytes: int = MAX_IMAGE_BYTES) -> tuple[bytes, str]:
     """Разобрать data-URL картинки (`data:image/jpeg;base64,...`) → (байты, mime).
 
-    Поднимает ValueError при неверном формате или неподдерживаемом типе — вызов
-    обязан сконвертировать это в 422, а не уронить запрос.
+    Поднимает ValueError при неверном формате, неподдерживаемом типе или
+    превышении `max_bytes` — вызов обязан сконвертировать это в 422, а не уронить
+    запрос.
     """
     if not data_url.startswith("data:"):
         raise ValueError("ожидается data-URL картинки (data:image/...;base64,...)")
     header, sep, payload = data_url[5:].partition(",")
-    if not sep or ";base64" not in header:
+    if not sep:
         raise ValueError("ожидается base64-кодированный data-URL")
-    mime = header.split(";", 1)[0].strip().lower()
+    # Параметры заголовка: первый — mime, среди остальных должен быть токен base64
+    # (без учёта регистра; строгое сравнение, чтобы не принять, напр., 'base64x').
+    params = [p.strip().lower() for p in header.split(";")]
+    mime = params[0]
+    if "base64" not in params[1:]:
+        raise ValueError("ожидается base64-кодированный data-URL")
     if mime not in _IMAGE_EXT:
         raise ValueError(f"неподдерживаемый тип картинки: {mime}")
     try:
@@ -44,6 +54,8 @@ def decode_data_url(data_url: str) -> tuple[bytes, str]:
         raise ValueError("повреждённый base64 в data-URL") from None
     if not raw:
         raise ValueError("пустая картинка")
+    if len(raw) > max_bytes:
+        raise ValueError(f"картинка больше допустимых {max_bytes} байт")
     return raw, mime
 
 

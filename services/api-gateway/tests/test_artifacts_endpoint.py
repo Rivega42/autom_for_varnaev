@@ -83,12 +83,30 @@ def test_decode_data_url_ok() -> None:
 
 @pytest.mark.parametrize(
     "bad",
-    ["нет-префикса", "data:image/png,нет-base64", "data:application/pdf;base64,AAAA"],
+    [
+        "нет-префикса",
+        "data:image/png,нет-base64",
+        "data:application/pdf;base64,AAAA",
+        "data:image/png;base64x," + _PNG_B64,  # токен кодирования не 'base64'
+    ],
 )
 def test_decode_data_url_rejects(bad: str) -> None:
     """Мусорный/неподдерживаемый data-URL → ValueError."""
     with pytest.raises(ValueError):
         decode_data_url(bad)
+
+
+def test_decode_data_url_base64_token_case_insensitive() -> None:
+    """Токен BASE64 в любом регистре допустим (mime тоже регистронезависим)."""
+    data, mime = decode_data_url("data:image/PNG;BASE64," + _PNG_B64)
+    assert mime == "image/png"
+    assert data == base64.b64decode(_PNG_B64)
+
+
+def test_decode_data_url_rejects_oversized() -> None:
+    """Картинка больше лимита → ValueError (защита от переполнения диска/памяти)."""
+    with pytest.raises(ValueError):
+        decode_data_url(_PNG_DATA_URL, max_bytes=1)
 
 
 def test_read_artifact_bytes_blocks_traversal(tmp_path: Path) -> None:
@@ -172,3 +190,21 @@ def test_post_analytics_event_without_image_unchanged(tmp_path: Path) -> None:
     assert resp.status_code == 200
     assert resp.json()["data"]["artifact_id"] is None
     assert events.created[0].artifact_id is None
+
+
+def test_post_analytics_event_non_uuid_camera_id_ok(tmp_path: Path) -> None:
+    """Не-UUID camera_id не валит запрос: артефакт сохраняется, камера не привязана."""
+    events = _FakeEventsClient()
+    resp = _client(tmp_path, events).post(
+        "/api/v1/analytics-events",
+        json={
+            "room": "room-1",
+            "message": "Стол протёрт",
+            "payload": {"camera_id": "cam-01"},  # человекочитаемый id, не UUID
+            "image": _PNG_DATA_URL,
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"]["artifact_id"]
+    # событие записано, камера не привязана (camera_id невалиден), но кадр сохранён
+    assert events.created[0].artifact_id is not None
