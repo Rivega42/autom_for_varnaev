@@ -35,6 +35,30 @@ jobs:
       - name: pytest (тесты)
         run: pytest
 
+  node-test:
+    name: node --test (analysis-core)
+    runs-on: ubuntu-latest
+    # Прогон Node-тестов единого ядра видеоаналитики (analysis-core) и серверного
+    # конвейера (video-analytics-node). Каталоги проверяются по наличию, поэтому
+    # один и тот же workflow работает и до, и после появления Node-сервисов.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установка Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Node-тесты JS-сервисов
+        run: |
+          for d in services/analysis-core services/video-analytics-node; do
+            if [ -d "$d" ]; then
+              echo "::group::node --test ($d)"
+              (cd "$d" && node --test)
+              echo "::endgroup::"
+            fi
+          done
+
   docker-build:
     name: docker smoke-build
     runs-on: ubuntu-latest
