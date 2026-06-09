@@ -15,9 +15,12 @@ RUN python -m venv /opt/venv \
 
 # ── Стадия запуска: тонкий runtime + системные либы для OpenCV/MediaPipe ──
 FROM python:3.12-slim AS runtime
-# libGL и libglib нужны OpenCV/MediaPipe в runtime (даже headless-сборке cv2).
+# Системные либы для OpenCV/MediaPipe в runtime (даже headless-сборке cv2):
+# libgl1/libglib2.0-0 — для OpenCV; libgles2 (libGLESv2.so.2) и libegl1
+# (libEGL.so.1) — для нативных C-биндингов MediaPipe Tasks (PoseLandmarker).
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y libgl1 libglib2.0-0 \
+    && apt-get install --no-install-recommends -y \
+        libgl1 libglib2.0-0 libgles2 libegl1 \
     && rm -rf /var/lib/apt/lists/*
 # Непривилегированный пользователь (не root).
 RUN useradd --create-home --uid 10001 appuser
