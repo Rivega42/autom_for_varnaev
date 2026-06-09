@@ -4,7 +4,11 @@
  * Замыкает цикл «записал в браузере → прогнал на сервере тем же ядром»:
  *   node bin/analyze.mjs --recording skeleton-*.json --room room-01 \
  *        [--camera <uuid>] [--zones zones.json] \
- *        [--post http://log-service:8000] [--api-key KEY]
+ *        [--post http://log-service:8000]
+ *
+ * --post шлёт напрямую в log-service (внутренняя сеть, без ключа).
+ * --zones принимает: массив зон, {items:[...]} ИЛИ полный конверт ответа API
+ *   ({status,data:{items}} — как сохраняет curl c GET /cameras/{id}/zones).
  *
  * Без --post события печатаются в stdout (JSON-строки) — удобно для проверки.
  * Источник кадров здесь — ЗАПИСЬ (без MediaPipe/RTSP); реальный live-источник
@@ -41,7 +45,12 @@ export async function cliMain(args, { sink, log = console.error } = {}) {
   if (!args.recording) throw new Error("нужен --recording <файл записи .json>");
   const recording = JSON.parse(await readFile(args.recording, "utf-8"));
   const zones = args.zones ? JSON.parse(await readFile(args.zones, "utf-8")) : [];
-  const rois = toRois(Array.isArray(zones) ? zones : zones.items);
+  // Зоны: массив, {items} или полный конверт API {status,data:{items}} (curl as-is).
+  const zoneList = Array.isArray(zones) ? zones : (zones.items ?? zones.data?.items ?? []);
+  const rois = toRois(zoneList);
+  if (args.zones && !rois.length) {
+    log("Внимание: в --zones не найдено ни одной зоны — покрытие считаться не будет");
+  }
 
   if (args.post === true) throw new Error("--post требует URL log-service");
   const engine = new AnalysisEngine({ rois });
