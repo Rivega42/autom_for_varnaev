@@ -174,6 +174,12 @@ services:
       AURA_INTEGRATION_ENABLED: ${AURA_INTEGRATION_ENABLED:-false}
       # Кадр-превью камеры для GUI разметки ROI (go2rtc во внутренней сети).
       GO2RTC_URL: ${GO2RTC_URL:-http://media-gateway:1984}
+      # Подключение к БД (справочники, задания, показания читаются напрямую).
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
     networks:
       - internal
       - integration
@@ -297,6 +303,12 @@ services:
       API_KEY: ${API_KEY:?API_KEY должен быть задан в .env (иначе API открыт без ключа)}
       AURA_INTEGRATION_ENABLED: ${AURA_INTEGRATION_ENABLED:-false}
       GO2RTC_URL: ${GO2RTC_URL:-http://media-gateway:1984}
+      # Подключение к БД (справочники, задания, показания читаются напрямую).
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
     networks:
       - internal
       - integration
