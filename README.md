@@ -92,6 +92,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) прогоняет `
 | 08 | [`docs/08_MQTT_CONTRACT.md`](docs/08_MQTT_CONTRACT.md) | Контракт MQTT: топики и payload показаний датчиков | датчики · firmware |
 | 09 | [`docs/09_OPERATIONS.md`](docs/09_OPERATIONS.md) | Эксплуатация: запуск, миграции, бэкап БД, артефакты, логи | DevOps · дежурный |
 | 10 | [`docs/10_DEPLOYMENT.md`](docs/10_DEPLOYMENT.md) | Развёртывание с нуля: .env, ассеты, миграции, сиды, проверка | DevOps |
+| 12 | [`docs/12_QUICKSTART_LAPTOP.md`](docs/12_QUICKSTART_LAPTOP.md) | Быстрый старт на ноутбуке: демо без железа и подключение реальных камер | DevOps · проверка |
 | — | [`docs/customer/`](docs/customer/README.md) | **Пакет для заказчика** (самодостаточный): единое руководство + схемы; только то, что можно передавать | заказчик |
 | — | [`docs/diagrams/`](docs/diagrams/README.md) | Схемы: состав продукта и взаимодействие (Mermaid) + BPMN/SVG | все |
 
