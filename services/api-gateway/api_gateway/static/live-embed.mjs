@@ -82,6 +82,8 @@ export function mountLiveAnalysis(container, opts) {
   const engine = new AnalysisEngine({ rois: zonesToRois(zones), gridWidth: 200 });
   const smooth = makeSmoother();
   const handPrev = {};
+  let trail = [];               // последние позиции кистей — для backfill на старте уборки
+  let prevCleanActive = false;  // фронт активности уборки
   let running = true, lastT = -1;
 
   const pad = (n) => String(n).padStart(2, "0");
@@ -129,6 +131,28 @@ export function mountLiveAnalysis(container, opts) {
     }
   }
 
+  /* сбросить заливку: и визуальный heat-канвас, и сетку покрытия движка (как в
+     PoC после стоп-кадра/в начале сессии) — иначе % копится между уборками. */
+  function clearHeat() {
+    heatCtx.clearRect(0, 0, heat.width, heat.height);
+    engine.heat.clear();
+    handPrev[15] = handPrev[16] = undefined;
+  }
+
+  /* путь обрезки по полигонам зоны (немного расширен) — заливка не вылезает за зону */
+  function heatClipPath(polys) {
+    const W = heat.width, H = heat.height;
+    heatCtx.beginPath();
+    polys.forEach((p) => {
+      const cx = p.reduce((a, q) => a + q[0], 0) / p.length, cy = p.reduce((a, q) => a + q[1], 0) / p.length;
+      p.forEach((pt, i) => {
+        const ex = cx + (pt[0] - cx) * 1.08, ey = cy + (pt[1] - cy) * 1.08, x = ex * W, y = ey * H;
+        i ? heatCtx.lineTo(x, y) : heatCtx.moveTo(x, y);
+      });
+      heatCtx.closePath();
+    });
+  }
+
   /* заливка «протёртости»: мазок радиусом из ширины кадра (как в ядре/PoC) */
   function stamp(a, b, color) {
     const W = heat.width, H = heat.height, r = Math.max(14, Math.min(W, H) * engine.lastTorso * 0.62);
@@ -144,9 +168,31 @@ export function mountLiveAnalysis(container, opts) {
     g.addColorStop(0, color + "4d"); g.addColorStop(1, color + "00");
     heatCtx.fillStyle = g; heatCtx.beginPath(); heatCtx.arc(bx, by, r, 0, 7); heatCtx.fill();
   }
+  /* крашу рабочие кисти текущего кадра, обрезая по зоне уборки (engine.cleanClip) */
   function paintHands(lm) {
     const idx = engine.cleanHandIdx && engine.cleanHandIdx.length ? engine.cleanHandIdx : [];
+    if (!idx.length) return;
+    const clip = engine.cleanClip && engine.cleanClip.length;
+    if (clip) { heatCtx.save(); heatClipPath(engine.cleanClip); heatCtx.clip(); }
     idx.forEach((wr) => { const pt = handPoint(lm, wr); stamp(handPrev[wr], pt, engine.cleanColor); handPrev[wr] = pt; });
+    if (clip) heatCtx.restore();
+  }
+  /* на старте уборки дорисовываю накопленный след (первые движения до детекта) */
+  function backfillHeat() {
+    const idx = engine.cleanHandIdx && engine.cleanHandIdx.length ? engine.cleanHandIdx : [];
+    if (!idx.length || !trail.length) return;
+    const clip = engine.cleanClip && engine.cleanClip.length;
+    if (clip) { heatCtx.save(); heatClipPath(engine.cleanClip); heatCtx.clip(); }
+    idx.forEach((wr) => {
+      const key = wr === 16 ? "p16" : "p15"; let prev = null;
+      trail.forEach((t) => { if (t[key]) { stamp(prev, t[key], engine.cleanColor); prev = t[key]; } });
+      if (prev) handPrev[wr] = prev;
+    });
+    if (clip) heatCtx.restore();
+  }
+  function pushTrail(lm) {
+    trail.push({ p15: handPoint(lm, 15), p16: handPoint(lm, 16) });
+    if (trail.length > 60) trail.shift();
   }
 
   function draw(lm) {
@@ -191,10 +237,14 @@ export function mountLiveAnalysis(container, opts) {
           for (const e of evs) {
             const shot = e.snapshot ? snapshot() : null;
             log(e.text, e.color, e.isAct, shot);
-            if (e.isAct) postEvent(e.text, shot); // действие (+стоп-кадр) → журнал/Grafana
+            if (e.isAct) postEvent(e.text, shot);   // действие (+стоп-кадр) → журнал/Grafana
+            if (shot) clearHeat();                  // после стоп-кадра сбрасываем заливку и % (как в PoC)
           }
           const cleanActive = engine.actState.wipe || engine.actState.mop || engine.actState.sweep || engine.actState.window;
+          if (cleanActive && !prevCleanActive) backfillHeat(); // дорисовать след начала уборки
+          prevCleanActive = cleanActive;
           if (cleanActive) paintHands(lm);
+          pushTrail(lm);
         } else {
           status.textContent = "не вижу человека"; ctx.clearRect(0, 0, skel.width, skel.height);
         }
@@ -204,7 +254,11 @@ export function mountLiveAnalysis(container, opts) {
     requestAnimationFrame(loop);
   }
 
-  function stop() { running = false; img.src = ""; }
+  function stop() {
+    if (!running) return;
+    running = false; img.src = "";
+    log("Сессия остановлена", "#ffffff", true);
+  }
   stopBtn.onclick = stop;
 
   status.textContent = "загрузка модели…";
