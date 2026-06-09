@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Серверный воркер видеоаналитики на едином ядре analysis-core (Фаза 3 #241)",
   "type": "module",
+  "bin": {
+    "analyze-recording": "bin/analyze.mjs"
+  },
   "scripts": {
     "test": "node --test"
   },
