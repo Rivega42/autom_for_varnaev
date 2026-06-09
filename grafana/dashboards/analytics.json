@@ -1,0 +1,68 @@
+{
+  "uid": "video-analytics",
+  "title": "Видеоаналитика",
+  "tags": ["мониторинг", "видеоаналитика"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_TIMESCALEDB",
+        "type": "datasource",
+        "query": "postgres",
+        "current": { "text": "TimescaleDB", "value": "TimescaleDB" },
+        "hide": 0
+      },
+      {
+        "name": "room",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "${DS_TIMESCALEDB}" },
+        "definition": "SELECT DISTINCT room_id FROM events WHERE source='analytics' ORDER BY 1",
+        "query": "SELECT DISTINCT room_id FROM events WHERE source='analytics' ORDER BY 1",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "% покрытия зон движением (протёрто)",
+      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "${DS_TIMESCALEDB}" },
+      "description": "Доля площади ROI-зоны, покрытая движением, из coverage_report (payload.coverage_pct). Серия — помещение/зона.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "max": 100 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT ts AS \"time\", (payload->>'coverage_pct')::float AS \"value\", concat(room_id, ' / ', payload->>'zone') AS \"metric\" FROM events WHERE type='coverage_report' AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) ORDER BY ts"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "События аналитики",
+      "type": "table",
+      "datasource": { "type": "postgres", "uid": "${DS_TIMESCALEDB}" },
+      "description": "pose_event / action_detected / coverage_report / condition_flagged — что распознала видеоаналитика.",
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 10 },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT ts AS \"time\", type, room_id AS room, severity, message, payload::text AS payload FROM events WHERE source='analytics' AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) ORDER BY ts DESC LIMIT 500"
+        }
+      ]
+    }
+  ]
+}
