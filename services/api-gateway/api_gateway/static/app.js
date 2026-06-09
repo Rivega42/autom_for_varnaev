@@ -74,6 +74,17 @@ function fillCameraSelect() {
   }
 }
 
+// Открыть браузерный живой анализ (порт PoC): скелет, распознавание, журнал,
+// стоп-кадры — всё в браузере поверх MJPEG-потока камеры (страница live.html).
+function openLiveAnalysis() {
+  if (!current) {
+    msg("Сначала выберите камеру", false);
+    return;
+  }
+  const key = encodeURIComponent(keyInput.value);
+  window.open(`live.html?cam=${current.id}&api_key=${key}`, "_blank");
+}
+
 // Разовый запуск анализа выбранной камеры (без curl/UUID).
 async function runAnalysisNow() {
   if (!current) {
@@ -619,6 +630,7 @@ $("nd_add").onclick = createNode;
 $("nc_save").onclick = createCamera;
 $("saveCam").onclick = saveCamera;
 $("runAnalysis").onclick = runAnalysisNow;
+$("liveAnalysis").onclick = openLiveAnalysis;
 $("loadFrame").onclick = loadFrame;
 $("liveToggle").onclick = toggleLive;
 $("videoToggle").onclick = toggleVideo;
