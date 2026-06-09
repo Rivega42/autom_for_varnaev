@@ -1,0 +1,10 @@
+{
+  "name": "video-analytics-node",
+  "version": "0.1.0",
+  "description": "Серверный воркер видеоаналитики на едином ядре analysis-core (Фаза 3 #241)",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "UNLICENSED"
+}
