@@ -12,6 +12,7 @@ dependencies = [
   "monitoring-shared",
   "sqlalchemy>=2",
   "psycopg2-binary>=2.9",
+  "httpx>=0.27",
 ]
 
 [tool.hatch.build.targets.wheel]
