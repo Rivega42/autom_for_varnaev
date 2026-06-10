@@ -111,6 +111,23 @@ export function mountLiveAnalysis(container, opts) {
     }).catch(() => {});
   }
 
+  /* отчёт о покрытии («протёрто на N%») → журнал/Grafana тем же контрактом,
+     что у серверного воркера: type=coverage_report, payload {zone,zone_id,coverage_pct} */
+  function postCoverage(e) {
+    if (!cameraId) return;
+    fetch("/api/v1/analytics-events", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+      body: JSON.stringify({
+        room, message: e.text, type: "coverage_report",
+        payload: {
+          origin: "browser", camera_id: cameraId, zone: e.coverage.zoneType,
+          zone_id: e.coverage.zoneId == null ? null : e.coverage.zoneId,
+          coverage_pct: e.coverage.pct,
+        },
+      }),
+    }).catch(() => {});
+  }
+
   const snapCanvas = document.createElement("canvas");
   function snapshot() {
     const W = skel.width, H = skel.height;
@@ -239,6 +256,7 @@ export function mountLiveAnalysis(container, opts) {
             const shot = e.snapshot ? snapshot() : null;
             log(e.text, e.color, e.isAct, shot);
             if (e.isAct) postEvent(e.text, shot);   // действие (+стоп-кадр) → журнал/Grafana
+            if (e.coverage) postCoverage(e);        // «протёрто на N%» → журнал/Grafana
             // сброс заливки/% — только после ЗАВЕРШЕНИЯ уборки; стоп-кадр
             // падения/SOS посреди уборки покрытие не трогает
             if (e.snapshot && ["wipe", "mop", "sweep", "window"].includes(e.action)) resetHeat = true;

@@ -227,7 +227,8 @@ def create_app(
             id=uuid4(),
             ts=ts,
             source=EventSource.ANALYTICS,
-            type=EventType.ACTION_DETECTED,
+            # Тип из белого списка схемы: действия и отчёты о покрытии браузера.
+            type=EventType(body.type),
             room_id=body.room,
             severity=body.severity,
             message=body.message,
