@@ -96,6 +96,7 @@ task_id       uuid REFERENCES analysis_tasks(id) -- если событие от
 | analytics | `action_detected` | `{"action":"surface_wiped","hands":"both","duration_s":4.2}` | «Протирание поверхности двумя руками, 4 с» |
 | analytics | `coverage_report` | `{"zone":"table","zone_id":7,"coverage_pct":63}` | «Покрытие зоны стола — 63%» |
 | analytics | `condition_flagged` | `{"flag":"no_uniform","brightness":0.4,"saturation":0.5}` | «Не распознана спецодежда (белый халат)» |
+| analytics | `cleaning_overdue` | `{"zone":"table","reason":"не убиралась более 4 ч (прошло 5.2 ч)"}` | «Зона «стол» (помещение room-01): не убиралась более 4 ч» |
 
 Типы аналитики соответствуют движку PoC (`07_VIDEO_ANALYTICS.md`): `pose_event` —
 простые позы (рука/колено/голова/корпус); `action_detected` — составные действия
@@ -211,6 +212,21 @@ enabled       boolean DEFAULT true
 ```
 `ingest-sensors` сверяет показания с `thresholds` и при срабатывании пишет
 `events`. В v2 пороги может присылать АУРА (`PUT /integration/settings`).
+
+### cleaning_rules (санитарный контроль уборки, #265)
+```
+id               serial PRIMARY KEY
+room_id          text NOT NULL REFERENCES rooms(id)
+zone_type        text NOT NULL        -- "table" | "floor" | "window" (как camera_zones)
+interval_hours   double precision NOT NULL  -- зона должна убираться не реже, чем раз в N ч
+min_coverage_pct int NOT NULL DEFAULT 0     -- мин. покрытие последней уборки, %
+zone_name        text                 -- подпись для оператора
+enabled          boolean DEFAULT true
+UNIQUE (room_id, zone_type)
+```
+Планировщик на каждом тике сверяет правила с последними `coverage_report` по
+зоне и при нарушении пишет `cleaning_overdue` (раз на эпизод; эпизод закрывается,
+когда зона снова убрана вовремя и с нормальным покрытием).
 
 ---
 

@@ -15,8 +15,10 @@ from datetime import UTC, datetime
 
 from sqlalchemy import Engine
 
+from scheduler.cleaning_monitor import CleaningMonitor
 from scheduler.config import Settings
 from scheduler.db import build_engine
+from scheduler.events import HttpEventSink
 from scheduler.schedules import ScheduleEntry, load_schedules, load_schedules_db
 from scheduler.tick import run_tick
 
@@ -56,21 +58,30 @@ def run_forever(
     sleep: Callable[[float], None] = time.sleep,
     now_fn: Callable[[], datetime] = _now_utc,
     max_iterations: int | None = None,
+    cleaning_monitor: CleaningMonitor | None = None,
 ) -> None:
     """Цикл планировщика: тик, затем сон на `tick_interval_s`, и так по кругу.
 
     Демон не должен падать из-за ошибки одного тика — исключение логируется,
     цикл продолжается. `max_iterations` ограничивает число итераций (для тестов);
-    при `None` цикл бесконечный.
+    при `None` цикл бесконечный. `cleaning_monitor` (если задан) проверяет на
+    каждом тике контроль уборки (#265) и эмитит cleaning_overdue.
     """
     iteration = 0
     while True:
+        now = now_fn()  # один момент времени на итерацию (тик + контроль уборки)
         try:
-            count = tick_once(engine, settings, now_fn())
+            count = tick_once(engine, settings, now)
             if count:
                 logger.info("Планировщик: тик создал заданий: %d", count)
         except Exception:
             logger.exception("Планировщик: ошибка в тике, продолжаем")
+        if cleaning_monitor is not None:
+            try:
+                cleaning_monitor.check(engine, now)
+            except Exception:
+                # Сбой контроля уборки не должен мешать созданию заданий.
+                logger.exception("Контроль уборки: ошибка проверки, продолжаем")
         iteration += 1
         if max_iterations is not None and iteration >= max_iterations:
             return
@@ -87,7 +98,8 @@ def main() -> None:
         settings.schedules_path,
         settings.tick_interval_s,
     )
-    run_forever(engine, settings)
+    monitor = CleaningMonitor(HttpEventSink(settings.log_service_url))
+    run_forever(engine, settings, cleaning_monitor=monitor)
 
 
 if __name__ == "__main__":
