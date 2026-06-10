@@ -12,10 +12,16 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 # Человекочитаемые названия типов зон (как в видеоаналитике/PoC).
 _ZONE_RU = {"table": "стол", "floor": "пол", "window": "окно"}
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Привести время к UTC-aware (naive трактуем как UTC) — иначе вычитание
+    naive и aware datetime бросает TypeError."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 @dataclass(frozen=True)
@@ -56,7 +62,7 @@ def _check(rule: CleaningRule, last: LastCleaning | None, now: datetime) -> str 
     """Вернуть причину просрочки (рус.) или None, если зона убрана вовремя."""
     if last is None:
         return "нет данных об уборке"
-    elapsed_h = (now - last.ts).total_seconds() / 3600.0
+    elapsed_h = (_as_utc(now) - _as_utc(last.ts)).total_seconds() / 3600.0
     if elapsed_h > rule.interval_hours:
         return f"не убиралась более {rule.interval_hours:g} ч (прошло {elapsed_h:.1f} ч)"
     if last.coverage_pct < rule.min_coverage_pct:

@@ -70,3 +70,11 @@ def test_zone_label_russian() -> None:
     """Сообщение содержит русское название зоны и помещение."""
     res, _ = evaluate_overdue([RULE], {}, NOW, set())
     assert "«стол»" in res[0].message and "room-01" in res[0].message
+
+
+def test_naive_and_aware_datetime_do_not_crash() -> None:
+    """now aware, last.ts naive (как может прийти из БД) — без TypeError."""
+    naive_last = {KEY: LastCleaning(ts=datetime(2026, 6, 10, 5, 0), coverage_pct=90)}
+    res, _ = evaluate_overdue([RULE], naive_last, NOW, set())
+    # 7 ч назад > интервала 4 ч → просрочка, и главное — не упало
+    assert len(res) == 1 and "более 4 ч" in res[0].message
