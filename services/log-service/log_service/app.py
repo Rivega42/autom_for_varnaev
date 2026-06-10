@@ -6,13 +6,14 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from fastapi import FastAPI, Query, Request
+from fastapi import BackgroundTasks, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import Engine
 
 from log_service.db import build_engine
 from log_service.envelope import error, ok
+from log_service.notifications import Notifier, build_notifier_from_env
 from log_service.repository import get_event, insert_event, list_events
 from monitoring_shared import Event
 
@@ -22,11 +23,14 @@ def _as_utc(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
-def create_app(engine: Engine | None = None) -> FastAPI:
-    """Создать приложение log-service. Engine можно передать (для тестов)."""
+def create_app(engine: Engine | None = None, notifier: Notifier | None = None) -> FastAPI:
+    """Создать приложение log-service. Engine/notifier можно передать (для тестов)."""
     app = FastAPI(title="log-service")
     engine = engine or build_engine()
+    # Диспетчер уведомлений: из окружения по умолчанию (без каналов — отключён).
+    notifier = notifier if notifier is not None else build_notifier_from_env()
     app.state.engine = engine
+    app.state.notifier = notifier
 
     @app.exception_handler(RequestValidationError)
     async def on_validation_error(request: Request, _exc: RequestValidationError) -> JSONResponse:
@@ -42,9 +46,14 @@ def create_app(engine: Engine | None = None) -> FastAPI:
         return ok({"service": "log-service", "up": True})
 
     @app.post("/events")
-    def receive_event(event: Event) -> dict[str, Any]:
-        """Принять событие и записать его в журнал."""
+    def receive_event(event: Event, background: BackgroundTasks) -> dict[str, Any]:
+        """Принять событие, записать в журнал и (в фоне) разослать уведомления.
+
+        Рассылка — фоновой задачей ПОСЛЕ ответа: медленный/недоступный канал
+        (Telegram/SMTP) не должен задерживать приём событий от ingest/analytics.
+        """
         insert_event(engine, event)
+        background.add_task(notifier.notify, event)  # best-effort, сбои гасятся внутри
         return ok({"id": str(event.id)})
 
     @app.get("/events", response_model=None)
