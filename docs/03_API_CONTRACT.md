@@ -134,7 +134,9 @@ GET /api/v1/events?from=&to=&type=&room=&limit=&offset=
 
 В тот же журнал попадают события живости инфраструктуры: `camera_offline`/
 `camera_online` (#283) — планировщик пробует кадр камеры у go2rtc и сообщает об
-отвале/восстановлении (раз на эпизод), симметрично «тишине» узла датчика.
+отвале/восстановлении (раз на эпизод), симметрично «тишине» узла датчика; и
+`service_silent`/`service_restored` (#284) — watchdog следит за свежестью
+heartbeat'ов наших сервисов (`ingest-sensors`, `scheduler`, `video-analytics`).
 
 ```
 GET /api/v1/events/{id} → одно событие

@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import Engine, text
 
-from ingest_sensors.db import DbReadingWriter, build_engine
+from ingest_sensors.db import DbReadingWriter, build_engine, write_heartbeat
 from ingest_sensors.events import HttpEventSink
 from ingest_sensors.mqtt import run
 from ingest_sensors.parsing import RoomResolver
@@ -72,7 +72,9 @@ def main() -> None:
     )
 
     def on_tick() -> None:
-        # Горячая перезагрузка порогов (изменения из интерфейса) + проверка тишины.
+        # Отметка живости сервиса (watchdog, #284) + горячая перезагрузка порогов
+        # (изменения из интерфейса) + проверка тишины узлов.
+        write_heartbeat(engine, "ingest-sensors", datetime.now(UTC))
         try:
             monitor.replace(load_thresholds(engine))
         except Exception:

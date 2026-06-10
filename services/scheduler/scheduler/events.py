@@ -97,3 +97,34 @@ def build_camera_online(cam: CameraInfo, now: datetime) -> Event:
         message=f"Камера «{cam.name}» в {_camera_where(cam)} снова на связи",
         payload={"camera_id": cam.id, "camera_name": cam.name},
     )
+
+
+def build_service_silent(service: str, silent_for_min: int, now: datetime) -> Event:
+    """Событие «сервис замолчал» (нет heartbeat дольше порога, #284).
+
+    source=analytics: это служебная живость нашего контура (не данные датчиков).
+    """
+    return Event(
+        id=uuid4(),
+        ts=now,
+        source=EventSource.ANALYTICS,
+        type=EventType.SERVICE_SILENT,
+        room_id=None,
+        severity=Severity.WARNING,
+        message=f"Сервис «{service}» не отвечает {silent_for_min} мин",
+        payload={"service": service, "silent_for_min": silent_for_min},
+    )
+
+
+def build_service_restored(service: str, now: datetime) -> Event:
+    """Событие «сервис снова на связи» (снятие, #284)."""
+    return Event(
+        id=uuid4(),
+        ts=now,
+        source=EventSource.ANALYTICS,
+        type=EventType.SERVICE_RESTORED,
+        room_id=None,
+        severity=Severity.INFO,
+        message=f"Сервис «{service}» снова на связи",
+        payload={"service": service},
+    )

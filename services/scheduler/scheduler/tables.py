@@ -72,6 +72,16 @@ cameras = sa.Table(
 )
 
 
+# Живость сервисов (#284): планировщик ЧИТАЕТ heartbeat'ы и пишет свой.
+service_heartbeats = sa.Table(
+    "service_heartbeats",
+    metadata,
+    sa.Column("service", sa.Text, primary_key=True),
+    sa.Column("ts", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("meta", sa.JSON),
+)
+
+
 schedules = sa.Table(
     "schedules",
     metadata,

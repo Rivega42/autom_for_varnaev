@@ -21,8 +21,10 @@ from scheduler.cleaning_monitor import CleaningMonitor
 from scheduler.config import Settings
 from scheduler.db import build_engine
 from scheduler.events import HttpEventSink
+from scheduler.heartbeat import write_heartbeat
 from scheduler.schedules import ScheduleEntry, load_schedules, load_schedules_db
 from scheduler.tick import run_tick
+from scheduler.watchdog import ServiceWatchdog
 
 logger = logging.getLogger(__name__)
 
@@ -62,17 +64,22 @@ def run_forever(
     max_iterations: int | None = None,
     cleaning_monitor: CleaningMonitor | None = None,
     camera_monitor: CameraLivenessMonitor | None = None,
+    watchdog: ServiceWatchdog | None = None,
+    service_name: str = "scheduler",
 ) -> None:
     """Цикл планировщика: тик, затем сон на `tick_interval_s`, и так по кругу.
 
     Демон не должен падать из-за ошибки одного тика — исключение логируется,
     цикл продолжается. `max_iterations` ограничивает число итераций (для тестов);
     при `None` цикл бесконечный. `cleaning_monitor` (если задан) проверяет на
-    каждом тике контроль уборки (#265); `camera_monitor` — живость камер (#283).
+    каждом тике контроль уборки (#265); `camera_monitor` — живость камер (#283);
+    `watchdog` — свежесть heartbeat'ов сервисов (#284). Планировщик пишет и свой
+    heartbeat на каждой итерации.
     """
     iteration = 0
     while True:
         now = now_fn()  # один момент времени на итерацию (тик + мониторы)
+        write_heartbeat(engine, service_name, now)  # отметка живости самого планировщика
         try:
             count = tick_once(engine, settings, now)
             if count:
@@ -91,6 +98,12 @@ def run_forever(
             except Exception:
                 # Сбой пробы камер не должен мешать остальным проверкам.
                 logger.exception("Живость камер: ошибка проверки, продолжаем")
+        if watchdog is not None:
+            try:
+                watchdog.check(engine, now)
+            except Exception:
+                # Сбой watchdog не должен мешать остальным проверкам.
+                logger.exception("Watchdog сервисов: ошибка проверки, продолжаем")
         iteration += 1
         if max_iterations is not None and iteration >= max_iterations:
             return
@@ -110,7 +123,14 @@ def main() -> None:
     sink = HttpEventSink(settings.log_service_url)
     cleaning = CleaningMonitor(sink)
     cameras = CameraLivenessMonitor(sink, Go2rtcCameraProber(settings.go2rtc_url))
-    run_forever(engine, settings, cleaning_monitor=cleaning, camera_monitor=cameras)
+    watchdog = ServiceWatchdog(sink, settings.service_silent_min)
+    run_forever(
+        engine,
+        settings,
+        cleaning_monitor=cleaning,
+        camera_monitor=cameras,
+        watchdog=watchdog,
+    )
 
 
 if __name__ == "__main__":
