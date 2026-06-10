@@ -65,7 +65,9 @@ def _seed(engine: Engine) -> None:
             ],
         )
 
-        def ev(ts: datetime, type_: str, room: str, payload: dict[str, Any], msg: str) -> dict:
+        def ev(
+            ts: datetime, type_: str, room: str, payload: dict[str, Any], msg: str
+        ) -> dict[str, Any]:
             return {
                 "id": uuid4(),
                 "ts": ts,
