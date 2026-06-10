@@ -90,7 +90,7 @@ def test_build_overview_aggregates_state() -> None:
     engine = _engine()
     cam_id = uuid4()
     _seed(engine, cam_id)
-    events = [
+    events: list[dict[str, Any]] = [
         {
             "id": str(uuid4()),
             "ts": "2026-06-10T11:50:00Z",
@@ -152,7 +152,7 @@ def test_camera_back_online_after_recovery() -> None:
     engine = _engine()
     cam_id = uuid4()
     _seed(engine, cam_id)
-    events = [
+    events: list[dict[str, Any]] = [
         {  # новее → побеждает
             "id": str(uuid4()),
             "ts": "2026-06-10T11:55:00Z",
