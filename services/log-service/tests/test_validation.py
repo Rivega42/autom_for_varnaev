@@ -50,3 +50,17 @@ def test_missing_message_rejected(engine: Engine) -> None:
     del bad["message"]
     response = client.post("/events", json=bad)
     assert response.status_code == 422
+
+
+def test_limit_is_capped(engine: Engine) -> None:
+    """Запредельный limit отклоняется валидацией (консистентно с api-gateway)."""
+    client = TestClient(create_app(engine))
+    response = client.get("/events", params={"limit": 999999})
+    assert response.status_code == 422
+
+
+def test_negative_offset_rejected(engine: Engine) -> None:
+    """Отрицательный offset → 422."""
+    client = TestClient(create_app(engine))
+    response = client.get("/events", params={"offset": -1})
+    assert response.status_code == 422
