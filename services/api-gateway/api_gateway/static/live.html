@@ -298,6 +298,17 @@ function postEvent(text,img){
     body:JSON.stringify(body)
   }).catch(()=>{});  // лента не критична — сбой отправки игнорируем
 }
+/* отчёт о покрытии зоны («протёрто на N%») → журнал/Grafana тем же контрактом,
+   что у серверного воркера: type=coverage_report, payload {zone,zone_id,coverage_pct} */
+function postCoverage(e){
+  if(!_liveCam)return;
+  fetch('/api/v1/analytics-events',{method:'POST',
+    headers:{'Content-Type':'application/json','X-API-Key':_liveKey},
+    body:JSON.stringify({room:_liveRoom,message:e.text,type:'coverage_report',
+      payload:{origin:'browser',camera_id:_liveCam,zone:e.coverage.zoneType,
+        zone_id:e.coverage.zoneId==null?null:e.coverage.zoneId,coverage_pct:e.coverage.pct}})
+  }).catch(()=>{});
+}
 function log(text,color,isAct=false,img=null){
   const now=new Date();logData.push({iso:now.toISOString(),time:stamp(now),text,act:isAct,shot:img?true:false});
   logEmpty.style.display='none';
@@ -625,6 +636,7 @@ function loop(){
         let resetHeat=false;
         for(const e of evs){
           log(e.text,e.color,e.isAct,e.snapshot?snapshot():null);
+          if(e.coverage)postCoverage(e); // «протёрто на N%» → журнал/Grafana
           // сброс заливки/процента — ТОЛЬКО после завершения уборки (не падение/SOS)
           if(e.snapshot&&['wipe','mop','sweep','window'].includes(e.action))resetHeat=true;
         }

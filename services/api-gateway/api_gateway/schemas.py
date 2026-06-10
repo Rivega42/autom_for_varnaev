@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -43,13 +43,16 @@ class AnalyticsEventCreate(BaseModel):
     """Тело POST /analytics-events: событие от браузерного живого анализа.
 
     Браузерный анализ (live.html) шлёт распознанное событие в журнал, чтобы оно
-    попало в Grafana/историю. Тип фиксируем как action_detected, источник —
-    analytics; в payload добавляется origin=browser (отличить от серверного).
+    попало в Grafana/историю. Источник — analytics; в payload добавляется
+    origin=browser (отличить от серверного). Тип — из белого списка: действия
+    (`action_detected`, по умолчанию) и отчёты о покрытии (`coverage_report`,
+    в payload — zone/zone_id/coverage_pct как у серверного воркера).
     """
 
     room: str | None = None
     message: str = Field(min_length=1)
     severity: Severity = Severity.INFO
+    type: Literal["action_detected", "coverage_report"] = "action_detected"
     payload: dict[str, Any] = Field(default_factory=dict)
     # Необязательный стоп-кадр события (data-URL `data:image/jpeg;base64,…`).
     # Если задан — сохраняется как артефакт-скриншот, а событие получает

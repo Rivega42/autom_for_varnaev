@@ -208,3 +208,33 @@ def test_post_analytics_event_non_uuid_camera_id_ok(tmp_path: Path) -> None:
     assert resp.json()["data"]["artifact_id"]
     # событие записано, камера не привязана (camera_id невалиден), но кадр сохранён
     assert events.created[0].artifact_id is not None
+
+
+def test_post_analytics_event_coverage_report(tmp_path: Path) -> None:
+    """type=coverage_report принимается; событие уходит с этим типом и payload зоны."""
+    events = _FakeEventsClient()
+    resp = _client(tmp_path, events).post(
+        "/api/v1/analytics-events",
+        json={
+            "room": "room-1",
+            "message": "стол протёрт на 80%",
+            "type": "coverage_report",
+            "payload": {"zone": "table", "zone_id": 7, "coverage_pct": 80},
+        },
+    )
+    assert resp.status_code == 200
+    ev = events.created[0]
+    assert ev.type.value == "coverage_report"
+    assert ev.payload["coverage_pct"] == 80
+    assert ev.payload["origin"] == "browser"
+
+
+def test_post_analytics_event_unknown_type_422(tmp_path: Path) -> None:
+    """Тип вне белого списка → 422, событие не пишется."""
+    events = _FakeEventsClient()
+    resp = _client(tmp_path, events).post(
+        "/api/v1/analytics-events",
+        json={"room": "r", "message": "x", "type": "pose_event"},
+    )
+    assert resp.status_code == 422
+    assert events.created == []
