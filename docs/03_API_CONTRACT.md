@@ -134,9 +134,17 @@ GET /api/v1/events?from=&to=&type=&room=&limit=&offset=
 
 ```
 GET /api/v1/events/{id} → одно событие
+POST /api/v1/events/{id}/ack         → подтвердить событие (эскалация прекращается)
 POST /api/v1/analytics-events        → событие браузерного живого анализа в журнал
 GET /api/v1/artifacts/{id}           → файл артефакта-доказательства (стоп-кадр/overlay)
 ```
+
+**Подтверждение и эскалация (#264).** Критичное событие, не подтверждённое
+оператором (`POST /events/{id}/ack`, идемпотентно) за `NOTIFY_ESCALATE_AFTER_MIN`
+минут, уведомляется повторно через те же каналы (с пометкой «ПОВТОР N»), с паузой
+`NOTIFY_ESCALATE_REPEAT_MIN` и максимумом `NOTIFY_ESCALATE_MAX` повторов.
+Эскалация выключена по умолчанию (`NOTIFY_ESCALATE_AFTER_MIN=0`). В элементе
+события появляется поле `acknowledged_at` (null = не подтверждено).
 
 **Тело `POST /analytics-events`** (от браузерного «Живого анализа», `live.html`):
 ```json

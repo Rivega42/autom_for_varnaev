@@ -30,6 +30,10 @@ class EventsClient(Protocol):
         """Записать событие в журнал (POST /events log-service)."""
         ...
 
+    def ack_event(self, event_id: UUID) -> bool:
+        """Подтвердить событие (#264); False — события нет."""
+        ...
+
 
 def _unwrap(payload: dict[str, Any]) -> Any:
     """Достать `data` из конверта log-service."""
@@ -68,3 +72,12 @@ class HttpEventsClient:
         with httpx.Client(timeout=self._timeout) as client:
             resp = client.post(f"{self._base_url}/events", json=event.model_dump(mode="json"))
         resp.raise_for_status()
+
+    def ack_event(self, event_id: UUID) -> bool:
+        """POST /events/{id}/ack — подтвердить событие; False при 404."""
+        with httpx.Client(timeout=self._timeout) as client:
+            resp = client.post(f"{self._base_url}/events/{event_id}/ack")
+        if resp.status_code == 404:
+            return False
+        resp.raise_for_status()
+        return True

@@ -34,6 +34,7 @@ def insert_event(engine: Engine, event: Event) -> None:
 
 def _to_item(row: RowMapping) -> dict[str, Any]:
     """Преобразовать строку events в элемент ответа API (docs/03 §3.2)."""
+    acked = row.get("acknowledged_at")
     return {
         "id": str(row["id"]),
         "ts": row["ts"].isoformat() if row["ts"] is not None else None,
@@ -45,7 +46,58 @@ def _to_item(row: RowMapping) -> dict[str, Any]:
         "payload": row["payload"],
         # путь к артефакту резолвится позже (через artifacts); в v1 — null
         "artifact_path": None,
+        # подтверждение оператором (#264); null = не подтверждено
+        "acknowledged_at": acked.isoformat() if acked is not None else None,
     }
+
+
+def ack_event(engine: Engine, event_id: UUID, now: datetime) -> bool:
+    """Подтвердить событие (идемпотентно); False — события нет."""
+    with engine.begin() as conn:
+        row = conn.execute(select(events.c.id).where(events.c.id == event_id)).first()
+        if row is None:
+            return False
+        conn.execute(
+            events.update()
+            .where(events.c.id == event_id, events.c.acknowledged_at.is_(None))
+            .values(acknowledged_at=now)
+        )
+    return True
+
+
+def find_for_escalation(
+    engine: Engine,
+    *,
+    severities: tuple[str, ...],
+    older_than: datetime,
+    repeat_after: datetime,
+    max_count: int,
+) -> list[RowMapping]:
+    """Неподтверждённые события для повторного уведомления.
+
+    Условия: важность из списка; событие старше `older_than`; ещё не
+    эскалировалось ЛИБО последняя эскалация раньше `repeat_after`; повторов
+    меньше `max_count`.
+    """
+    stmt = select(events).where(
+        events.c.acknowledged_at.is_(None),
+        events.c.severity.in_(severities),
+        events.c.ts <= older_than,
+        events.c.escalation_count < max_count,
+        (events.c.escalated_at.is_(None)) | (events.c.escalated_at <= repeat_after),
+    )
+    with engine.connect() as conn:
+        return list(conn.execute(stmt).mappings())
+
+
+def mark_escalated(engine: Engine, event_id: UUID, now: datetime) -> None:
+    """Зафиксировать факт повторного уведомления."""
+    with engine.begin() as conn:
+        conn.execute(
+            events.update()
+            .where(events.c.id == event_id)
+            .values(escalated_at=now, escalation_count=events.c.escalation_count + 1)
+        )
 
 
 def list_events(

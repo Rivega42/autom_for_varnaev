@@ -49,6 +49,9 @@ class _FakeEventsClient:
     def create_event(self, event: Any) -> None:
         self.created.append(event)
 
+    def ack_event(self, event_id: UUID) -> bool:
+        return False
+
 
 def _sqlite_engine() -> Engine:
     """In-memory SQLite с одной общей связью (StaticPool) и таблицей artifacts."""

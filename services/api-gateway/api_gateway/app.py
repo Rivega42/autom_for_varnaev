@@ -190,6 +190,13 @@ def create_app(
             raise api_error(ErrorCode.EVENT_NOT_FOUND, "Событие не найдено")
         return ok(item)
 
+    @app.post(f"{API_PREFIX}/events/{{event_id}}/ack", dependencies=[auth])
+    def post_event_ack(event_id: UUID) -> dict[str, Any]:
+        """Подтвердить событие (#264): эскалация уведомлений по нему прекращается."""
+        if not events.ack_event(event_id):
+            raise api_error(ErrorCode.EVENT_NOT_FOUND, "Событие не найдено")
+        return ok({"id": str(event_id), "acknowledged": True})
+
     @app.post(f"{API_PREFIX}/analytics-events", dependencies=[auth])
     def post_analytics_event(body: AnalyticsEventCreate) -> dict[str, Any]:
         """Записать событие браузерного живого анализа в журнал (→ Grafana).
