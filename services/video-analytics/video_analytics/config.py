@@ -24,6 +24,8 @@ class Settings:
     max_stream_frames: int = _DEFAULT_MAX_STREAM_FRAMES
     # Путь к модели MediaPipe PoseLandmarker (бинарный ассет на томе /models).
     model_path: str = "/models/pose_landmarker.task"
+    # Ротация артефактов: скриншоты старше N дней удаляются (0 = не чистить).
+    artifacts_retention_days: int = 30
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -45,4 +47,5 @@ class Settings:
             fps=int(os.getenv("ANALYTICS_FPS", "5")),
             max_stream_frames=max_frames,
             model_path=os.getenv("ANALYTICS_MODEL_PATH", "/models/pose_landmarker.task"),
+            artifacts_retention_days=int(os.getenv("ARTIFACTS_RETENTION_DAYS", "30")),
         )
