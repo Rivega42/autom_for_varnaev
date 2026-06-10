@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from api_gateway.app import create_app
 from api_gateway.config import Settings
@@ -67,11 +67,22 @@ def _seed(engine: Engine, cam_id: object) -> None:
 
 
 class _FakeEvents:
+    """Фейковый источник событий (полная сигнатура EventsClient для типов)."""
+
     def __init__(self, items: list[dict[str, Any]]) -> None:
         self._items = items
 
     def list_events(self, params: dict[str, Any]) -> dict[str, Any]:
         return {"items": self._items, "total": len(self._items)}
+
+    def get_event(self, event_id: UUID) -> dict[str, Any] | None:
+        return None
+
+    def create_event(self, event: object) -> None:
+        pass
+
+    def ack_event(self, event_id: UUID) -> bool:
+        return False
 
 
 def test_build_overview_aggregates_state() -> None:
@@ -167,7 +178,7 @@ def test_recent_events_truncated_to_limit() -> None:
     """Лента событий ограничена recent_limit, отсортирована по убыванию времени."""
     engine = _engine()
     _seed(engine, uuid4())
-    events = [
+    events: list[dict[str, Any]] = [
         {
             "id": str(uuid4()),
             "ts": f"2026-06-10T10:{m:02d}:00Z",
