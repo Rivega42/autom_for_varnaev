@@ -87,6 +87,33 @@ services:
     # Одноразовая задача: после завершения не перезапускаем.
     restart: "no"
 
+  backup:
+    # Резервное копирование БД по расписанию с ротацией (#267). На объекте нет
+    # администратора БД, а журнал санитарии/ППК терять нельзя. Делает сжатый
+    # pg_dump в том `backups`, хранит BACKUP_KEEP последних, спит BACKUP_INTERVAL_H
+    # часов. Сеть internal — БД наружу не публикуется. Восстановление: docs/09 §4.
+    build:
+      context: .
+      dockerfile: db/Dockerfile.backup
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+      BACKUP_DIR: /backups
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      BACKUP_INTERVAL_H: ${BACKUP_INTERVAL_H:-24}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks:
+      - internal
+    volumes:
+      - backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   mqtt-broker:
     # Брокер MQTT (Mosquitto): приём показаний от узлов датчиков (ESPHome).
     image: eclipse-mosquitto:2
@@ -432,3 +459,4 @@ volumes:
   db_data:
   mqtt_data:
   grafana_data:
+  backups:  # сжатые дампы БД (сервис backup, #267)

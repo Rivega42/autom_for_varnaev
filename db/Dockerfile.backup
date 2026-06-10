@@ -1,0 +1,36 @@
+# Образ резервного копирования БД (#267): pg_dump по расписанию с ротацией.
+# Поднимается сервисом `backup` в docker-compose (сеть internal — БД наружу не
+# публикуется). Делает сжатый дамп в том `backups`, хранит N последних, спит до
+# следующего раза. Параметры — из окружения (POSTGRES_*, BACKUP_*).
+#
+# Восстановление — см. docs/09_OPERATIONS.md §4.
+#
+# Контекст сборки — КОРЕНЬ репозитория: нужен scripts/backup_db.py.
+
+FROM python:3.12-slim
+
+# pg_dump должен быть НЕ СТАРШЕ сервера (TimescaleDB на PostgreSQL 16), поэтому
+# ставим клиент именно 16-й версии из официального репозитория PGDG
+# (в bookworm по умолчанию только 15-й).
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends wget gnupg ca-certificates; \
+    install -d /usr/share/postgresql-common/pgdg; \
+    wget -q -O /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+        https://www.postgresql.org/media/keys/ACCC4CF8.asc; \
+    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends postgresql-client-16; \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+# Непривилегированный пользователь (не root); каталог бэкапов монтируется томом.
+RUN useradd --create-home --uid 10001 appuser
+COPY scripts/backup_db.py ./backup_db.py
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    BACKUP_DIR=/backups
+USER appuser
+# Бесконечный цикл «дамп → ротация → сон». Для разового запуска: BACKUP_ONCE=1.
+ENTRYPOINT ["python", "backup_db.py"]
