@@ -101,7 +101,7 @@ cleaning_rules = sa.Table(
     "cleaning_rules",
     metadata,
     sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-    sa.Column("room_id", sa.Text, nullable=False),
+    sa.Column("room_id", sa.Text, sa.ForeignKey("rooms.id"), nullable=False),
     sa.Column("zone_type", sa.Text, nullable=False),
     sa.Column("interval_hours", sa.Float, nullable=False),
     sa.Column("min_coverage_pct", sa.Integer, nullable=False),

@@ -185,9 +185,15 @@ def test_schedule_rename_to_existing_returns_409() -> None:
 # ── Правила санитарного контроля уборки (#265) ──
 
 
+def _add_room(client: TestClient, room_id: str = "room-01") -> None:
+    resp = client.post("/api/v1/rooms", json={"id": room_id, "name": "Кухня", "is_cold": False})
+    assert resp.status_code == 200
+
+
 def test_cleaning_rule_crud() -> None:
     """Создание, список, изменение и удаление правила уборки."""
     client = _client()
+    _add_room(client)
     created = client.post(
         "/api/v1/cleaning-rules",
         json={
@@ -220,6 +226,7 @@ def test_cleaning_rule_crud() -> None:
 def test_cleaning_rule_duplicate_zone_409() -> None:
     """Второе правило на ту же зону (помещение+тип) → 409."""
     client = _client()
+    _add_room(client)
     body = {"room": "room-01", "zone_type": "floor", "interval_hours": 8}
     assert client.post("/api/v1/cleaning-rules", json=body).status_code == 200
     dup = client.post("/api/v1/cleaning-rules", json=body)
@@ -227,9 +234,21 @@ def test_cleaning_rule_duplicate_zone_409() -> None:
     assert dup.json()["error"]["code"] == "CLEANING_RULE_DUPLICATE"
 
 
+def test_cleaning_rule_unknown_room_404() -> None:
+    """Правило для несуществующего помещения → 404 ROOM_NOT_FOUND (не ложный 409)."""
+    client = _client()
+    resp = client.post(
+        "/api/v1/cleaning-rules",
+        json={"room": "ghost", "zone_type": "table", "interval_hours": 4},
+    )
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "ROOM_NOT_FOUND"
+
+
 def test_cleaning_rule_validation_and_404() -> None:
     """Невалидные значения → 422; несуществующее правило → 404."""
     client = _client()
+    _add_room(client, "r")
     bad = client.post(
         "/api/v1/cleaning-rules",
         json={"room": "r", "zone_type": "wall", "interval_hours": 4},

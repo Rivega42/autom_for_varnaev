@@ -29,6 +29,7 @@ from api_gateway.cameras_repository import (
 )
 from api_gateway.cleaning_rules_repository import (
     DuplicateCleaningRuleError,
+    RoomNotFoundForRuleError,
 )
 from api_gateway.cleaning_rules_repository import (
     create_rule as create_cleaning_rule,
@@ -493,9 +494,13 @@ def create_app(
 
     @app.post(f"{API_PREFIX}/cleaning-rules", dependencies=[auth])
     def post_cleaning_rule(body: CleaningRuleCreate) -> dict[str, Any]:
-        """Создать правило; дубль зоны (помещение+тип) → 409."""
+        """Создать правило; нет помещения → 404, дубль зоны → 409."""
         try:
             return ok(create_cleaning_rule(engine, body))
+        except RoomNotFoundForRuleError:
+            raise api_error(
+                ErrorCode.ROOM_NOT_FOUND, f"Помещение «{body.room}» не найдено"
+            ) from None
         except DuplicateCleaningRuleError:
             raise api_error(
                 ErrorCode.CLEANING_RULE_DUPLICATE,

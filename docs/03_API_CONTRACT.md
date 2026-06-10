@@ -332,6 +332,7 @@ DELETE /api/v1/cleaning-rules/{id}         # удалить или 404 CLEANING_
 ```
 `zone_type`: `table`|`floor`|`window` (как у ROI-зон). На пару (room, zone_type)
 — одно правило (уникальность). `min_coverage_pct: 0` — покрытие не проверяется.
+Несуществующее помещение → 404 `ROOM_NOT_FOUND`.
 
 ---
 

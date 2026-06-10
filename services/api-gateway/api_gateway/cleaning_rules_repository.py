@@ -11,12 +11,17 @@ from typing import Any
 from sqlalchemy import Engine, delete, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
+from api_gateway.rooms_repository import room_exists
 from api_gateway.schemas import CleaningRuleCreate, CleaningRuleUpdate
 from api_gateway.tables import cleaning_rules
 
 
 class DuplicateCleaningRuleError(Exception):
     """Правило для этой зоны (помещение+тип) уже существует."""
+
+
+class RoomNotFoundForRuleError(Exception):
+    """Помещение правила отсутствует в справочнике rooms."""
 
 
 def rule_to_api(row: dict[str, Any]) -> dict[str, Any]:
@@ -39,7 +44,14 @@ def list_rules(engine: Engine) -> list[dict[str, Any]]:
 
 
 def create_rule(engine: Engine, body: CleaningRuleCreate) -> dict[str, Any]:
-    """Создать правило; на дубль зоны — DuplicateCleaningRuleError."""
+    """Создать правило; нет помещения → RoomNotFoundForRuleError (404),
+    дубль зоны → DuplicateCleaningRuleError (409).
+
+    Помещение проверяем в коде, а не FK: SQLite в тестах не форсит FK, а в
+    PostgreSQL FK-нарушение дало бы IntegrityError, неотличимый от дубля.
+    """
+    if not room_exists(engine, body.room):
+        raise RoomNotFoundForRuleError(body.room)
     values = {
         "room_id": body.room,
         "zone_type": body.zone_type.value,
