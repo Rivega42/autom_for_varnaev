@@ -69,15 +69,16 @@ def run_forever(
     """
     iteration = 0
     while True:
+        now = now_fn()  # один момент времени на итерацию (тик + контроль уборки)
         try:
-            count = tick_once(engine, settings, now_fn())
+            count = tick_once(engine, settings, now)
             if count:
                 logger.info("Планировщик: тик создал заданий: %d", count)
         except Exception:
             logger.exception("Планировщик: ошибка в тике, продолжаем")
         if cleaning_monitor is not None:
             try:
-                cleaning_monitor.check(engine, now_fn())
+                cleaning_monitor.check(engine, now)
             except Exception:
                 # Сбой контроля уборки не должен мешать созданию заданий.
                 logger.exception("Контроль уборки: ошибка проверки, продолжаем")

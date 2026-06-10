@@ -290,6 +290,9 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      log-service:
+        # healthy: первые cleaning_overdue не должны теряться на старте стека
+        condition: service_healthy
     restart: unless-stopped
 
   video-analytics:
