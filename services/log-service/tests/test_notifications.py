@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from log_service.app import create_app
 from log_service.notifications import Notifier, format_event
+from sqlalchemy.engine import Engine
 
 from monitoring_shared import Event, EventSource, EventType, Severity
 
@@ -103,7 +106,7 @@ def test_endpoint_dispatches_after_insert() -> None:
     assert len(ch.sent) == 1
 
 
-def test_build_notifier_bad_severity_falls_back(monkeypatch) -> None:
+def test_build_notifier_bad_severity_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
     """Некорректный NOTIFY_MIN_SEVERITY не роняет старт — fallback на warning."""
     import log_service.notifications as notif
 
@@ -112,7 +115,7 @@ def test_build_notifier_bad_severity_falls_back(monkeypatch) -> None:
     assert n.notify(_event(Severity.INFO)) == 0  # каналов нет — noop, но не упало
 
 
-def test_build_notifier_bad_smtp_port_falls_back(monkeypatch) -> None:
+def test_build_notifier_bad_smtp_port_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
     """Нечисловой SMTP_PORT не роняет старт."""
     import log_service.notifications as notif
 
@@ -123,27 +126,27 @@ def test_build_notifier_bad_smtp_port_falls_back(monkeypatch) -> None:
     notif.build_notifier_from_env()  # не должно бросить ValueError
 
 
-def test_telegram_truncates_long_text(monkeypatch) -> None:
+def test_telegram_truncates_long_text(monkeypatch: pytest.MonkeyPatch) -> None:
     """Длинный текст усекается до лимита Telegram (нет HTTP 400)."""
     from log_service.notifications import TelegramChannel
 
-    captured = {}
+    captured: dict[str, int] = {}
 
     class _FakeResp:
         def raise_for_status(self) -> None:
             pass
 
     class _FakeClient:
-        def __init__(self, *a, **k) -> None:
+        def __init__(self, *a: object, **k: object) -> None:
             pass
 
-        def __enter__(self):
+        def __enter__(self) -> _FakeClient:
             return self
 
-        def __exit__(self, *a) -> None:
+        def __exit__(self, *a: object) -> None:
             pass
 
-        def post(self, url, json):
+        def post(self, url: str, json: dict[str, Any]) -> _FakeResp:
             captured["len"] = len(json["text"])
             return _FakeResp()
 
@@ -155,7 +158,7 @@ def test_telegram_truncates_long_text(monkeypatch) -> None:
     assert captured["len"] <= 4096
 
 
-def _sqlite_app(notifier: Notifier | None = None):
+def _sqlite_app(notifier: Notifier | None = None) -> tuple[Engine, TestClient]:
     from log_service.tables import metadata
     from sqlalchemy import create_engine
     from sqlalchemy.pool import StaticPool
