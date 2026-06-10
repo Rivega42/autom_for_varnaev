@@ -48,6 +48,7 @@ from api_gateway.db import build_engine
 from api_gateway.errors import api_error, register_error_handlers
 from api_gateway.events_client import EventsClient, HttpEventsClient
 from api_gateway.integration import register_integration_routes
+from api_gateway.overview_repository import build_overview
 from api_gateway.readings_repository import list_readings
 from api_gateway.reports_repository import build_report, report_to_csv
 from api_gateway.rooms_repository import (
@@ -334,6 +335,12 @@ def create_app(
             limit=limit,
         )
         return ok({"items": items, "total": len(items)})
+
+    @app.get(f"{API_PREFIX}/overview", dependencies=[auth])
+    def get_overview() -> dict[str, Any]:
+        """Обзор объекта для дежурного: помещения, узлы, камеры, события, алерты (#288)."""
+        data = build_overview(engine, events, datetime.now(UTC))
+        return ok(data)
 
     # ── Справочники объекта: помещения и узлы датчиков (docs/03_API_CONTRACT.md §3.4) ──
     # Заводятся через интерфейс/REST — без SQL и сидинга. Без узла в справочнике

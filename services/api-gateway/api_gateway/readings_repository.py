@@ -51,3 +51,27 @@ def list_readings(
 
     with engine.connect() as conn:
         return [_reading_to_api(dict(r)) for r in conn.execute(stmt).mappings()]
+
+
+def latest_readings(
+    engine: Engine, scan_limit: int = 1000
+) -> tuple[dict[str, datetime], dict[tuple[str | None, str], dict[str, Any]]]:
+    """Свести последние показания: по узлу (ts) и по (помещение, метрика) (значение).
+
+    Просматриваем последние `scan_limit` показаний (по убыванию ts) и берём первое
+    встреченное для каждого ключа — оно и есть самое свежее. Узел/помещение, давно
+    не присылавшие данные, в окно не попадают и считаются «молчащими» — это и нужно
+    для индикации живости на обзорном экране (#288).
+    """
+    stmt = select(sensor_readings).order_by(sensor_readings.c.ts.desc()).limit(scan_limit)
+    node_latest: dict[str, datetime] = {}
+    room_metric: dict[tuple[str | None, str], dict[str, Any]] = {}
+    with engine.connect() as conn:
+        for r in conn.execute(stmt).mappings():
+            node_id = r["node_id"]
+            if node_id is not None and node_id not in node_latest:
+                node_latest[node_id] = r["ts"]
+            key = (r["room_id"], r["metric"])
+            if key not in room_metric:
+                room_metric[key] = {"value": r["value"], "unit": r["unit"], "ts": _iso(r["ts"])}
+    return node_latest, room_metric
