@@ -16,6 +16,23 @@
   только **действия** и **отчёты о покрытии** (позы/лампы — нет, как в браузере).
 - **`src/sources.mjs`** — интерфейс источника кадров + `arrayFrames` (для тестов).
 
+## Воспроизведение записи браузера (проверяемо, без MediaPipe/RTSP)
+
+`bin/analyze.mjs` — CLI, прогоняющий **запись** браузерного «Живого анализа»
+(кнопка «запись» в `live.html` выгружает `skeleton-*.json`) через ТО ЖЕ
+серверное ядро и выдающий события журнала. Замыкает цикл «записал в браузере →
+проверил на сервере тем же кодом», не требуя камеры/нативных зависимостей.
+
+```bash
+# события в stdout (JSON-строки):
+node bin/analyze.mjs --recording skeleton-*.json --room room-01 --zones zones.json
+# или сразу в журнал:
+node bin/analyze.mjs --recording skeleton-*.json --room room-01 \
+     --camera <uuid> --post http://log-service:8000
+```
+
+`--zones` принимает и формат API (`GET /cameras/{id}/zones`), и формат ядра.
+
 ## Чего пока нет (Фаза 3, проверяется на хосте)
 
 - **`mediapipeFrames`** — извлечение кадров из RTSP/видеофайла + запуск MediaPipe

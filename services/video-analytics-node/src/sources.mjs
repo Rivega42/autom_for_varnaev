@@ -13,6 +13,25 @@ export async function* arrayFrames(frames) {
   for (const f of frames) yield f;
 }
 
+/* Распаковка точки из формата браузерного рекордера packLM: [x,y,z,v]. */
+function unpackLM(packed) {
+  return packed ? packed.map((p) => ({ x: p[0], y: p[1], z: p[2], visibility: p[3] })) : null;
+}
+
+/* Источник кадров из ЗАПИСИ браузерного «Живого анализа» (кнопка «запись» в
+ * live.html выгружает JSON {meta, frames:[{t, lm, w}]}). Позволяет прогнать ту
+ * же запись через серверное ядро и получить идентичные события — проверяемо без
+ * камеры/MediaPipe. На вход — распарсенный JSON записи ИЛИ просто массив кадров. */
+export async function* recordingFrames(recording) {
+  const frames = Array.isArray(recording) ? recording : recording?.frames;
+  if (!Array.isArray(frames)) throw new Error("в записи нет массива frames");
+  for (const f of frames) {
+    const lm = unpackLM(f.lm);
+    if (!lm) continue; // кадр без позы (трекинг не видел человека) — пропускаем
+    yield { lm, world: unpackLM(f.w), ts: f.t };
+  }
+}
+
 /* СТЫК (Фаза 3, требует проверки на хосте): источник кадров из RTSP/видеофайла
  * через MediaPipe PoseLandmarker в Node.
  *

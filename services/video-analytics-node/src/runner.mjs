@@ -46,14 +46,16 @@ export async function runAnalysis({ frames, engine, sink, roomId = null, cameraI
 }
 
 /* Приёмник, который шлёт события в log-service /events (как Python-воркер).
- * Используется в проде; в тестах подменяется массивом-сборщиком. */
-export function logServiceSink(baseUrl, { fetchImpl = fetch } = {}) {
+ * Используется в проде; в тестах подменяется массивом-сборщиком.
+ * Таймаут обязателен: зависший log-service не должен вешать вызов навечно. */
+export function logServiceSink(baseUrl, { fetchImpl = fetch, timeoutMs = 10000 } = {}) {
   const url = baseUrl.replace(/\/$/, '') + '/events';
   return async (event) => {
     const resp = await fetchImpl(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(event),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!resp.ok) throw new Error('log-service /events вернул ' + resp.status);
   };
