@@ -180,3 +180,66 @@ def test_schedule_rename_to_existing_returns_409() -> None:
     resp = client.patch(f"/api/v1/schedules/{second['id']}", json={"name": "a"})
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "SCHEDULE_DUPLICATE_NAME"
+
+
+# ── Правила санитарного контроля уборки (#265) ──
+
+
+def test_cleaning_rule_crud() -> None:
+    """Создание, список, изменение и удаление правила уборки."""
+    client = _client()
+    created = client.post(
+        "/api/v1/cleaning-rules",
+        json={
+            "room": "room-01",
+            "zone_type": "table",
+            "interval_hours": 4,
+            "min_coverage_pct": 60,
+            "zone_name": "стол у плиты",
+        },
+    )
+    assert created.status_code == 200
+    rule = created.json()["data"]
+    assert rule["zone_type"] == "table" and rule["enabled"] is True
+
+    listed = client.get("/api/v1/cleaning-rules").json()["data"]
+    assert listed["total"] == 1
+
+    patched = client.patch(
+        f"/api/v1/cleaning-rules/{rule['id']}", json={"interval_hours": 2, "enabled": False}
+    )
+    assert patched.status_code == 200
+    assert patched.json()["data"]["interval_hours"] == 2
+    assert patched.json()["data"]["enabled"] is False
+
+    deleted = client.delete(f"/api/v1/cleaning-rules/{rule['id']}")
+    assert deleted.status_code == 200
+    assert client.get("/api/v1/cleaning-rules").json()["data"]["total"] == 0
+
+
+def test_cleaning_rule_duplicate_zone_409() -> None:
+    """Второе правило на ту же зону (помещение+тип) → 409."""
+    client = _client()
+    body = {"room": "room-01", "zone_type": "floor", "interval_hours": 8}
+    assert client.post("/api/v1/cleaning-rules", json=body).status_code == 200
+    dup = client.post("/api/v1/cleaning-rules", json=body)
+    assert dup.status_code == 409
+    assert dup.json()["error"]["code"] == "CLEANING_RULE_DUPLICATE"
+
+
+def test_cleaning_rule_validation_and_404() -> None:
+    """Невалидные значения → 422; несуществующее правило → 404."""
+    client = _client()
+    bad = client.post(
+        "/api/v1/cleaning-rules",
+        json={"room": "r", "zone_type": "wall", "interval_hours": 4},
+    )
+    assert bad.status_code == 422
+    neg = client.post(
+        "/api/v1/cleaning-rules",
+        json={"room": "r", "zone_type": "table", "interval_hours": 0},
+    )
+    assert neg.status_code == 422
+    missing = client.patch("/api/v1/cleaning-rules/999", json={"enabled": True})
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "CLEANING_RULE_NOT_FOUND"

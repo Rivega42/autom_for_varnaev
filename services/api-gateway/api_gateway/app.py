@@ -27,6 +27,21 @@ from api_gateway.cameras_repository import (
     list_cameras,
     update_camera,
 )
+from api_gateway.cleaning_rules_repository import (
+    DuplicateCleaningRuleError,
+)
+from api_gateway.cleaning_rules_repository import (
+    create_rule as create_cleaning_rule,
+)
+from api_gateway.cleaning_rules_repository import (
+    delete_rule as delete_cleaning_rule,
+)
+from api_gateway.cleaning_rules_repository import (
+    list_rules as list_cleaning_rules,
+)
+from api_gateway.cleaning_rules_repository import (
+    update_rule as update_cleaning_rule,
+)
 from api_gateway.config import Settings
 from api_gateway.db import build_engine
 from api_gateway.errors import api_error, register_error_handlers
@@ -52,6 +67,8 @@ from api_gateway.schemas import (
     CameraUpdate,
     CameraZoneCreate,
     CameraZoneUpdate,
+    CleaningRuleCreate,
+    CleaningRuleUpdate,
     RoomCreate,
     ScheduleCreate,
     ScheduleUpdate,
@@ -465,6 +482,40 @@ def create_app(
         if not delete_threshold(engine, threshold_id):
             raise api_error(ErrorCode.THRESHOLD_NOT_FOUND, "Порог не найден")
         return ok({"deleted": threshold_id})
+
+    # ── Правила санитарного контроля уборки (#265) — настройка через интерфейс ──
+
+    @app.get(f"{API_PREFIX}/cleaning-rules", dependencies=[auth])
+    def get_cleaning_rules() -> dict[str, Any]:
+        """Список правил контроля уборки."""
+        items = list_cleaning_rules(engine)
+        return ok({"items": items, "total": len(items)})
+
+    @app.post(f"{API_PREFIX}/cleaning-rules", dependencies=[auth])
+    def post_cleaning_rule(body: CleaningRuleCreate) -> dict[str, Any]:
+        """Создать правило; дубль зоны (помещение+тип) → 409."""
+        try:
+            return ok(create_cleaning_rule(engine, body))
+        except DuplicateCleaningRuleError:
+            raise api_error(
+                ErrorCode.CLEANING_RULE_DUPLICATE,
+                f"Правило для зоны «{body.zone_type.value}» в «{body.room}» уже существует",
+            ) from None
+
+    @app.patch(f"{API_PREFIX}/cleaning-rules/{{rule_id}}", dependencies=[auth])
+    def patch_cleaning_rule(rule_id: int, body: CleaningRuleUpdate) -> dict[str, Any]:
+        """Изменить правило или 404 CLEANING_RULE_NOT_FOUND."""
+        item = update_cleaning_rule(engine, rule_id, body)
+        if item is None:
+            raise api_error(ErrorCode.CLEANING_RULE_NOT_FOUND, "Правило не найдено")
+        return ok(item)
+
+    @app.delete(f"{API_PREFIX}/cleaning-rules/{{rule_id}}", dependencies=[auth])
+    def remove_cleaning_rule(rule_id: int) -> dict[str, Any]:
+        """Удалить правило или 404 CLEANING_RULE_NOT_FOUND."""
+        if not delete_cleaning_rule(engine, rule_id):
+            raise api_error(ErrorCode.CLEANING_RULE_NOT_FOUND, "Правило не найдено")
+        return ok({"deleted": rule_id})
 
     # ── Расписания видеоанализа (таймер) — настройка через интерфейс ──
 

@@ -512,6 +512,95 @@ async function deleteThreshold(id) {
   }
 }
 
+// ── Правила уборки (санитарный контроль, #265) ──
+
+const ZONE_RU = { table: "стол", floor: "пол", window: "окно" };
+
+async function loadCleaningRules() {
+  const tbody = $("cleaningrules").querySelector("tbody");
+  tbody.innerHTML = "";
+  try {
+    const data = await api("/cleaning-rules");
+    for (const r of data.items) {
+      const tr = document.createElement("tr");
+      // textContent: room/zone_name — свободные строки оператора (без innerHTML).
+      const cells = [
+        r.room,
+        ZONE_RU[r.zone_type] || r.zone_type,
+        String(r.interval_hours),
+        r.min_coverage_pct ? r.min_coverage_pct + "%" : "—",
+        r.zone_name || "—",
+        r.enabled ? "да" : "нет",
+      ];
+      for (const text of cells) {
+        const cell = document.createElement("td");
+        cell.textContent = text;
+        tr.appendChild(cell);
+      }
+      const td = document.createElement("td");
+      const toggle = document.createElement("button");
+      toggle.textContent = r.enabled ? "выключить" : "включить";
+      toggle.className = "sec";
+      toggle.onclick = () => toggleCleaningRule(r.id, !r.enabled);
+      td.appendChild(toggle);
+      const btn = document.createElement("button");
+      btn.textContent = "удалить";
+      btn.className = "sec";
+      btn.onclick = () => deleteCleaningRule(r.id);
+      td.appendChild(btn);
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+  } catch (e) {
+    msg("Ошибка загрузки правил уборки: " + e.message, false);
+  }
+}
+
+async function createCleaningRule() {
+  const interval = parseFloat($("cr_interval").value);
+  if (Number.isNaN(interval) || interval <= 0) {
+    msg("Укажите интервал уборки в часах (> 0)", false);
+    return;
+  }
+  const body = {
+    room: $("cr_room").value.trim(),
+    zone_type: $("cr_zone").value,
+    interval_hours: interval,
+    min_coverage_pct: parseInt($("cr_minpct").value, 10) || 0,
+    zone_name: $("cr_name").value.trim() || null,
+  };
+  if (!body.room) {
+    msg("Укажите помещение", false);
+    return;
+  }
+  try {
+    await api("/cleaning-rules", { method: "POST", body: JSON.stringify(body) });
+    $("cr_room").value = $("cr_interval").value = $("cr_minpct").value = $("cr_name").value = "";
+    loadCleaningRules();
+    msg("Правило уборки добавлено");
+  } catch (e) {
+    msg("Ошибка добавления правила: " + e.message, false);
+  }
+}
+
+async function toggleCleaningRule(id, enabled) {
+  try {
+    await api(`/cleaning-rules/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) });
+    loadCleaningRules();
+  } catch (e) {
+    msg("Ошибка изменения правила: " + e.message, false);
+  }
+}
+
+async function deleteCleaningRule(id) {
+  try {
+    await api(`/cleaning-rules/${id}`, { method: "DELETE" });
+    loadCleaningRules();
+  } catch (e) {
+    msg("Ошибка удаления правила: " + e.message, false);
+  }
+}
+
 // ── Расписания (таймер) ──
 
 async function loadSchedules() {
@@ -664,6 +753,7 @@ function loadAll() {
   loadNodes();
   loadCameras();
   loadThresholds();
+  loadCleaningRules();
   loadSchedules();
 }
 
@@ -683,6 +773,7 @@ $("clearPoly").onclick = () => {
   draw();
 };
 $("th_add").onclick = createThreshold;
+$("cr_add").onclick = createCleaningRule;
 $("sc_add").onclick = createSchedule;
 
 if (keyInput.value) loadAll();

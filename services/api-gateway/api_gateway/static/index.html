@@ -185,6 +185,30 @@
   </main>
 
   <main>
+    <section class="panel" id="cleaning-panel" style="width:100%">
+      <h2 style="margin-top:0">Правила уборки (санитарный контроль)</h2>
+      <p class="hint">Зона должна убираться не реже интервала; покрытие последней уборки — не ниже
+        порога. Нарушение — событие «не убрано вовремя» (журнал/Grafana, уведомления).</p>
+      <div class="row">
+        <input id="cr_room" placeholder="помещение" />
+        <select id="cr_zone">
+          <option value="table">стол</option>
+          <option value="floor">пол</option>
+          <option value="window">окно</option>
+        </select>
+        <input id="cr_interval" type="number" step="0.5" min="0.5" placeholder="интервал, ч" style="width:120px" />
+        <input id="cr_minpct" type="number" min="0" max="100" placeholder="мин. покрытие, % (0 = не проверять)" style="width:230px" />
+        <input id="cr_name" placeholder="подпись зоны (опц.)" />
+        <button id="cr_add">Добавить правило</button>
+      </div>
+      <table id="cleaningrules">
+        <thead><tr><th>помещение</th><th>зона</th><th>интервал, ч</th><th>мин. %</th><th>подпись</th><th>вкл</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <main>
     <section class="panel" id="schedules-panel" style="width:100%">
       <h2 style="margin-top:0">Расписания видеоанализа (таймер)</h2>
       <p class="hint">Периодический запуск анализа. Изменения подхватываются планировщиком на следующем тике.</p>
