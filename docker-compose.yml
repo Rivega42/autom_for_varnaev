@@ -275,6 +275,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-monitoring}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
       SCHEDULER_CONFIG: ${SCHEDULER_CONFIG:-/config/schedules.json}
+      # Журнал событий: cleaning_overdue контроля уборки (#265).
+      LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
       SCHEDULER_TICK_S: ${SCHEDULER_TICK_S:-60}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
