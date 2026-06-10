@@ -69,6 +69,8 @@
 | `ROOM_ALREADY_EXISTS` | 409 | помещение с таким id уже существует |
 | `NODE_ALREADY_EXISTS` | 409 | узел датчиков с таким id уже существует |
 | `ARTIFACT_NOT_FOUND` | 404 | артефакт-доказательство с таким id отсутствует (или файл недоступен) |
+| `CLEANING_RULE_NOT_FOUND` | 404 | правило контроля уборки с таким id отсутствует |
+| `CLEANING_RULE_DUPLICATE` | 409 | правило для этой зоны (помещение+тип) уже существует |
 | `NOT_IMPLEMENTED` | 501 | эндпойнт-разъём АУРА выключен в v1 |
 | `INTERNAL` | 500 | прочая внутренняя ошибка |
 
@@ -308,6 +310,29 @@ DELETE /api/v1/schedules/{id}              # удалить или 404 SCHEDULE_
 остаётся поддержанным для совместимости; записи файла берутся, если имя не занято
 записью из БД; имя расписания уникально). Коды ошибок: `THRESHOLD_NOT_FOUND`,
 `SCHEDULE_NOT_FOUND` (404), `SCHEDULE_DUPLICATE_NAME` (409 — имя занято).
+
+### 3.7 Правила санитарного контроля уборки (#265)
+
+Зона (помещение + тип) должна убираться не реже `interval_hours`; покрытие
+последней уборки — не ниже `min_coverage_pct`. Нарушение — событие
+`cleaning_overdue` от планировщика (раз на эпизод). Правила перечитываются
+планировщиком на каждом тике.
+
+```
+GET    /api/v1/cleaning-rules              # список правил
+POST   /api/v1/cleaning-rules              # создать или 409 CLEANING_RULE_DUPLICATE
+PATCH  /api/v1/cleaning-rules/{id}         # изменить или 404 CLEANING_RULE_NOT_FOUND
+DELETE /api/v1/cleaning-rules/{id}         # удалить или 404 CLEANING_RULE_NOT_FOUND
+```
+
+**Тело `POST /cleaning-rules`**:
+```json
+{ "room": "room-01", "zone_type": "table", "interval_hours": 4,
+  "min_coverage_pct": 60, "zone_name": "стол у плиты", "enabled": true }
+```
+`zone_type`: `table`|`floor`|`window` (как у ROI-зон). На пару (room, zone_type)
+— одно правило (уникальность). `min_coverage_pct: 0` — покрытие не проверяется.
+Несуществующее помещение → 404 `ROOM_NOT_FOUND`.
 
 ---
 

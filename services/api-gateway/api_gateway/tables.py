@@ -97,6 +97,20 @@ thresholds = sa.Table(
 )
 
 
+cleaning_rules = sa.Table(
+    "cleaning_rules",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column("room_id", sa.Text, sa.ForeignKey("rooms.id"), nullable=False),
+    sa.Column("zone_type", sa.Text, nullable=False),
+    sa.Column("interval_hours", sa.Float, nullable=False),
+    sa.Column("min_coverage_pct", sa.Integer, nullable=False),
+    sa.Column("zone_name", sa.Text),
+    sa.Column("enabled", sa.Boolean, nullable=False),
+    sa.UniqueConstraint("room_id", "zone_type", name="uq_cleaning_rules_room_zone"),
+)
+
+
 artifacts = sa.Table(
     "artifacts",
     metadata,

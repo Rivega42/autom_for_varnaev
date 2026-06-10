@@ -170,6 +170,30 @@ class ThresholdUpdate(BaseModel):
     enabled: bool | None = None
 
 
+class CleaningRuleCreate(BaseModel):
+    """Тело POST /cleaning-rules: правило санитарного контроля уборки (#265).
+
+    Зона (помещение+тип) должна убираться не реже interval_hours; покрытие
+    последней уборки — не ниже min_coverage_pct (0 = не проверять покрытие).
+    """
+
+    room: str = Field(min_length=1)
+    zone_type: ZoneType
+    interval_hours: float = Field(gt=0)
+    min_coverage_pct: int = Field(default=0, ge=0, le=100)
+    zone_name: str | None = None
+    enabled: bool = True
+
+
+class CleaningRuleUpdate(BaseModel):
+    """Тело PATCH /cleaning-rules/{id}: частичное обновление правила."""
+
+    interval_hours: float | None = Field(default=None, gt=0)
+    min_coverage_pct: int | None = Field(default=None, ge=0, le=100)
+    zone_name: str | None = None
+    enabled: bool | None = None
+
+
 class ScheduleCreate(BaseModel):
     """Тело POST /schedules: запись расписания видеоанализа (таймер)."""
 
