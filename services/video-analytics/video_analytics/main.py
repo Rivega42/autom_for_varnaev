@@ -69,7 +69,10 @@ def run_forever(
     iteration = 0
     next_cleanup = now_fn()  # первая зачистка — сразу при старте
     while True:
-        write_heartbeat(engine, "video-analytics", now_fn())  # отметка живости (#284)
+        # Отметка живости (#284). Пишется между заданиями: SERVICE_SILENT_MIN
+        # должен превышать длительность самого долгого одиночного run_once
+        # (окно анализа ограничено ANALYTICS_MAX_STREAM_FRAMES, обычно ≈30 c).
+        write_heartbeat(engine, "video-analytics", now_fn())
         if settings.artifacts_retention_days > 0 and now_fn() >= next_cleanup:
             try:
                 cleanup_artifacts(
