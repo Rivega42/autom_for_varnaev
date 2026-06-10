@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from fastapi import FastAPI, Query, Request
+from fastapi import BackgroundTasks, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import Engine
@@ -46,10 +46,14 @@ def create_app(engine: Engine | None = None, notifier: Notifier | None = None) -
         return ok({"service": "log-service", "up": True})
 
     @app.post("/events")
-    def receive_event(event: Event) -> dict[str, Any]:
-        """Принять событие, записать в журнал и (best-effort) разослать уведомления."""
+    def receive_event(event: Event, background: BackgroundTasks) -> dict[str, Any]:
+        """Принять событие, записать в журнал и (в фоне) разослать уведомления.
+
+        Рассылка — фоновой задачей ПОСЛЕ ответа: медленный/недоступный канал
+        (Telegram/SMTP) не должен задерживать приём событий от ingest/analytics.
+        """
         insert_event(engine, event)
-        notifier.notify(event)  # сбой каналов не влияет на запись (гасится внутри)
+        background.add_task(notifier.notify, event)  # best-effort, сбои гасятся внутри
         return ok({"id": str(event.id)})
 
     @app.get("/events", response_model=None)

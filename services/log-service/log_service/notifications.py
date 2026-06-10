@@ -59,10 +59,11 @@ class TelegramChannel:
         self._timeout = timeout
 
     def send(self, subject: str, body: str, event: Event) -> None:
+        text = f"{subject}\n\n{body}"
+        if len(text) > 4096:  # лимит Telegram sendMessage — иначе HTTP 400
+            text = text[:4093] + "…"
         with httpx.Client(timeout=self._timeout) as client:
-            resp = client.post(
-                self._url, json={"chat_id": self._chat_id, "text": f"{subject}\n\n{body}"}
-            )
+            resp = client.post(self._url, json={"chat_id": self._chat_id, "text": text})
         resp.raise_for_status()
 
 
@@ -171,10 +172,15 @@ def build_notifier_from_env() -> Notifier:
     mail_to = os.getenv("NOTIFY_EMAIL_TO")
     mail_from = os.getenv("NOTIFY_EMAIL_FROM")
     if smtp_host and mail_to and mail_from:
+        try:
+            smtp_port = int(os.getenv("SMTP_PORT", "587").strip())
+        except ValueError:
+            logger.warning("SMTP_PORT некорректен — использую 587")
+            smtp_port = 587
         channels.append(
             EmailChannel(
                 smtp_host,
-                int(os.getenv("SMTP_PORT", "587")),
+                smtp_port,
                 mail_from,
                 [r.strip() for r in mail_to.split(",") if r.strip()],
                 user=os.getenv("SMTP_USER"),
@@ -183,7 +189,11 @@ def build_notifier_from_env() -> Notifier:
             )
         )
 
-    min_sev = Severity(os.getenv("NOTIFY_MIN_SEVERITY", "warning"))
+    try:
+        min_sev = Severity(os.getenv("NOTIFY_MIN_SEVERITY", "warning").strip().lower())
+    except ValueError:
+        logger.warning("NOTIFY_MIN_SEVERITY некорректен — использую warning")
+        min_sev = Severity.WARNING
     types_env = os.getenv("NOTIFY_TYPES")  # CSV типов; пусто = любой
     types = frozenset(t.strip() for t in types_env.split(",") if t.strip()) if types_env else None
 

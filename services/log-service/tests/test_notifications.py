@@ -101,3 +101,55 @@ def test_endpoint_dispatches_after_insert() -> None:
     resp = client.post("/events", json=body)
     assert resp.status_code == 200
     assert len(ch.sent) == 1
+
+
+def test_build_notifier_bad_severity_falls_back(monkeypatch) -> None:
+    """Некорректный NOTIFY_MIN_SEVERITY не роняет старт — fallback на warning."""
+    import log_service.notifications as notif
+
+    monkeypatch.setenv("NOTIFY_MIN_SEVERITY", "КРИТ")
+    n = notif.build_notifier_from_env()  # не должно бросить
+    assert n.notify(_event(Severity.INFO)) == 0  # каналов нет — noop, но не упало
+
+
+def test_build_notifier_bad_smtp_port_falls_back(monkeypatch) -> None:
+    """Нечисловой SMTP_PORT не роняет старт."""
+    import log_service.notifications as notif
+
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_PORT", "abc")
+    monkeypatch.setenv("NOTIFY_EMAIL_FROM", "a@example.com")
+    monkeypatch.setenv("NOTIFY_EMAIL_TO", "b@example.com")
+    notif.build_notifier_from_env()  # не должно бросить ValueError
+
+
+def test_telegram_truncates_long_text(monkeypatch) -> None:
+    """Длинный текст усекается до лимита Telegram (нет HTTP 400)."""
+    from log_service.notifications import TelegramChannel
+
+    captured = {}
+
+    class _FakeResp:
+        def raise_for_status(self) -> None:
+            pass
+
+    class _FakeClient:
+        def __init__(self, *a, **k) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a) -> None:
+            pass
+
+        def post(self, url, json):
+            captured["len"] = len(json["text"])
+            return _FakeResp()
+
+    monkeypatch.setattr("log_service.notifications.httpx.Client", _FakeClient)
+    ch = TelegramChannel("token", "chat")
+    ev = _event(Severity.CRITICAL)
+    ev = ev.model_copy(update={"message": "x" * 9000})
+    ch.send(*format_event(ev)[:2], ev)
+    assert captured["len"] <= 4096
