@@ -59,6 +59,22 @@ jobs:
             fi
           done
 
+  compose-validate:
+    name: docker compose config
+    runs-on: ubuntu-latest
+    # Валидация compose-файлов (синтаксис, ссылки на сети/тома, интерполяция env):
+    # битая топология должна ловиться в CI, а не при `up` на объекте.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Валидация базового compose
+        run: docker compose --env-file .env.example -f docker-compose.yml config -q
+
+      - name: Валидация связки с demo-оверлеем
+        run: >
+          docker compose --env-file .env.example
+          -f docker-compose.yml -f docker-compose.demo.yml config -q
+
   docker-build:
     name: docker smoke-build
     runs-on: ubuntu-latest
