@@ -147,6 +147,7 @@ def test_report_csv_sections() -> None:
     engine = _engine()
     _seed(engine)
     csv_text = report_to_csv(build_report(engine, T0, T_END))
+    assert csv_text.startswith("\ufeff"), "BOM обязателен для русского Excel"
     assert "УБОРКИ" in csv_text
     assert "ПРОСРОЧКИ УБОРКИ" in csv_text
     assert "ХОЛОДОВАЯ ЦЕПЬ" in csv_text

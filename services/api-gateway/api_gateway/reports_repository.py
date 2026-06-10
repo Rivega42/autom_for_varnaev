@@ -155,11 +155,16 @@ def build_report(engine: Engine, from_ts: datetime, to_ts: datetime) -> dict[str
 
 
 def report_to_csv(report: dict[str, Any]) -> str:
-    """Отчёт в CSV (разделы с заголовками; UTF-8, ; как разделитель для Excel)."""
+    """Отчёт в CSV (разделы с заголовками; UTF-8 c BOM, ; — разделитель для Excel).
+
+    BOM обязателен: русский Excel на Windows без него трактует UTF-8 как cp1251,
+    и кириллица превращается в кракозябры.
+    """
     import csv
     import io
 
     buf = io.StringIO()
+    buf.write("\ufeff")  # BOM для Excel
     w = csv.writer(buf, delimiter=";")
     w.writerow([f"Отчёт за период {report['from']} — {report['to']}"])
     w.writerow([])

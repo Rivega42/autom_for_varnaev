@@ -503,7 +503,8 @@ def create_app(
         """Отчёт за период: уборки, просрочки, холодовая цепь (JSON или CSV)."""
         from_ts = _parse_query_dt(from_)
         to_ts = _parse_query_dt(to) or datetime.now(UTC)
-        assert from_ts is not None  # from обязателен (Query без default)
+        if from_ts is None:  # недостижимо при обязательном from; не assert (python -O)
+            raise api_error(ErrorCode.VALIDATION_ERROR, "Параметр from обязателен")
         if from_ts >= to_ts:
             raise api_error(ErrorCode.VALIDATION_ERROR, "from должен быть раньше to")
         report = build_report(engine, from_ts, to_ts)
