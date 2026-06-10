@@ -80,6 +80,8 @@ class EventType(StrEnum):
     ACTION_DETECTED = "action_detected"
     COVERAGE_REPORT = "coverage_report"
     CONDITION_FLAGGED = "condition_flagged"
+    # санитарный контроль
+    CLEANING_OVERDUE = "cleaning_overdue"
 
 
 class Event(BaseModel):
