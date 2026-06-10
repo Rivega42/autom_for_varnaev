@@ -12,7 +12,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import Engine
 
@@ -22,6 +22,7 @@ from video_analytics.config import Settings
 from video_analytics.db import build_engine
 from video_analytics.detector import MediaPipePoseDetector, PoseDetector
 from video_analytics.event_sink import EventSink, HttpEventSink
+from video_analytics.retention import cleanup_artifacts
 from video_analytics.sources import FrameSource
 from video_analytics.worker import SourceFactory, run_once
 
@@ -62,10 +63,24 @@ def run_forever(
     """Цикл воркера: обрабатывать задания, при пустой очереди ждать `idle_sleep_s`.
 
     `max_iterations` ограничивает число итераций (для тестов); при `None` цикл
-    бесконечный.
+    бесконечный. Раз в сутки (и при старте) выполняется ротация артефактов:
+    скриншоты старше `artifacts_retention_days` удаляются вместе со строками.
     """
     iteration = 0
+    next_cleanup = now_fn()  # первая зачистка — сразу при старте
     while True:
+        if settings.artifacts_retention_days > 0 and now_fn() >= next_cleanup:
+            try:
+                cleanup_artifacts(
+                    engine,
+                    settings.artifacts_dir,
+                    retention_days=settings.artifacts_retention_days,
+                    now=now_fn(),
+                )
+            except Exception:
+                # Сбой ротации не должен останавливать обработку заданий.
+                logger.exception("Сбой ротации артефактов — продолжаю работу")
+            next_cleanup = now_fn() + timedelta(days=1)
         processed = run_once(
             engine,
             settings,

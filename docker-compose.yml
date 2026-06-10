@@ -290,6 +290,8 @@ services:
       ANALYTICS_FPS: ${ANALYTICS_FPS:-5}
       ANALYTICS_MODEL_PATH: ${ANALYTICS_MODEL_PATH:-/models/pose_landmarker.task}
       ANALYTICS_MAX_STREAM_FRAMES: ${ANALYTICS_MAX_STREAM_FRAMES:-150}
+      # Ротация артефактов: скриншоты старше N дней удаляются (0 = выключено).
+      ARTIFACTS_RETENTION_DAYS: ${ARTIFACTS_RETENTION_DAYS:-30}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - internal
@@ -368,6 +370,7 @@ services:
       ANALYTICS_FPS: ${ANALYTICS_FPS:-5}
       ANALYTICS_MODEL_PATH: ${ANALYTICS_MODEL_PATH:-/models/pose_landmarker.task}
       ANALYTICS_MAX_STREAM_FRAMES: ${ANALYTICS_MAX_STREAM_FRAMES:-150}
+      ARTIFACTS_RETENTION_DAYS: ${ARTIFACTS_RETENTION_DAYS:-30}
     networks:
       - internal
     volumes:
