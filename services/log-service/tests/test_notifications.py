@@ -153,3 +153,81 @@ def test_telegram_truncates_long_text(monkeypatch) -> None:
     ev = ev.model_copy(update={"message": "x" * 9000})
     ch.send(*format_event(ev)[:2], ev)
     assert captured["len"] <= 4096
+
+
+def _sqlite_app(notifier: Notifier | None = None):
+    from log_service.tables import metadata
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import StaticPool
+
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    metadata.create_all(engine)
+    return engine, TestClient(create_app(engine=engine, notifier=notifier or Notifier([])))
+
+
+def test_ack_endpoint_idempotent_and_404() -> None:
+    """POST /events/{id}/ack подтверждает (идемпотентно); чужой id → 404."""
+    _engine, client = _sqlite_app()
+    ev = _event(Severity.CRITICAL)
+    assert client.post("/events", json=ev.model_dump(mode="json")).status_code == 200
+
+    first = client.post(f"/events/{ev.id}/ack")
+    assert first.status_code == 200 and first.json()["data"]["acknowledged"] is True
+    second = client.post(f"/events/{ev.id}/ack")  # повтор — тоже 200
+    assert second.status_code == 200
+
+    listed = client.get("/events").json()["data"]["items"][0]
+    assert listed["acknowledged_at"] is not None
+
+    from uuid import uuid4 as _u
+
+    assert client.post(f"/events/{_u()}/ack").status_code == 404
+
+
+def test_escalation_repeats_until_ack() -> None:
+    """Неподтверждённое критичное событие повторяется; после ack — тишина."""
+    from datetime import timedelta
+
+    from log_service.escalation import EscalationSettings, Escalator
+    from log_service.repository import ack_event
+
+    ch = _RecordingChannel()
+    notifier = Notifier([ch], min_severity=Severity.WARNING)
+    engine, client = _sqlite_app(notifier)
+    ev = _event(Severity.CRITICAL)
+    client.post("/events", json=ev.model_dump(mode="json"))
+    assert len(ch.sent) == 1  # первичное уведомление
+
+    esc = Escalator(notifier, EscalationSettings(after_min=5, repeat_min=10, max_repeats=2))
+    t0 = ev.ts
+
+    # рано (3 мин) — повтора нет
+    assert esc.check_once(engine, t0 + timedelta(minutes=3)) == 0
+    # 6 мин — первый повтор с пометкой
+    assert esc.check_once(engine, t0 + timedelta(minutes=6)) == 1
+    assert "ПОВТОР 1" in ch.sent[-1][0] + ch.sent[-1][1]
+    # сразу ещё раз — пауза repeat_min не прошла
+    assert esc.check_once(engine, t0 + timedelta(minutes=7)) == 0
+    # после паузы — второй повтор
+    assert esc.check_once(engine, t0 + timedelta(minutes=17)) == 1
+    # лимит повторов исчерпан
+    assert esc.check_once(engine, t0 + timedelta(minutes=40)) == 0
+
+    # новый цикл: другое событие, ack останавливает эскалацию
+    ev2 = _event(Severity.CRITICAL)
+    client.post("/events", json=ev2.model_dump(mode="json"))
+    ack_event(engine, ev2.id, t0 + timedelta(minutes=1))
+    assert esc.check_once(engine, t0 + timedelta(minutes=20)) == 0
+
+
+def test_escalation_disabled_by_default() -> None:
+    """after_min=0 — эскалация выключена."""
+    from log_service.escalation import EscalationSettings, Escalator
+
+    ch = _RecordingChannel()
+    engine, client = _sqlite_app(Notifier([ch], min_severity=Severity.WARNING))
+    client.post("/events", json=_event(Severity.CRITICAL).model_dump(mode="json"))
+    esc = Escalator(Notifier([ch]), EscalationSettings())  # after_min=0
+    assert esc.check_once(engine, datetime(2026, 6, 10, 12, 0, tzinfo=UTC)) == 0

@@ -24,4 +24,8 @@ events = sa.Table(
     sa.Column("payload", sa.JSON, nullable=False),
     sa.Column("artifact_id", sa.Uuid),
     sa.Column("task_id", sa.Uuid),
+    # Подтверждение и эскалация уведомлений (#264).
+    sa.Column("acknowledged_at", sa.DateTime(timezone=True)),
+    sa.Column("escalated_at", sa.DateTime(timezone=True)),
+    sa.Column("escalation_count", sa.Integer, nullable=False, server_default="0"),
 )

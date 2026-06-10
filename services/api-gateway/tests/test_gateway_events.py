@@ -31,6 +31,10 @@ class _FakeEventsClient:
         self.created = getattr(self, "created", [])
         self.created.append(event)
 
+    def ack_event(self, event_id: UUID) -> bool:
+        # подтверждается только «существующее» событие фейка
+        return bool(self._event and self._event["id"] == str(event_id))
+
 
 _SETTINGS = Settings(
     log_service_url="http://log-service:8000",
@@ -104,3 +108,16 @@ def test_post_analytics_event_persisted() -> None:
     assert ev.room_id == "room-01"
     assert ev.payload["origin"] == "browser"
     assert "Стол протёрт" in ev.message
+
+
+def test_ack_event_ok_and_404() -> None:
+    """POST /events/{id}/ack: подтверждение существующего; 404 для чужого id."""
+    ev = _event()
+    client = TestClient(create_app(settings=_SETTINGS, events_client=_FakeEventsClient(ev)))
+    okresp = client.post(f"/api/v1/events/{ev['id']}/ack")
+    assert okresp.status_code == 200
+    assert okresp.json()["data"]["acknowledged"] is True
+
+    missing = client.post(f"/api/v1/events/{uuid4()}/ack")
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "EVENT_NOT_FOUND"

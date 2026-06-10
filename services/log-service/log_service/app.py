@@ -13,8 +13,9 @@ from sqlalchemy import Engine
 
 from log_service.db import build_engine
 from log_service.envelope import error, ok
+from log_service.escalation import start_escalator_thread
 from log_service.notifications import Notifier, build_notifier_from_env
-from log_service.repository import get_event, insert_event, list_events
+from log_service.repository import ack_event, get_event, insert_event, list_events
 from monitoring_shared import Event
 
 
@@ -95,6 +96,19 @@ def create_app(engine: Engine | None = None, notifier: Notifier | None = None) -
                 content=error("EVENT_NOT_FOUND", "Событие не найдено"),
             )
         return ok(item)
+
+    @app.post("/events/{event_id}/ack", response_model=None)
+    def acknowledge_event(event_id: UUID) -> dict[str, Any] | JSONResponse:
+        """Подтвердить событие (#264): эскалация по нему прекращается. Идемпотентно."""
+        if not ack_event(engine, event_id, datetime.now(UTC)):
+            return JSONResponse(
+                status_code=404,
+                content=error("EVENT_NOT_FOUND", "Событие не найдено"),
+            )
+        return ok({"id": str(event_id), "acknowledged": True})
+
+    # Фоновая эскалация неподтверждённых событий (включается через env).
+    start_escalator_thread(engine, notifier)
 
     return app
 

@@ -22,6 +22,9 @@ class _FakeEventsClient:
     def create_event(self, event: object) -> None:
         pass
 
+    def ack_event(self, event_id: UUID) -> bool:
+        return False
+
 
 def _client(enabled_aura: bool = False) -> TestClient:
     settings = Settings(
