@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import pytest
 from scheduler.cleaning_monitor import CleaningMonitor
 from scheduler.cleaning_store import load_cleaning_rules, load_last_cleanings
 from scheduler.tables import cleaning_rules, events, metadata
@@ -79,7 +80,7 @@ def test_load_last_cleanings_latest_wins() -> None:
     assert last[("room-01", "table")].coverage_pct == 90
 
 
-def test_monitor_emits_overdue_once(caplog) -> None:
+def test_monitor_emits_overdue_once(caplog: pytest.LogCaptureFixture) -> None:
     """Монитор эмитит cleaning_overdue один раз на эпизод; норма — сбрасывает."""
     engine = _engine()
     _add_rule(engine)
