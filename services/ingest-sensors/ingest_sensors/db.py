@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
@@ -47,6 +48,23 @@ def _database_url() -> str:
 def build_engine(url: str | None = None) -> Engine:
     """Создать engine SQLAlchemy (URL из аргумента или окружения)."""
     return create_engine(url or _database_url())
+
+
+# UPSERT heartbeat сервиса (watchdog, #284). SQL диалект-нейтрален: ON CONFLICT
+# поддерживают и PostgreSQL, и SQLite. Имя сервиса — первичный ключ.
+_HEARTBEAT = text(
+    "INSERT INTO service_heartbeats (service, ts) VALUES (:service, :ts) "
+    "ON CONFLICT(service) DO UPDATE SET ts = excluded.ts"
+)
+
+
+def write_heartbeat(engine: Engine, service: str, now: datetime) -> None:
+    """Обновить отметку живости сервиса; ошибки логируются, цикл не падает."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(_HEARTBEAT, {"service": service, "ts": now})
+    except Exception:
+        logger.debug("Не удалось записать heartbeat сервиса %s", service, exc_info=True)
 
 
 class DbReadingWriter:

@@ -19,7 +19,7 @@ from sqlalchemy import Engine
 from monitoring_shared import SourceType
 from video_analytics.capture import create_frame_source
 from video_analytics.config import Settings
-from video_analytics.db import build_engine
+from video_analytics.db import build_engine, write_heartbeat
 from video_analytics.detector import MediaPipePoseDetector, PoseDetector
 from video_analytics.event_sink import EventSink, HttpEventSink
 from video_analytics.retention import cleanup_artifacts
@@ -69,6 +69,7 @@ def run_forever(
     iteration = 0
     next_cleanup = now_fn()  # первая зачистка — сразу при старте
     while True:
+        write_heartbeat(engine, "video-analytics", now_fn())  # отметка живости (#284)
         if settings.artifacts_retention_days > 0 and now_fn() >= next_cleanup:
             try:
                 cleanup_artifacts(

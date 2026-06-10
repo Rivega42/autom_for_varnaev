@@ -311,6 +311,8 @@ services:
       # Медиа-шлюз: проба живости камер (#283).
       GO2RTC_URL: ${GO2RTC_URL:-http://media-gateway:1984}
       SCHEDULER_TICK_S: ${SCHEDULER_TICK_S:-60}
+      # Watchdog сервисов (#284): порог «тишины» heartbeat'а, минут.
+      SERVICE_SILENT_MIN: ${SERVICE_SILENT_MIN:-5}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - internal

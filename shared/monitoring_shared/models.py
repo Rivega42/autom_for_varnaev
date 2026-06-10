@@ -85,6 +85,8 @@ class EventType(StrEnum):
     # живость инфраструктуры (камеры, сервисы)
     CAMERA_OFFLINE = "camera_offline"
     CAMERA_ONLINE = "camera_online"
+    SERVICE_SILENT = "service_silent"
+    SERVICE_RESTORED = "service_restored"
 
 
 class Event(BaseModel):
