@@ -53,8 +53,8 @@ def create_app(engine: Engine | None = None) -> FastAPI:
         to: str | None = None,
         type: str | None = None,
         room: str | None = None,
-        limit: int = 50,
-        offset: int = 0,
+        limit: int = Query(default=50, ge=1, le=1000),
+        offset: int = Query(default=0, ge=0),
     ) -> dict[str, Any] | JSONResponse:
         """Лента событий с фильтрами по времени/типу/помещению."""
         try:
