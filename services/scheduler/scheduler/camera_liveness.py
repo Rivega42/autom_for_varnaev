@@ -20,7 +20,13 @@ logger = logging.getLogger(__name__)
 
 
 class CameraLivenessMonitor:
-    """Проверка доступности камер с памятью «упавших» между тиками."""
+    """Проверка доступности камер с памятью «упавших» между тиками.
+
+    Проба синхронная и последовательная: суммарно N камер × таймаут пробы должно
+    укладываться в `tick_interval_s` планировщика (по умолчанию 3 c × несколько
+    камер ≪ 60 c). Если go2rtc недоступен целиком — за один тик каждая камера
+    помечается offline ровно один раз (дедуп), без повторов на следующих тиках.
+    """
 
     def __init__(self, sink: EventSink, prober: CameraProber) -> None:
         self._sink = sink
@@ -31,7 +37,9 @@ class CameraLivenessMonitor:
     def check(self, engine: Engine, now: datetime) -> int:
         """Один проход: проверить все включённые камеры; вернуть число событий."""
         emitted = 0
+        seen: set[str] = set()
         for cam in load_enabled_cameras(engine):
+            seen.add(cam.id)
             live = self._prober.is_live(cam.name)
             if not live and cam.id not in self._offline:
                 self._sink.emit(build_camera_offline(cam, now))
@@ -43,4 +51,6 @@ class CameraLivenessMonitor:
                 self._offline.discard(cam.id)
                 emitted += 1
                 logger.info("Камера «%s» снова на связи", cam.name)
+        # Камеры, выбывшие из справочника пока были offline, забываем без события.
+        self._offline &= seen
         return emitted

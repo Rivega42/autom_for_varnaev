@@ -64,7 +64,7 @@ class Go2rtcCameraProber:
     действительно отдаёт видео — это и есть проверка живости камеры.
     """
 
-    def __init__(self, base_url: str, timeout: float = 5.0, client: Any | None = None) -> None:
+    def __init__(self, base_url: str, timeout: float = 3.0, client: Any | None = None) -> None:
         self._url = base_url.rstrip("/") + "/api/frame.jpeg"
         self._timeout = timeout
         self._client = client
