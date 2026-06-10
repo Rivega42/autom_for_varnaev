@@ -512,6 +512,33 @@ async function deleteThreshold(id) {
   }
 }
 
+// ── Отчёт за период (#266) ──
+
+async function downloadReportCsv() {
+  const fromVal = $("rp_from").value;
+  if (!fromVal) {
+    msg("Укажите начало периода", false);
+    return;
+  }
+  const params = new URLSearchParams({ from: new Date(fromVal).toISOString(), format: "csv" });
+  const toVal = $("rp_to").value;
+  if (toVal) params.set("to", new Date(toVal).toISOString());
+  try {
+    const resp = await fetch(`${API}/reports/sanitation?${params}`, { headers: headers(false) });
+    if (!resp.ok) throw new Error(resp.status);
+    const blob = await resp.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (resp.headers.get("content-disposition") || "").match(/filename="(.+)"/)?.[1]
+      || "sanitation-report.csv";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 500);
+    msg("Отчёт выгружен");
+  } catch (e) {
+    msg("Ошибка выгрузки отчёта: " + e.message, false);
+  }
+}
+
 // ── Правила уборки (санитарный контроль, #265) ──
 
 const ZONE_RU = { table: "стол", floor: "пол", window: "окно" };
@@ -774,6 +801,7 @@ $("clearPoly").onclick = () => {
 };
 $("th_add").onclick = createThreshold;
 $("cr_add").onclick = createCleaningRule;
+$("rp_csv").onclick = downloadReportCsv;
 $("sc_add").onclick = createSchedule;
 
 if (keyInput.value) loadAll();

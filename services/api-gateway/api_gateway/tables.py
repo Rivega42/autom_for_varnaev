@@ -97,6 +97,23 @@ thresholds = sa.Table(
 )
 
 
+# Журнал событий: gateway ЧИТАЕТ его напрямую для отчётов (агрегаты по периоду,
+# как Grafana) — REST log-service для постраничной ленты, не для агрегатов.
+events = sa.Table(
+    "events",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("ts", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("source", sa.Text, nullable=False),
+    sa.Column("type", sa.Text, nullable=False),
+    sa.Column("room_id", sa.Text),
+    sa.Column("severity", sa.Text, nullable=False),
+    sa.Column("message", sa.Text, nullable=False),
+    sa.Column("payload", sa.JSON, nullable=False),
+    sa.Column("artifact_id", sa.Uuid),
+)
+
+
 cleaning_rules = sa.Table(
     "cleaning_rules",
     metadata,

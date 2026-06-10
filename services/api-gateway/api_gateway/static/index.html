@@ -185,6 +185,18 @@
   </main>
 
   <main>
+    <section class="panel" id="report-panel" style="width:100%">
+      <h2 style="margin-top:0">Отчёт за период (санинспекция/ППК)</h2>
+      <p class="hint">Уборки, просрочки и холодовая цепь (мин/макс/среднее, время вне нормы). CSV открывается в Excel.</p>
+      <div class="row">
+        <label>с <input id="rp_from" type="datetime-local" /></label>
+        <label>по <input id="rp_to" type="datetime-local" /></label>
+        <button id="rp_csv">Скачать CSV</button>
+      </div>
+    </section>
+  </main>
+
+  <main>
     <section class="panel" id="cleaning-panel" style="width:100%">
       <h2 style="margin-top:0">Правила уборки (санитарный контроль)</h2>
       <p class="hint">Зона должна убираться не реже интервала; покрытие последней уборки — не ниже

@@ -49,6 +49,7 @@ from api_gateway.errors import api_error, register_error_handlers
 from api_gateway.events_client import EventsClient, HttpEventsClient
 from api_gateway.integration import register_integration_routes
 from api_gateway.readings_repository import list_readings
+from api_gateway.reports_repository import build_report, report_to_csv
 from api_gateway.rooms_repository import (
     RoomAlreadyExistsError,
     create_room,
@@ -490,6 +491,31 @@ def create_app(
         if not delete_threshold(engine, threshold_id):
             raise api_error(ErrorCode.THRESHOLD_NOT_FOUND, "Порог не найден")
         return ok({"deleted": threshold_id})
+
+    # ── Сменный/суточный отчёт для санинспекции/ППК (#266) ──
+
+    @app.get(f"{API_PREFIX}/reports/sanitation", dependencies=[auth])
+    def get_sanitation_report(
+        from_: str = Query(alias="from"),
+        to: str | None = None,
+        format: str = Query(default="json", pattern="^(json|csv)$"),
+    ) -> Any:
+        """Отчёт за период: уборки, просрочки, холодовая цепь (JSON или CSV)."""
+        from_ts = _parse_query_dt(from_)
+        to_ts = _parse_query_dt(to) or datetime.now(UTC)
+        if from_ts is None:  # недостижимо при обязательном from; не assert (python -O)
+            raise api_error(ErrorCode.VALIDATION_ERROR, "Параметр from обязателен")
+        if from_ts >= to_ts:
+            raise api_error(ErrorCode.VALIDATION_ERROR, "from должен быть раньше to")
+        report = build_report(engine, from_ts, to_ts)
+        if format == "csv":
+            filename = f"sanitation-{from_ts:%Y%m%d}-{to_ts:%Y%m%d}.csv"
+            return Response(
+                content=report_to_csv(report),
+                media_type="text/csv; charset=utf-8",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+        return ok(report)
 
     # ── Правила санитарного контроля уборки (#265) — настройка через интерфейс ──
 
