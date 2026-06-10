@@ -153,8 +153,24 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-monitoring}
       POSTGRES_USER: ${POSTGRES_USER:-monitoring}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+      # Уведомления (#264): каналы включаются заданием соответствующих переменных.
+      NOTIFY_MIN_SEVERITY: ${NOTIFY_MIN_SEVERITY:-warning}
+      NOTIFY_TYPES: ${NOTIFY_TYPES:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      NOTIFY_WEBHOOK_URL: ${NOTIFY_WEBHOOK_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_TLS: ${SMTP_TLS:-true}
+      NOTIFY_EMAIL_FROM: ${NOTIFY_EMAIL_FROM:-}
+      NOTIFY_EMAIL_TO: ${NOTIFY_EMAIL_TO:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - internal
+      # edge: исходящие уведомления (Telegram/SMTP/webhook) наружу из internal не уйдут
+      - edge
     depends_on:
       db:
         condition: service_healthy

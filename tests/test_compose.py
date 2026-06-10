@@ -48,8 +48,9 @@ def test_grafana_volume_declared() -> None:
 
 # ── Финальный compose (E9.6): прикладные сервисы ──
 
-# Внутренние сервисы (наружу не публикуются, только сеть internal).
-_INTERNAL_ONLY = ("log-service", "ingest-sensors", "scheduler", "video-analytics")
+# Внутренние сервисы (наружу порт НЕ публикуют). log-service дополнительно в edge —
+# только для ИСХОДЯЩИХ уведомлений (Telegram/SMTP/webhook), порта наружу нет.
+_INTERNAL_ONLY = ("ingest-sensors", "scheduler", "video-analytics")
 
 
 def test_all_app_services_present_with_build() -> None:
@@ -69,6 +70,13 @@ def test_internal_services_not_published() -> None:
         svc = services[name]
         assert "ports" not in svc, f"{name} не должен публиковать порт наружу"
         assert svc["networks"] == ["internal"]
+
+
+def test_log_service_no_published_port_but_egress() -> None:
+    """log-service не публикует порт наружу, но в edge — для исходящих уведомлений."""
+    svc = _compose()["services"]["log-service"]
+    assert "ports" not in svc, "log-service не должен публиковать порт наружу"
+    assert set(svc["networks"]) == {"internal", "edge"}
 
 
 def test_api_gateway_bridges_networks_and_published() -> None:

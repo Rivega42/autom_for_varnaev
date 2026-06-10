@@ -69,7 +69,7 @@
 | `ingest-sensors` | ✅ | — | — | нет |
 | `video-analytics` | ✅ | — | — | нет |
 | `scheduler` | ✅ | — | — | нет |
-| `log-service` | ✅ | — | — | нет |
+| `log-service` | ✅ | ✅ | — | нет (edge — исходящие уведомления Telegram/SMTP/webhook) |
 | `grafana` | ✅ | ✅ | — | да (дашборд) |
 | `api-gateway` | ✅ | ✅ | ✅ | да (REST) |
 | контейнеры АУРА | — | — | ✅ | по усмотрению АУРА |

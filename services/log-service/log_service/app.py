@@ -13,6 +13,7 @@ from sqlalchemy import Engine
 
 from log_service.db import build_engine
 from log_service.envelope import error, ok
+from log_service.notifications import Notifier, build_notifier_from_env
 from log_service.repository import get_event, insert_event, list_events
 from monitoring_shared import Event
 
@@ -22,11 +23,14 @@ def _as_utc(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
-def create_app(engine: Engine | None = None) -> FastAPI:
-    """Создать приложение log-service. Engine можно передать (для тестов)."""
+def create_app(engine: Engine | None = None, notifier: Notifier | None = None) -> FastAPI:
+    """Создать приложение log-service. Engine/notifier можно передать (для тестов)."""
     app = FastAPI(title="log-service")
     engine = engine or build_engine()
+    # Диспетчер уведомлений: из окружения по умолчанию (без каналов — отключён).
+    notifier = notifier if notifier is not None else build_notifier_from_env()
     app.state.engine = engine
+    app.state.notifier = notifier
 
     @app.exception_handler(RequestValidationError)
     async def on_validation_error(request: Request, _exc: RequestValidationError) -> JSONResponse:
@@ -43,8 +47,9 @@ def create_app(engine: Engine | None = None) -> FastAPI:
 
     @app.post("/events")
     def receive_event(event: Event) -> dict[str, Any]:
-        """Принять событие и записать его в журнал."""
+        """Принять событие, записать в журнал и (best-effort) разослать уведомления."""
         insert_event(engine, event)
+        notifier.notify(event)  # сбой каналов не влияет на запись (гасится внутри)
         return ok({"id": str(event.id)})
 
     @app.get("/events", response_model=None)
