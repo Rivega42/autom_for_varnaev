@@ -15,6 +15,8 @@ from datetime import UTC, datetime
 
 from sqlalchemy import Engine
 
+from scheduler.camera_liveness import CameraLivenessMonitor
+from scheduler.camera_store import Go2rtcCameraProber
 from scheduler.cleaning_monitor import CleaningMonitor
 from scheduler.config import Settings
 from scheduler.db import build_engine
@@ -59,17 +61,18 @@ def run_forever(
     now_fn: Callable[[], datetime] = _now_utc,
     max_iterations: int | None = None,
     cleaning_monitor: CleaningMonitor | None = None,
+    camera_monitor: CameraLivenessMonitor | None = None,
 ) -> None:
     """Цикл планировщика: тик, затем сон на `tick_interval_s`, и так по кругу.
 
     Демон не должен падать из-за ошибки одного тика — исключение логируется,
     цикл продолжается. `max_iterations` ограничивает число итераций (для тестов);
     при `None` цикл бесконечный. `cleaning_monitor` (если задан) проверяет на
-    каждом тике контроль уборки (#265) и эмитит cleaning_overdue.
+    каждом тике контроль уборки (#265); `camera_monitor` — живость камер (#283).
     """
     iteration = 0
     while True:
-        now = now_fn()  # один момент времени на итерацию (тик + контроль уборки)
+        now = now_fn()  # один момент времени на итерацию (тик + мониторы)
         try:
             count = tick_once(engine, settings, now)
             if count:
@@ -82,6 +85,12 @@ def run_forever(
             except Exception:
                 # Сбой контроля уборки не должен мешать созданию заданий.
                 logger.exception("Контроль уборки: ошибка проверки, продолжаем")
+        if camera_monitor is not None:
+            try:
+                camera_monitor.check(engine, now)
+            except Exception:
+                # Сбой пробы камер не должен мешать остальным проверкам.
+                logger.exception("Живость камер: ошибка проверки, продолжаем")
         iteration += 1
         if max_iterations is not None and iteration >= max_iterations:
             return
@@ -98,8 +107,10 @@ def main() -> None:
         settings.schedules_path,
         settings.tick_interval_s,
     )
-    monitor = CleaningMonitor(HttpEventSink(settings.log_service_url))
-    run_forever(engine, settings, cleaning_monitor=monitor)
+    sink = HttpEventSink(settings.log_service_url)
+    cleaning = CleaningMonitor(sink)
+    cameras = CameraLivenessMonitor(sink, Go2rtcCameraProber(settings.go2rtc_url))
+    run_forever(engine, settings, cleaning_monitor=cleaning, camera_monitor=cameras)
 
 
 if __name__ == "__main__":

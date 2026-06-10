@@ -16,6 +16,8 @@ class Settings:
     tick_interval_s: int
     # Журнал событий: сюда уходят cleaning_overdue (контроль уборки, #265).
     log_service_url: str = "http://log-service:8000"
+    # Медиа-шлюз go2rtc: проба живости камер (#283).
+    go2rtc_url: str = "http://media-gateway:1984"
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -24,4 +26,5 @@ class Settings:
             schedules_path=os.getenv("SCHEDULER_CONFIG", "/config/schedules.json"),
             tick_interval_s=int(os.getenv("SCHEDULER_TICK_S", "60")),
             log_service_url=os.getenv("LOG_SERVICE_URL", "http://log-service:8000"),
+            go2rtc_url=os.getenv("GO2RTC_URL", "http://media-gateway:1984"),
         )

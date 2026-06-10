@@ -306,8 +306,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-monitoring}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
       SCHEDULER_CONFIG: ${SCHEDULER_CONFIG:-/config/schedules.json}
-      # Журнал событий: cleaning_overdue контроля уборки (#265).
+      # Журнал событий: cleaning_overdue контроля уборки (#265), живость камер (#283).
       LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
+      # Медиа-шлюз: проба живости камер (#283).
+      GO2RTC_URL: ${GO2RTC_URL:-http://media-gateway:1984}
       SCHEDULER_TICK_S: ${SCHEDULER_TICK_S:-60}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:

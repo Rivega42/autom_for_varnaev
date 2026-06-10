@@ -53,6 +53,25 @@ events = sa.Table(
 )
 
 
+# Справочники (планировщик ЧИТАЕТ): помещения и камеры — для проверки живости.
+rooms = sa.Table(
+    "rooms",
+    metadata,
+    sa.Column("id", sa.Text, primary_key=True),
+    sa.Column("name", sa.Text, nullable=False),
+)
+
+
+cameras = sa.Table(
+    "cameras",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("room_id", sa.Text),
+    sa.Column("name", sa.Text, nullable=False),
+    sa.Column("enabled", sa.Boolean, nullable=False),
+)
+
+
 schedules = sa.Table(
     "schedules",
     metadata,

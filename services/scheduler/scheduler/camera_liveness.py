@@ -1,0 +1,46 @@
+"""Монитор живости камер: проба go2rtc → camera_offline/camera_online (#283).
+
+Вызывается из цикла планировщика на каждом тике. Для каждой включённой камеры
+проверяет, отдаёт ли go2rtc её кадр; отвал камеры порождает `camera_offline`
+один раз на эпизод, восстановление — `camera_online`. Симметрично «тишине» узла
+датчика (`sensor_silent`). Состояние эпизодов живёт в мониторе между тиками.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+
+from sqlalchemy import Engine
+
+from scheduler.camera_store import CameraProber, load_enabled_cameras
+from scheduler.events import EventSink, build_camera_offline, build_camera_online
+
+logger = logging.getLogger(__name__)
+
+
+class CameraLivenessMonitor:
+    """Проверка доступности камер с памятью «упавших» между тиками."""
+
+    def __init__(self, sink: EventSink, prober: CameraProber) -> None:
+        self._sink = sink
+        self._prober = prober
+        # id камер, по которым уже сообщили об отвале (ждём восстановления).
+        self._offline: set[str] = set()
+
+    def check(self, engine: Engine, now: datetime) -> int:
+        """Один проход: проверить все включённые камеры; вернуть число событий."""
+        emitted = 0
+        for cam in load_enabled_cameras(engine):
+            live = self._prober.is_live(cam.name)
+            if not live and cam.id not in self._offline:
+                self._sink.emit(build_camera_offline(cam, now))
+                self._offline.add(cam.id)
+                emitted += 1
+                logger.warning("Камера «%s» не отвечает", cam.name)
+            elif live and cam.id in self._offline:
+                self._sink.emit(build_camera_online(cam, now))
+                self._offline.discard(cam.id)
+                emitted += 1
+                logger.info("Камера «%s» снова на связи", cam.name)
+        return emitted

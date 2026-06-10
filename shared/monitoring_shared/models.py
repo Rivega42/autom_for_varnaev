@@ -82,6 +82,9 @@ class EventType(StrEnum):
     CONDITION_FLAGGED = "condition_flagged"
     # санитарный контроль
     CLEANING_OVERDUE = "cleaning_overdue"
+    # живость инфраструктуры (камеры, сервисы)
+    CAMERA_OFFLINE = "camera_offline"
+    CAMERA_ONLINE = "camera_online"
 
 
 class Event(BaseModel):

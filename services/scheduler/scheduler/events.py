@@ -14,6 +14,7 @@ from uuid import uuid4
 import httpx
 
 from monitoring_shared import Event, EventSource, EventType, Severity
+from scheduler.camera_store import CameraInfo
 from scheduler.cleaning import OverdueResult
 
 logger = logging.getLogger(__name__)
@@ -59,4 +60,40 @@ def build_cleaning_overdue(result: OverdueResult, now: datetime) -> Event:
         severity=Severity.WARNING,
         message=result.message,
         payload={"zone": result.zone_type, "reason": result.reason},
+    )
+
+
+def _camera_where(cam: CameraInfo) -> str:
+    """Человекочитаемое «где» для текста события о камере."""
+    return cam.room_name or cam.room_id or "неизвестном помещении"
+
+
+def build_camera_offline(cam: CameraInfo, now: datetime) -> Event:
+    """Событие «камера не отвечает» (#283).
+
+    source=analytics: живость камеры относится к контуру видеоаналитики.
+    """
+    return Event(
+        id=uuid4(),
+        ts=now,
+        source=EventSource.ANALYTICS,
+        type=EventType.CAMERA_OFFLINE,
+        room_id=cam.room_id,
+        severity=Severity.WARNING,
+        message=f"Камера «{cam.name}» в {_camera_where(cam)} не отвечает",
+        payload={"camera_id": cam.id, "camera_name": cam.name},
+    )
+
+
+def build_camera_online(cam: CameraInfo, now: datetime) -> Event:
+    """Событие «камера снова на связи» (снятие, #283)."""
+    return Event(
+        id=uuid4(),
+        ts=now,
+        source=EventSource.ANALYTICS,
+        type=EventType.CAMERA_ONLINE,
+        room_id=cam.room_id,
+        severity=Severity.INFO,
+        message=f"Камера «{cam.name}» в {_camera_where(cam)} снова на связи",
+        payload={"camera_id": cam.id, "camera_name": cam.name},
     )
