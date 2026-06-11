@@ -143,7 +143,9 @@ GET /api/v1/events?from=&to=&type=&room=&limit=&offset=
 
 В тот же журнал попадают события живости инфраструктуры: `camera_offline`/
 `camera_online` (#283) — планировщик пробует кадр камеры у go2rtc и сообщает об
-отвале/восстановлении (раз на эпизод), симметрично «тишине» узла датчика; и
+отвале/восстановлении (раз на эпизод), симметрично «тишине» узла датчика;
+`media_gateway_offline`/`media_gateway_online` (#286) — недоступность самого
+go2rtc даёт один агрегированный сигнал вместо лавины `camera_offline`; и
 `service_silent`/`service_restored` (#284) — watchdog следит за свежестью
 heartbeat'ов наших сервисов (`ingest-sensors`, `scheduler`, `video-analytics`).
 

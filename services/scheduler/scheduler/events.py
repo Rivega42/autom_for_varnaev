@@ -99,6 +99,38 @@ def build_camera_online(cam: CameraInfo, now: datetime) -> Event:
     )
 
 
+def build_media_gateway_offline(now: datetime) -> Event:
+    """Событие «медиа-шлюз go2rtc недоступен» (#286).
+
+    Один агрегированный сигнал вместо лавины `camera_offline` по всем камерам:
+    при упавшем шлюзе состояние самих камер неизвестно.
+    """
+    return Event(
+        id=uuid4(),
+        ts=now,
+        source=EventSource.ANALYTICS,
+        type=EventType.MEDIA_GATEWAY_OFFLINE,
+        room_id=None,
+        severity=Severity.WARNING,
+        message="Медиа-шлюз камер (go2rtc) недоступен — состояние камер неизвестно",
+        payload={"service": "media-gateway"},
+    )
+
+
+def build_media_gateway_online(now: datetime) -> Event:
+    """Событие «медиа-шлюз go2rtc снова на связи» (снятие, #286)."""
+    return Event(
+        id=uuid4(),
+        ts=now,
+        source=EventSource.ANALYTICS,
+        type=EventType.MEDIA_GATEWAY_ONLINE,
+        room_id=None,
+        severity=Severity.INFO,
+        message="Медиа-шлюз камер (go2rtc) снова на связи",
+        payload={"service": "media-gateway"},
+    )
+
+
 def build_service_silent(service: str, silent_for_min: int, now: datetime) -> Event:
     """Событие «сервис замолчал» (нет heartbeat дольше порога, #284).
 
