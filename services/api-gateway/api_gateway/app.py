@@ -20,6 +20,7 @@ from api_gateway.artifacts_store import (
     read_artifact_bytes,
     save_bytes,
 )
+from api_gateway.audit import list_audit, make_audited
 from api_gateway.auth import make_require_api_key_media, make_require_role
 from api_gateway.cameras_repository import (
     create_camera,
@@ -157,6 +158,9 @@ def create_app(
     # admin — только роль admin: настройка (камеры/пороги/расписания/правила/справочники).
     auth = Depends(make_require_role(settings, "operator"))
     admin = Depends(make_require_role(settings, "admin"))
+    # Аудит значимых действий (#292): проверяют роль И пишут строку в audit_log.
+    audited_admin = Depends(make_audited(settings, engine, "admin"))
+    audited_op = Depends(make_audited(settings, engine, "operator"))
     # Для медиа-эндпойнтов (кадр/видеопоток): ключ из заголовка ИЛИ query (<img>).
     media_auth = Depends(make_require_api_key_media(settings))
 
@@ -195,7 +199,7 @@ def create_app(
             raise api_error(ErrorCode.EVENT_NOT_FOUND, "Событие не найдено")
         return ok(item)
 
-    @app.post(f"{API_PREFIX}/events/{{event_id}}/ack", dependencies=[auth])
+    @app.post(f"{API_PREFIX}/events/{{event_id}}/ack", dependencies=[audited_op])
     def post_event_ack(event_id: UUID) -> dict[str, Any]:
         """Подтвердить событие (#264): эскалация уведомлений по нему прекращается."""
         if not events.ack_event(event_id):
@@ -345,6 +349,16 @@ def create_app(
         data = build_overview(engine, events, datetime.now(UTC))
         return ok(data)
 
+    @app.get(f"{API_PREFIX}/audit", dependencies=[admin])
+    def get_audit(
+        from_: str | None = Query(default=None, alias="from"),
+        to: str | None = None,
+        limit: int = Query(default=100, ge=1, le=1000),
+    ) -> dict[str, Any]:
+        """Журнал аудита значимых действий (только admin, #292)."""
+        items = list_audit(engine, _parse_query_dt(from_), _parse_query_dt(to), limit)
+        return ok({"items": items, "total": len(items)})
+
     # ── Справочники объекта: помещения и узлы датчиков (docs/03_API_CONTRACT.md §3.4) ──
     # Заводятся через интерфейс/REST — без SQL и сидинга. Без узла в справочнике
     # ingest-sensors отбрасывает его показания, поэтому это часть первичной настройки.
@@ -355,7 +369,7 @@ def create_app(
         items = list_rooms(engine)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/rooms", dependencies=[admin])
+    @app.post(f"{API_PREFIX}/rooms", dependencies=[audited_admin])
     def post_room(body: RoomCreate) -> dict[str, Any]:
         """Завести помещение или 409 ROOM_ALREADY_EXISTS при занятом id."""
         try:
@@ -372,7 +386,7 @@ def create_app(
         items = list_nodes(engine)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/sensor-nodes", dependencies=[admin])
+    @app.post(f"{API_PREFIX}/sensor-nodes", dependencies=[audited_admin])
     def post_sensor_node(body: SensorNodeCreate) -> dict[str, Any]:
         """Завести узел датчиков (404 если помещения нет, 409 при занятом id)."""
         try:
@@ -396,7 +410,7 @@ def create_app(
         items = list_cameras(engine)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/cameras", dependencies=[admin])
+    @app.post(f"{API_PREFIX}/cameras", dependencies=[audited_admin])
     def post_camera(body: CameraCreate) -> dict[str, Any]:
         """Завести камеру в справочнике объекта (альтернатива сид-конфигу)."""
         return ok(create_camera(engine, body))
@@ -409,7 +423,7 @@ def create_app(
             raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
         return ok(item)
 
-    @app.patch(f"{API_PREFIX}/cameras/{{camera_id}}", dependencies=[admin])
+    @app.patch(f"{API_PREFIX}/cameras/{{camera_id}}", dependencies=[audited_admin])
     def patch_camera(camera_id: UUID, body: CameraUpdate) -> dict[str, Any]:
         """Включить/выключить камеру и функции её видеоаналитики."""
         item = update_camera(engine, camera_id, body)
@@ -452,14 +466,14 @@ def create_app(
         items = list_zones(engine, camera_id)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/cameras/{{camera_id}}/zones", dependencies=[admin])
+    @app.post(f"{API_PREFIX}/cameras/{{camera_id}}/zones", dependencies=[audited_admin])
     def post_camera_zone(camera_id: UUID, body: CameraZoneCreate) -> dict[str, Any]:
         """Создать ROI-зону камеры."""
         if get_camera(engine, camera_id) is None:
             raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
         return ok(create_zone(engine, camera_id, body))
 
-    @app.patch(f"{API_PREFIX}/zones/{{zone_id}}", dependencies=[admin])
+    @app.patch(f"{API_PREFIX}/zones/{{zone_id}}", dependencies=[audited_admin])
     def patch_zone(zone_id: int, body: CameraZoneUpdate) -> dict[str, Any]:
         """Изменить ROI-зону или 404 ZONE_NOT_FOUND."""
         item = update_zone(engine, zone_id, body)
@@ -467,7 +481,7 @@ def create_app(
             raise api_error(ErrorCode.ZONE_NOT_FOUND, "Зона не найдена")
         return ok(item)
 
-    @app.delete(f"{API_PREFIX}/zones/{{zone_id}}", dependencies=[admin])
+    @app.delete(f"{API_PREFIX}/zones/{{zone_id}}", dependencies=[audited_admin])
     def remove_zone(zone_id: int) -> dict[str, Any]:
         """Удалить ROI-зону или 404 ZONE_NOT_FOUND."""
         if not delete_zone(engine, zone_id):
@@ -482,12 +496,12 @@ def create_app(
         items = list_thresholds(engine)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/thresholds", dependencies=[admin])
+    @app.post(f"{API_PREFIX}/thresholds", dependencies=[audited_admin])
     def post_threshold(body: ThresholdCreate) -> dict[str, Any]:
         """Создать порог метрики."""
         return ok(create_threshold(engine, body))
 
-    @app.patch(f"{API_PREFIX}/thresholds/{{threshold_id}}", dependencies=[admin])
+    @app.patch(f"{API_PREFIX}/thresholds/{{threshold_id}}", dependencies=[audited_admin])
     def patch_threshold(threshold_id: int, body: ThresholdUpdate) -> dict[str, Any]:
         """Изменить порог или 404 THRESHOLD_NOT_FOUND."""
         item = update_threshold(engine, threshold_id, body)
@@ -495,7 +509,7 @@ def create_app(
             raise api_error(ErrorCode.THRESHOLD_NOT_FOUND, "Порог не найден")
         return ok(item)
 
-    @app.delete(f"{API_PREFIX}/thresholds/{{threshold_id}}", dependencies=[admin])
+    @app.delete(f"{API_PREFIX}/thresholds/{{threshold_id}}", dependencies=[audited_admin])
     def remove_threshold(threshold_id: int) -> dict[str, Any]:
         """Удалить порог или 404 THRESHOLD_NOT_FOUND."""
         if not delete_threshold(engine, threshold_id):
@@ -535,7 +549,7 @@ def create_app(
         items = list_cleaning_rules(engine)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/cleaning-rules", dependencies=[admin])
+    @app.post(f"{API_PREFIX}/cleaning-rules", dependencies=[audited_admin])
     def post_cleaning_rule(body: CleaningRuleCreate) -> dict[str, Any]:
         """Создать правило; нет помещения → 404, дубль зоны → 409."""
         try:
@@ -550,7 +564,7 @@ def create_app(
                 f"Правило для зоны «{body.zone_type.value}» в «{body.room}» уже существует",
             ) from None
 
-    @app.patch(f"{API_PREFIX}/cleaning-rules/{{rule_id}}", dependencies=[admin])
+    @app.patch(f"{API_PREFIX}/cleaning-rules/{{rule_id}}", dependencies=[audited_admin])
     def patch_cleaning_rule(rule_id: int, body: CleaningRuleUpdate) -> dict[str, Any]:
         """Изменить правило или 404 CLEANING_RULE_NOT_FOUND."""
         item = update_cleaning_rule(engine, rule_id, body)
@@ -558,7 +572,7 @@ def create_app(
             raise api_error(ErrorCode.CLEANING_RULE_NOT_FOUND, "Правило не найдено")
         return ok(item)
 
-    @app.delete(f"{API_PREFIX}/cleaning-rules/{{rule_id}}", dependencies=[admin])
+    @app.delete(f"{API_PREFIX}/cleaning-rules/{{rule_id}}", dependencies=[audited_admin])
     def remove_cleaning_rule(rule_id: int) -> dict[str, Any]:
         """Удалить правило или 404 CLEANING_RULE_NOT_FOUND."""
         if not delete_cleaning_rule(engine, rule_id):
@@ -573,7 +587,7 @@ def create_app(
         items = list_schedules(engine)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/schedules", dependencies=[admin])
+    @app.post(f"{API_PREFIX}/schedules", dependencies=[audited_admin])
     def post_schedule(body: ScheduleCreate) -> dict[str, Any]:
         """Создать расписание (таймер запуска видеоанализа) или 409 при дубле имени."""
         try:
@@ -584,7 +598,7 @@ def create_app(
                 f"Расписание с именем «{body.name}» уже существует",
             ) from None
 
-    @app.patch(f"{API_PREFIX}/schedules/{{schedule_id}}", dependencies=[admin])
+    @app.patch(f"{API_PREFIX}/schedules/{{schedule_id}}", dependencies=[audited_admin])
     def patch_schedule(schedule_id: int, body: ScheduleUpdate) -> dict[str, Any]:
         """Изменить расписание или 404 SCHEDULE_NOT_FOUND / 409 при дубле имени."""
         try:
@@ -598,7 +612,7 @@ def create_app(
             raise api_error(ErrorCode.SCHEDULE_NOT_FOUND, "Расписание не найдено")
         return ok(item)
 
-    @app.delete(f"{API_PREFIX}/schedules/{{schedule_id}}", dependencies=[admin])
+    @app.delete(f"{API_PREFIX}/schedules/{{schedule_id}}", dependencies=[audited_admin])
     def remove_schedule(schedule_id: int) -> dict[str, Any]:
         """Удалить расписание или 404 SCHEDULE_NOT_FOUND."""
         if not delete_schedule(engine, schedule_id):
