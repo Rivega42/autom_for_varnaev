@@ -128,6 +128,26 @@ cleaning_rules = sa.Table(
 )
 
 
+audit_log = sa.Table(
+    "audit_log",
+    metadata,
+    # BigInteger в PostgreSQL; в SQLite (тесты) — INTEGER, иначе автоинкремент PK
+    # не работает (SQLite даёт rowid только для «INTEGER PRIMARY KEY»).
+    sa.Column(
+        "id",
+        sa.BigInteger().with_variant(sa.Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    ),
+    sa.Column("ts", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("actor", sa.Text, nullable=False),
+    sa.Column("role", sa.Text, nullable=False),
+    sa.Column("action", sa.Text, nullable=False),
+    sa.Column("target", sa.Text, nullable=False),
+    sa.Column("detail", sa.JSON),
+)
+
+
 artifacts = sa.Table(
     "artifacts",
     metadata,
