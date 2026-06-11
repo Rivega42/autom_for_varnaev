@@ -20,7 +20,7 @@ from api_gateway.artifacts_store import (
     read_artifact_bytes,
     save_bytes,
 )
-from api_gateway.auth import make_require_api_key, make_require_api_key_media
+from api_gateway.auth import make_require_api_key_media, make_require_role
 from api_gateway.cameras_repository import (
     create_camera,
     get_camera,
@@ -152,8 +152,11 @@ def create_app(
     app = FastAPI(title="api-gateway")
     register_error_handlers(app)
 
-    # Зависимость X-API-Key для публичных и /integration/* (docs/03_API_CONTRACT.md §1).
-    auth = Depends(make_require_api_key(settings))
+    # Зависимости X-API-Key по ролям (docs/03_API_CONTRACT.md §1, #291).
+    # auth — любой валидный ключ (роль operator+): чтение, ack, analytics/analysis.
+    # admin — только роль admin: настройка (камеры/пороги/расписания/правила/справочники).
+    auth = Depends(make_require_role(settings, "operator"))
+    admin = Depends(make_require_role(settings, "admin"))
     # Для медиа-эндпойнтов (кадр/видеопоток): ключ из заголовка ИЛИ query (<img>).
     media_auth = Depends(make_require_api_key_media(settings))
 
@@ -352,7 +355,7 @@ def create_app(
         items = list_rooms(engine)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/rooms", dependencies=[auth])
+    @app.post(f"{API_PREFIX}/rooms", dependencies=[admin])
     def post_room(body: RoomCreate) -> dict[str, Any]:
         """Завести помещение или 409 ROOM_ALREADY_EXISTS при занятом id."""
         try:
@@ -369,7 +372,7 @@ def create_app(
         items = list_nodes(engine)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/sensor-nodes", dependencies=[auth])
+    @app.post(f"{API_PREFIX}/sensor-nodes", dependencies=[admin])
     def post_sensor_node(body: SensorNodeCreate) -> dict[str, Any]:
         """Завести узел датчиков (404 если помещения нет, 409 при занятом id)."""
         try:
@@ -393,7 +396,7 @@ def create_app(
         items = list_cameras(engine)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/cameras", dependencies=[auth])
+    @app.post(f"{API_PREFIX}/cameras", dependencies=[admin])
     def post_camera(body: CameraCreate) -> dict[str, Any]:
         """Завести камеру в справочнике объекта (альтернатива сид-конфигу)."""
         return ok(create_camera(engine, body))
@@ -406,7 +409,7 @@ def create_app(
             raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
         return ok(item)
 
-    @app.patch(f"{API_PREFIX}/cameras/{{camera_id}}", dependencies=[auth])
+    @app.patch(f"{API_PREFIX}/cameras/{{camera_id}}", dependencies=[admin])
     def patch_camera(camera_id: UUID, body: CameraUpdate) -> dict[str, Any]:
         """Включить/выключить камеру и функции её видеоаналитики."""
         item = update_camera(engine, camera_id, body)
@@ -449,14 +452,14 @@ def create_app(
         items = list_zones(engine, camera_id)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/cameras/{{camera_id}}/zones", dependencies=[auth])
+    @app.post(f"{API_PREFIX}/cameras/{{camera_id}}/zones", dependencies=[admin])
     def post_camera_zone(camera_id: UUID, body: CameraZoneCreate) -> dict[str, Any]:
         """Создать ROI-зону камеры."""
         if get_camera(engine, camera_id) is None:
             raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
         return ok(create_zone(engine, camera_id, body))
 
-    @app.patch(f"{API_PREFIX}/zones/{{zone_id}}", dependencies=[auth])
+    @app.patch(f"{API_PREFIX}/zones/{{zone_id}}", dependencies=[admin])
     def patch_zone(zone_id: int, body: CameraZoneUpdate) -> dict[str, Any]:
         """Изменить ROI-зону или 404 ZONE_NOT_FOUND."""
         item = update_zone(engine, zone_id, body)
@@ -464,7 +467,7 @@ def create_app(
             raise api_error(ErrorCode.ZONE_NOT_FOUND, "Зона не найдена")
         return ok(item)
 
-    @app.delete(f"{API_PREFIX}/zones/{{zone_id}}", dependencies=[auth])
+    @app.delete(f"{API_PREFIX}/zones/{{zone_id}}", dependencies=[admin])
     def remove_zone(zone_id: int) -> dict[str, Any]:
         """Удалить ROI-зону или 404 ZONE_NOT_FOUND."""
         if not delete_zone(engine, zone_id):
@@ -479,12 +482,12 @@ def create_app(
         items = list_thresholds(engine)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/thresholds", dependencies=[auth])
+    @app.post(f"{API_PREFIX}/thresholds", dependencies=[admin])
     def post_threshold(body: ThresholdCreate) -> dict[str, Any]:
         """Создать порог метрики."""
         return ok(create_threshold(engine, body))
 
-    @app.patch(f"{API_PREFIX}/thresholds/{{threshold_id}}", dependencies=[auth])
+    @app.patch(f"{API_PREFIX}/thresholds/{{threshold_id}}", dependencies=[admin])
     def patch_threshold(threshold_id: int, body: ThresholdUpdate) -> dict[str, Any]:
         """Изменить порог или 404 THRESHOLD_NOT_FOUND."""
         item = update_threshold(engine, threshold_id, body)
@@ -492,7 +495,7 @@ def create_app(
             raise api_error(ErrorCode.THRESHOLD_NOT_FOUND, "Порог не найден")
         return ok(item)
 
-    @app.delete(f"{API_PREFIX}/thresholds/{{threshold_id}}", dependencies=[auth])
+    @app.delete(f"{API_PREFIX}/thresholds/{{threshold_id}}", dependencies=[admin])
     def remove_threshold(threshold_id: int) -> dict[str, Any]:
         """Удалить порог или 404 THRESHOLD_NOT_FOUND."""
         if not delete_threshold(engine, threshold_id):
@@ -532,7 +535,7 @@ def create_app(
         items = list_cleaning_rules(engine)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/cleaning-rules", dependencies=[auth])
+    @app.post(f"{API_PREFIX}/cleaning-rules", dependencies=[admin])
     def post_cleaning_rule(body: CleaningRuleCreate) -> dict[str, Any]:
         """Создать правило; нет помещения → 404, дубль зоны → 409."""
         try:
@@ -547,7 +550,7 @@ def create_app(
                 f"Правило для зоны «{body.zone_type.value}» в «{body.room}» уже существует",
             ) from None
 
-    @app.patch(f"{API_PREFIX}/cleaning-rules/{{rule_id}}", dependencies=[auth])
+    @app.patch(f"{API_PREFIX}/cleaning-rules/{{rule_id}}", dependencies=[admin])
     def patch_cleaning_rule(rule_id: int, body: CleaningRuleUpdate) -> dict[str, Any]:
         """Изменить правило или 404 CLEANING_RULE_NOT_FOUND."""
         item = update_cleaning_rule(engine, rule_id, body)
@@ -555,7 +558,7 @@ def create_app(
             raise api_error(ErrorCode.CLEANING_RULE_NOT_FOUND, "Правило не найдено")
         return ok(item)
 
-    @app.delete(f"{API_PREFIX}/cleaning-rules/{{rule_id}}", dependencies=[auth])
+    @app.delete(f"{API_PREFIX}/cleaning-rules/{{rule_id}}", dependencies=[admin])
     def remove_cleaning_rule(rule_id: int) -> dict[str, Any]:
         """Удалить правило или 404 CLEANING_RULE_NOT_FOUND."""
         if not delete_cleaning_rule(engine, rule_id):
@@ -570,7 +573,7 @@ def create_app(
         items = list_schedules(engine)
         return ok({"items": items, "total": len(items)})
 
-    @app.post(f"{API_PREFIX}/schedules", dependencies=[auth])
+    @app.post(f"{API_PREFIX}/schedules", dependencies=[admin])
     def post_schedule(body: ScheduleCreate) -> dict[str, Any]:
         """Создать расписание (таймер запуска видеоанализа) или 409 при дубле имени."""
         try:
@@ -581,7 +584,7 @@ def create_app(
                 f"Расписание с именем «{body.name}» уже существует",
             ) from None
 
-    @app.patch(f"{API_PREFIX}/schedules/{{schedule_id}}", dependencies=[auth])
+    @app.patch(f"{API_PREFIX}/schedules/{{schedule_id}}", dependencies=[admin])
     def patch_schedule(schedule_id: int, body: ScheduleUpdate) -> dict[str, Any]:
         """Изменить расписание или 404 SCHEDULE_NOT_FOUND / 409 при дубле имени."""
         try:
@@ -595,7 +598,7 @@ def create_app(
             raise api_error(ErrorCode.SCHEDULE_NOT_FOUND, "Расписание не найдено")
         return ok(item)
 
-    @app.delete(f"{API_PREFIX}/schedules/{{schedule_id}}", dependencies=[auth])
+    @app.delete(f"{API_PREFIX}/schedules/{{schedule_id}}", dependencies=[admin])
     def remove_schedule(schedule_id: int) -> dict[str, Any]:
         """Удалить расписание или 404 SCHEDULE_NOT_FOUND."""
         if not delete_schedule(engine, schedule_id):
@@ -603,7 +606,8 @@ def create_app(
         return ok({"deleted": schedule_id})
 
     # СТЫК-АУРА (v2): заглушённые разъёмы /integration/* (501 при выключенном флаге).
-    register_integration_routes(app, settings, dependencies=[auth])
+    # Разъёмы АУРА — уровень настройки (admin); в v1 всё равно заглушены (501).
+    register_integration_routes(app, settings, dependencies=[admin])
 
     # GUI настройки видеоаналитики (статический SPA). Сам HTML/JS — без ключа;
     # запросы к API из него несут X-API-Key. Каталог создаётся вместе с пакетом.

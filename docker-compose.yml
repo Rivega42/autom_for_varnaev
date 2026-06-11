@@ -224,6 +224,8 @@ services:
     environment:
       LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
       API_KEY: ${API_KEY:?API_KEY должен быть задан в .env (иначе API открыт без ключа)}
+      # Роли (#291): ключи per-user «ключ:роль,...» (operator|admin); API_KEY=admin.
+      API_KEYS: ${API_KEYS:-}
       AURA_INTEGRATION_ENABLED: ${AURA_INTEGRATION_ENABLED:-false}
       # Кадр-превью камеры для GUI разметки ROI (go2rtc во внутренней сети).
       GO2RTC_URL: ${GO2RTC_URL:-http://media-gateway:1984}
@@ -380,6 +382,8 @@ services:
     environment:
       LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
       API_KEY: ${API_KEY:?API_KEY должен быть задан в .env (иначе API открыт без ключа)}
+      # Роли (#291): ключи per-user «ключ:роль,...» (operator|admin); API_KEY=admin.
+      API_KEYS: ${API_KEYS:-}
       AURA_INTEGRATION_ENABLED: ${AURA_INTEGRATION_ENABLED:-false}
       GO2RTC_URL: ${GO2RTC_URL:-http://media-gateway:1984}
       # Подключение к БД (справочники, задания, показания читаются напрямую).
