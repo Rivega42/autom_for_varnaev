@@ -55,8 +55,16 @@ unit         text NOT NULL                 -- "C" | "%" | "C"
 ```
 - Создаётся как hypertable: `SELECT create_hypertable('sensor_readings','ts');`
 - Индекс по `(room_id, metric, ts DESC)` для дашбордов.
-- Политика хранения/сжатия — задаётся отдельным issue (зависит от регламента
-  заказчика по сроку хранения; см. открытые вопросы решения по датчикам).
+- Сжатие сырья (lossless) — политика `add_compression_policy` старше
+  `READINGS_COMPRESS_AFTER_DAYS` дней (по умолчанию 7); retention
+  `add_retention_policy` — `READINGS_RETENTION_DAYS` (0 = выключено, значения по
+  регламенту заказчика, #41). Миграция 0018 (#295).
+
+### sensor_readings_hourly (continuous aggregate, #295)
+Почасовая свёртка для быстрых дашбордов на длинных рядах (Grafana читает свёртку,
+а не сырьё): `bucket` (час), `room_id`, `metric`, `unit`, `avg_value`,
+`min_value`, `max_value`. Обновляется политикой раз в час. Сырьё остаётся для
+коротких диапазонов и детализации.
 
 Метрики v1: `air_temp` (°C), `humidity` (%), `surface_ir` (°C — бесконтактная
 температура поверхности, MLX90614), `uv_index` (общий УФ-индекс/УФ-A, LTR390),
