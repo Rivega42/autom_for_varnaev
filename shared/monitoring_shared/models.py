@@ -80,6 +80,7 @@ class EventType(StrEnum):
     ACTION_DETECTED = "action_detected"
     COVERAGE_REPORT = "coverage_report"
     CONDITION_FLAGGED = "condition_flagged"
+    UNIFORM_VIOLATION = "uniform_violation"
     # санитарный контроль
     CLEANING_OVERDUE = "cleaning_overdue"
     # живость инфраструктуры (камеры, сервисы)

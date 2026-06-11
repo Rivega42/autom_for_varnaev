@@ -45,7 +45,8 @@ from video_analytics.repository import (
 )
 from video_analytics.sources import Frame, FrameSource
 from video_analytics.uniform import (
-    build_condition_flagged,
+    UniformViolationDetector,
+    build_uniform_violation,
     is_white_coat,
     mean_brightness_saturation,
     torso_polygon,
@@ -117,6 +118,7 @@ def process_task(
     analytics: dict[str, bool] | None = None,
     engine: Engine | None = None,
     artifacts_dir: str = "",
+    uniform_min_seconds: float = 5.0,
     save_frame: Callable[[Frame, str], None] = save_screenshot,
     now_fn: Callable[[], datetime] = _now_utc,
 ) -> dict[str, Any]:
@@ -141,8 +143,9 @@ def process_task(
     poses_found = 0
     events_sent = 0
     coverage_zones = 0
-    # Флаг «нет спецодежды» эмитим однократно на задание (антиспам).
-    uniform_flagged = False
+    # Контроль спецодежды: нарушение фиксируем при отсутствии халата дольше
+    # порога (раз на эпизод), а не однократно по первому кадру (#272).
+    uniform_detector = UniformViolationDetector(uniform_min_seconds)
     # heat-маска движения для расчёта покрытия зон (только если зоны заданы).
     heat: BoolMask | None = None
     prev_frame: Frame | None = None
@@ -169,18 +172,16 @@ def process_task(
                 for action in actions.process(pose, ts, table_polys):
                     sink.emit(build_action_event(action, task.room_id, ts))
                     events_sent += 1
-            # Эвристика «белого халата»: при видимом торсе и отсутствии халата —
-            # одно событие condition_flagged на задание.
-            if (
-                uniform_on
-                and not uniform_flagged
-                and all(pose.visible(lm) for lm in _TORSO_LANDMARKS)
-            ):
+            # Эвристика «белого халата»: при видимом торсе оцениваем наличие
+            # халата; нарушение фиксируем, если его нет дольше порога (#272).
+            if uniform_on and all(pose.visible(lm) for lm in _TORSO_LANDMARKS):
                 brightness, saturation = mean_brightness_saturation(frame, torso_polygon(pose))
-                if not is_white_coat(brightness, saturation):
-                    sink.emit(build_condition_flagged(brightness, saturation, task.room_id, ts))
+                duration = uniform_detector.update(is_white_coat(brightness, saturation), ts)
+                if duration is not None:
+                    sink.emit(
+                        build_uniform_violation(duration, brightness, saturation, task.room_id, ts)
+                    )
                     events_sent += 1
-                    uniform_flagged = True
             # Запомнить первый кадр, на котором появились события (для скриншота).
             if evidence_frame is None and events_sent > events_before:
                 evidence_frame = frame
@@ -269,6 +270,7 @@ def run_once(
             analytics=analytics,
             engine=engine,
             artifacts_dir=settings.artifacts_dir,
+            uniform_min_seconds=settings.uniform_min_seconds,
             save_frame=save_frame,
             now_fn=now_fn,
         )

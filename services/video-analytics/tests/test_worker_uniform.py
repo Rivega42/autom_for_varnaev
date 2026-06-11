@@ -1,8 +1,9 @@
-"""Проверка проводки эвристики «белого халата» в воркере (condition_flagged)."""
+"""Проверка проводки эвристики «белого халата» в воркере (uniform_violation, #272)."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import numpy as np
@@ -66,9 +67,21 @@ class _FakeDetector:
         return self._pose
 
 
-def _run(engine: Engine, frame: Frame) -> CollectingEventSink:
+def _clock(step_s: float = 1.0) -> Callable[[], datetime]:
+    """Часы, продвигающиеся на step_s секунд за каждый вызов (для накопления длительности)."""
+    state = {"t": datetime(2026, 6, 6, 10, 0, tzinfo=UTC)}
+
+    def now() -> datetime:
+        cur = state["t"]
+        state["t"] = cur + timedelta(seconds=step_s)
+        return cur
+
+    return now
+
+
+def _run(engine: Engine, frame: Frame, frames: int = 10) -> CollectingEventSink:
     sink = CollectingEventSink()
-    source: FrameSource = FakeFrameSource([frame])
+    source: FrameSource = FakeFrameSource([frame] * frames)
     run_once(
         engine,
         _settings(),
@@ -76,24 +89,36 @@ def _run(engine: Engine, frame: Frame) -> CollectingEventSink:
         sink=sink,
         source_factory=lambda *_: source,
         save_frame=lambda *_: None,  # не трогаем cv2 в тестах
-        now_fn=lambda: datetime(2026, 6, 6, 10, 1, tzinfo=UTC),
+        now_fn=_clock(),  # время идёт — иначе длительность нарушения не накопится
     )
     return sink
 
 
-def test_dark_clothing_flags_no_uniform() -> None:
-    """Тёмная одежда на торсе → событие condition_flagged."""
+def test_dark_clothing_long_enough_triggers_violation() -> None:
+    """Тёмная одежда на торсе дольше порога → событие uniform_violation."""
     engine = _engine()
     _insert_task(engine)
     frame: Frame = np.full((100, 100, 3), 30, dtype=np.uint8)
     sink = _run(engine, frame)
-    assert any(e.type is EventType.CONDITION_FLAGGED for e in sink.events)
+    violations = [e for e in sink.events if e.type is EventType.UNIFORM_VIOLATION]
+    assert len(violations) == 1  # раз на эпизод
+    assert violations[0].payload["flag"] == "no_uniform"
 
 
-def test_white_coat_no_flag() -> None:
-    """Белый халат (яркий, ненасыщенный торс) → события condition_flagged нет."""
+def test_white_coat_no_violation() -> None:
+    """Белый халат (яркий, ненасыщенный торс) → нарушения нет."""
     engine = _engine()
     _insert_task(engine)
     frame: Frame = np.full((100, 100, 3), 240, dtype=np.uint8)
     sink = _run(engine, frame)
-    assert not any(e.type is EventType.CONDITION_FLAGGED for e in sink.events)
+    assert not any(e.type is EventType.UNIFORM_VIOLATION for e in sink.events)
+
+
+def test_short_violation_below_threshold_no_event() -> None:
+    """Короткое отсутствие халата (меньше порога) события не даёт."""
+    engine = _engine()
+    _insert_task(engine)
+    frame: Frame = np.full((100, 100, 3), 30, dtype=np.uint8)
+    # 3 кадра по 1 c < порога 5 c → нарушение не фиксируется
+    sink = _run(engine, frame, frames=3)
+    assert not any(e.type is EventType.UNIFORM_VIOLATION for e in sink.events)

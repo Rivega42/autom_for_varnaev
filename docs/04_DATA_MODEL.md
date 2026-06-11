@@ -104,6 +104,7 @@ task_id       uuid REFERENCES analysis_tasks(id) -- если событие от
 | analytics | `action_detected` | `{"action":"surface_wiped","hands":"both","duration_s":4.2}` | «Протирание поверхности двумя руками, 4 с» |
 | analytics | `coverage_report` | `{"zone":"table","zone_id":7,"coverage_pct":63}` | «Покрытие зоны стола — 63%» |
 | analytics | `condition_flagged` | `{"flag":"no_uniform","brightness":0.4,"saturation":0.5}` | «Не распознана спецодежда (белый халат)» |
+| analytics | `uniform_violation` | `{"flag":"no_uniform","duration_s":7.0,"brightness":0.4,"saturation":0.5}` | «Человек без спецодежды (белого халата) дольше 7 с» |
 | analytics | `cleaning_overdue` | `{"zone":"table","reason":"не убиралась более 4 ч (прошло 5.2 ч)"}` | «Зона «стол» (помещение room-01): не убиралась более 4 ч» |
 | analytics | `camera_offline` | `{"camera_id":"...","camera_name":"Кухня-1"}` | «Камера «Кухня-1» в Цех приготовления не отвечает» |
 | analytics | `camera_online` | `{"camera_id":"...","camera_name":"Кухня-1"}` | «Камера «Кухня-1» в Цех приготовления снова на связи» |
@@ -114,6 +115,9 @@ task_id       uuid REFERENCES analysis_tasks(id) -- если событие от
 простые позы (рука/колено/голова/корпус); `action_detected` — составные действия
 (протирание/махи/хлопок/ходьба) с длительностью; `coverage_report` — % покрытия
 ROI-зоны; `condition_flagged` — форма («белый халат», цветовая эвристика).
+`uniform_violation` (#272) — то же по правилу: человек без признака халата дольше
+`ANALYTICS_UNIFORM_MIN_S` секунд → событие (раз на эпизод) со стоп-кадром. Это
+эвристика (яркость/насыщенность торса), а не обученный детектор СИЗ (см. #105).
 
 `sensor_silent` критичен для холодовой цепи: молчащий узел = потенциально
 испорченный товар. Порог «тишины» — в `thresholds`/конфиге.
