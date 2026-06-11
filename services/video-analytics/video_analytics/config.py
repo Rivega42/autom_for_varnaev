@@ -26,6 +26,8 @@ class Settings:
     model_path: str = "/models/pose_landmarker.task"
     # Ротация артефактов: скриншоты старше N дней удаляются (0 = не чистить).
     artifacts_retention_days: int = 30
+    # Контроль спецодежды (#272): нарушение, если халата нет дольше N секунд.
+    uniform_min_seconds: float = 5.0
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -48,4 +50,5 @@ class Settings:
             max_stream_frames=max_frames,
             model_path=os.getenv("ANALYTICS_MODEL_PATH", "/models/pose_landmarker.task"),
             artifacts_retention_days=int(os.getenv("ARTIFACTS_RETENTION_DAYS", "30")),
+            uniform_min_seconds=float(os.getenv("ANALYTICS_UNIFORM_MIN_S", "5")),
         )

@@ -76,3 +76,60 @@ def build_condition_flagged(
             "saturation": round(saturation, 2),
         },
     )
+
+
+class UniformViolationDetector:
+    """Фиксирует отсутствие халата дольше порога — раз на эпизод (#272).
+
+    На каждом кадре с видимым торсом вызывается `update(has_uniform, ts)`. Пока
+    халата нет, накапливается время с первого «нет халата»; при превышении порога
+    возвращается длительность (один раз), затем тишина до возврата халата. Это
+    эвристика, а не обученный детектор СИЗ (ограничения — docs/07 §2.4, issue #105).
+    """
+
+    def __init__(self, min_seconds: float) -> None:
+        self._min = min_seconds
+        self._since: datetime | None = None
+        self._fired = False
+
+    def update(self, has_uniform: bool, ts: datetime) -> float | None:
+        """Вернуть длительность нарушения при пересечении порога, иначе None."""
+        if has_uniform:
+            self._since = None
+            self._fired = False
+            return None
+        if self._since is None:
+            self._since = ts
+            return None
+        if self._fired:
+            return None
+        elapsed = (ts - self._since).total_seconds()
+        if elapsed >= self._min:
+            self._fired = True
+            return elapsed
+        return None
+
+
+def build_uniform_violation(
+    duration_s: float,
+    brightness: float,
+    saturation: float,
+    room_id: str | None,
+    ts: datetime,
+) -> Event:
+    """Событие «человек без спецодежды в зоне дольше нормы» (+стоп-кадр, #272)."""
+    return Event(
+        id=uuid4(),
+        ts=ts,
+        source=EventSource.ANALYTICS,
+        type=EventType.UNIFORM_VIOLATION,
+        room_id=room_id,
+        severity=Severity.WARNING,
+        message=f"Человек без спецодежды (белого халата) дольше {int(duration_s)} с",
+        payload={
+            "flag": "no_uniform",
+            "duration_s": round(duration_s, 1),
+            "brightness": round(brightness, 2),
+            "saturation": round(saturation, 2),
+        },
+    )
