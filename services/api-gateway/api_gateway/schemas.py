@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import time
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from monitoring_shared import Metric, Severity, SourceType, ThresholdOp, ZoneType
 
@@ -191,6 +192,38 @@ class CleaningRuleUpdate(BaseModel):
     interval_hours: float | None = Field(default=None, gt=0)
     min_coverage_pct: int | None = Field(default=None, ge=0, le=100)
     zone_name: str | None = None
+    enabled: bool | None = None
+
+
+class PresenceRuleCreate(BaseModel):
+    """Тело POST /presence-rules: правило контроля присутствия по окну (#300).
+
+    В помещении в окне window_start–window_end (дневное, в поясе PRESENCE_TZ
+    планировщика) присутствие должно фиксироваться не реже, чем раз в
+    max_absence_min минут; иначе — событие presence_missing.
+    """
+
+    room: str = Field(min_length=1)
+    window_start: time
+    window_end: time
+    max_absence_min: int = Field(default=30, gt=0)
+    enabled: bool = True
+
+    @model_validator(mode="after")
+    def _window_is_daytime(self) -> PresenceRuleCreate:
+        """Окно дневное: начало строго раньше конца (через полночь — не в v1)."""
+        if self.window_start >= self.window_end:
+            raise ValueError("window_start должен быть раньше window_end (дневное окно)")
+        return self
+
+
+class PresenceRuleUpdate(BaseModel):
+    """Тело PATCH /presence-rules/{id}: частичное обновление правила.
+
+    Окно (room+start+end) — ключ правила и не меняется: пересоздайте правило.
+    """
+
+    max_absence_min: int | None = Field(default=None, gt=0)
     enabled: bool | None = None
 
 

@@ -221,6 +221,26 @@
   </main>
 
   <main>
+    <section class="panel" id="presence-panel" style="width:100%">
+      <h2 style="margin-top:0">Контроль присутствия (рабочие зоны)</h2>
+      <p class="hint">В окне времени присутствие в рабочей зоне помещения должно фиксироваться не
+        реже допустимого перерыва. Нарушение — событие «нет присутствия» (журнал/Grafana,
+        уведомления). Времена окна — в поясе PRESENCE_TZ планировщика.</p>
+      <div class="row">
+        <input id="pr_room" placeholder="помещение" />
+        <input id="pr_start" type="time" value="08:00" style="width:110px" />
+        <input id="pr_end" type="time" value="17:00" style="width:110px" />
+        <input id="pr_maxabs" type="number" min="1" placeholder="перерыв, мин (30)" style="width:150px" />
+        <button id="pr_add">Добавить правило</button>
+      </div>
+      <table id="presencerules">
+        <thead><tr><th>помещение</th><th>окно</th><th>перерыв, мин</th><th>вкл</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <main>
     <section class="panel" id="schedules-panel" style="width:100%">
       <h2 style="margin-top:0">Расписания видеоанализа (таймер)</h2>
       <p class="hint">Периодический запуск анализа. Изменения подхватываются планировщиком на следующем тике.</p>

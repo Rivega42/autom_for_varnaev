@@ -50,6 +50,22 @@ from api_gateway.errors import api_error, register_error_handlers
 from api_gateway.events_client import EventsClient, HttpEventsClient
 from api_gateway.integration import register_integration_routes
 from api_gateway.overview_repository import build_overview
+from api_gateway.presence_rules_repository import (
+    DuplicatePresenceRuleError,
+    RoomNotFoundForPresenceRuleError,
+)
+from api_gateway.presence_rules_repository import (
+    create_rule as create_presence_rule,
+)
+from api_gateway.presence_rules_repository import (
+    delete_rule as delete_presence_rule,
+)
+from api_gateway.presence_rules_repository import (
+    list_rules as list_presence_rules,
+)
+from api_gateway.presence_rules_repository import (
+    update_rule as update_presence_rule,
+)
 from api_gateway.readings_repository import list_readings
 from api_gateway.reports_repository import build_report, report_to_csv
 from api_gateway.rooms_repository import (
@@ -73,6 +89,8 @@ from api_gateway.schemas import (
     CameraZoneUpdate,
     CleaningRuleCreate,
     CleaningRuleUpdate,
+    PresenceRuleCreate,
+    PresenceRuleUpdate,
     RoomCreate,
     ScheduleCreate,
     ScheduleUpdate,
@@ -577,6 +595,45 @@ def create_app(
         """Удалить правило или 404 CLEANING_RULE_NOT_FOUND."""
         if not delete_cleaning_rule(engine, rule_id):
             raise api_error(ErrorCode.CLEANING_RULE_NOT_FOUND, "Правило не найдено")
+        return ok({"deleted": rule_id})
+
+    # ── Правила контроля присутствия (#300, #312) — настройка через интерфейс ──
+
+    @app.get(f"{API_PREFIX}/presence-rules", dependencies=[auth])
+    def get_presence_rules() -> dict[str, Any]:
+        """Список правил контроля присутствия."""
+        items = list_presence_rules(engine)
+        return ok({"items": items, "total": len(items)})
+
+    @app.post(f"{API_PREFIX}/presence-rules", dependencies=[audited_admin])
+    def post_presence_rule(body: PresenceRuleCreate) -> dict[str, Any]:
+        """Создать правило; нет помещения → 404, дубль окна → 409."""
+        try:
+            return ok(create_presence_rule(engine, body))
+        except RoomNotFoundForPresenceRuleError:
+            raise api_error(
+                ErrorCode.ROOM_NOT_FOUND, f"Помещение «{body.room}» не найдено"
+            ) from None
+        except DuplicatePresenceRuleError:
+            raise api_error(
+                ErrorCode.PRESENCE_RULE_DUPLICATE,
+                f"Правило с окном {body.window_start:%H:%M}–{body.window_end:%H:%M} "
+                f"в «{body.room}» уже существует",
+            ) from None
+
+    @app.patch(f"{API_PREFIX}/presence-rules/{{rule_id}}", dependencies=[audited_admin])
+    def patch_presence_rule(rule_id: int, body: PresenceRuleUpdate) -> dict[str, Any]:
+        """Изменить правило (порог/включённость) или 404 PRESENCE_RULE_NOT_FOUND."""
+        item = update_presence_rule(engine, rule_id, body)
+        if item is None:
+            raise api_error(ErrorCode.PRESENCE_RULE_NOT_FOUND, "Правило не найдено")
+        return ok(item)
+
+    @app.delete(f"{API_PREFIX}/presence-rules/{{rule_id}}", dependencies=[audited_admin])
+    def remove_presence_rule(rule_id: int) -> dict[str, Any]:
+        """Удалить правило или 404 PRESENCE_RULE_NOT_FOUND."""
+        if not delete_presence_rule(engine, rule_id):
+            raise api_error(ErrorCode.PRESENCE_RULE_NOT_FOUND, "Правило не найдено")
         return ok({"deleted": rule_id})
 
     # ── Расписания видеоанализа (таймер) — настройка через интерфейс ──

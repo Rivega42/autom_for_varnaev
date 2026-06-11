@@ -80,6 +80,8 @@
 | `ARTIFACT_NOT_FOUND` | 404 | артефакт-доказательство с таким id отсутствует (или файл недоступен) |
 | `CLEANING_RULE_NOT_FOUND` | 404 | правило контроля уборки с таким id отсутствует |
 | `CLEANING_RULE_DUPLICATE` | 409 | правило для этой зоны (помещение+тип) уже существует |
+| `PRESENCE_RULE_NOT_FOUND` | 404 | правило контроля присутствия с таким id отсутствует |
+| `PRESENCE_RULE_DUPLICATE` | 409 | правило с таким окном для помещения уже существует |
 | `NOT_IMPLEMENTED` | 501 | эндпойнт-разъём АУРА выключен в v1 |
 | `INTERNAL` | 500 | прочая внутренняя ошибка |
 
@@ -358,6 +360,31 @@ DELETE /api/v1/cleaning-rules/{id}         # удалить или 404 CLEANING_
 `zone_type`: `table`|`floor`|`window` (как у ROI-зон). На пару (room, zone_type)
 — одно правило (уникальность). `min_coverage_pct: 0` — покрытие не проверяется.
 Несуществующее помещение → 404 `ROOM_NOT_FOUND`.
+
+### 3.7a Правила контроля присутствия (#300, #312)
+
+В помещении в окне времени (например, смена 08:00–17:00) присутствие в рабочей
+зоне должно фиксироваться не реже, чем раз в `max_absence_min` минут (события
+`presence_detected`, #302). Нарушение — событие `presence_missing` от
+планировщика (раз на эпизод). Времена окна — в поясе `PRESENCE_TZ` планировщика
+(IANA, по умолчанию UTC); окно дневное (`window_start < window_end`).
+
+```
+GET    /api/v1/presence-rules              # список правил
+POST   /api/v1/presence-rules              # создать или 409 PRESENCE_RULE_DUPLICATE
+PATCH  /api/v1/presence-rules/{id}         # изменить или 404 PRESENCE_RULE_NOT_FOUND
+DELETE /api/v1/presence-rules/{id}         # удалить или 404 PRESENCE_RULE_NOT_FOUND
+```
+
+**Тело `POST /presence-rules`**:
+```json
+{ "room": "room-01", "window_start": "08:00", "window_end": "17:00",
+  "max_absence_min": 30, "enabled": true }
+```
+На тройку (room, window_start, window_end) — одно правило (уникальность); на
+помещение допускается несколько окон (смены). `PATCH` меняет только
+`max_absence_min`/`enabled` (окно — ключ правила: пересоздайте). Несуществующее
+помещение → 404 `ROOM_NOT_FOUND`; `window_start >= window_end` → 422.
 
 ### 3.8 Сменный/суточный отчёт (санинспекция/ППК, #266)
 
