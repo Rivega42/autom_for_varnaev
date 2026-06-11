@@ -33,6 +33,12 @@ def _point_in_polygon(x: float, y: float, poly: Sequence[tuple[float, float]]) -
     return inside
 
 
+def point_in_polygon(x: float, y: float, polygon_norm: Sequence[Sequence[float]]) -> bool:
+    """Точка (нормированные [0..1]) внутри полигона (нормированные вершины)."""
+    poly = [(float(px), float(py)) for px, py in polygon_norm]
+    return _point_in_polygon(x, y, poly)
+
+
 def polygon_mask(height: int, width: int, polygon_norm: Sequence[Sequence[float]]) -> BoolMask:
     """Построить булеву маску полигона по нормированным вершинам [0..1]."""
     poly = [(px * width, py * height) for px, py in polygon_norm]
