@@ -86,7 +86,13 @@ models/pose_landmarker.task
 Без файла воркер `video-analytics` не стартует (см. [`models/README.md`](../models/README.md)).
 
 ### 4.2 Камеры (`media-gateway`)
-Опишите RTSP/ONVIF-камеры объекта в [`media-gateway/go2rtc.yaml`](../media-gateway/go2rtc.yaml).
+Создайте конфиг медиа-шлюза из примера и опишите RTSP/ONVIF-камеры объекта:
+```bash
+cp media-gateway/go2rtc.yaml.example media-gateway/go2rtc.yaml
+```
+`go2rtc.yaml` — в `.gitignore` (RTSP-URL содержат пароли камер, в репозиторий
+они не попадают); в репозитории — только
+[`go2rtc.yaml.example`](../media-gateway/go2rtc.yaml.example).
 
 ### 4.3 Расписания видеоанализа (`scheduler`)
 ```bash
