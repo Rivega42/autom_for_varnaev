@@ -50,7 +50,14 @@ bash scripts/fetch_model.sh        # скачает models/pose_landmarker.task
 
 ### Шаг 2. Адреса камер в go2rtc
 
-В `media-gateway/go2rtc.yaml` пропишите свои потоки. **Имя потока** (ключ) должно
+Создайте конфиг из примера и пропишите свои потоки (`go2rtc.yaml` — в
+`.gitignore`: пароли камер в репозиторий не попадают):
+
+```bash
+cp media-gateway/go2rtc.yaml.example media-gateway/go2rtc.yaml
+```
+
+**Имя потока** (ключ) должно
 совпадать с именем камеры в справочнике — по нему GUI берёт кадр-превью:
 
 ```yaml

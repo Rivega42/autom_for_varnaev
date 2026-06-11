@@ -38,6 +38,8 @@ config/schedules.json
 services/api-gateway/api_gateway/static/vendor/
 # Реальный конфиг объекта для сидинга (адреса камер и т.п.); в репо — только пример.
 db/seeds/object.yaml
+# Реальный конфиг медиа-шлюза: RTSP-URL камер содержат логин/пароль; в репо — только пример.
+media-gateway/go2rtc.yaml
 
 # IDE и ОС
 .idea/
