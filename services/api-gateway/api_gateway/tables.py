@@ -128,6 +128,21 @@ cleaning_rules = sa.Table(
 )
 
 
+presence_rules = sa.Table(
+    "presence_rules",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column("room_id", sa.Text, sa.ForeignKey("rooms.id"), nullable=False),
+    sa.Column("window_start", sa.Time, nullable=False),
+    sa.Column("window_end", sa.Time, nullable=False),
+    sa.Column("max_absence_min", sa.Integer, nullable=False),
+    sa.Column("enabled", sa.Boolean, nullable=False),
+    sa.UniqueConstraint(
+        "room_id", "window_start", "window_end", name="uq_presence_rules_room_window"
+    ),
+)
+
+
 audit_log = sa.Table(
     "audit_log",
     metadata,

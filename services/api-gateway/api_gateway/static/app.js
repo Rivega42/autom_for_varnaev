@@ -628,6 +628,89 @@ async function deleteCleaningRule(id) {
   }
 }
 
+// ── Контроль присутствия (рабочие зоны, #300/#312) ──
+
+async function loadPresenceRules() {
+  const tbody = $("presencerules").querySelector("tbody");
+  tbody.innerHTML = "";
+  try {
+    const data = await api("/presence-rules");
+    for (const r of data.items) {
+      const tr = document.createElement("tr");
+      // textContent: room — свободная строка оператора (без innerHTML).
+      const cells = [
+        r.room,
+        r.window_start + "–" + r.window_end,
+        String(r.max_absence_min),
+        r.enabled ? "да" : "нет",
+      ];
+      for (const text of cells) {
+        const cell = document.createElement("td");
+        cell.textContent = text;
+        tr.appendChild(cell);
+      }
+      const td = document.createElement("td");
+      const toggle = document.createElement("button");
+      toggle.textContent = r.enabled ? "выключить" : "включить";
+      toggle.className = "sec";
+      toggle.onclick = () => togglePresenceRule(r.id, !r.enabled);
+      td.appendChild(toggle);
+      const btn = document.createElement("button");
+      btn.textContent = "удалить";
+      btn.className = "sec";
+      btn.onclick = () => deletePresenceRule(r.id);
+      td.appendChild(btn);
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+  } catch (e) {
+    msg("Ошибка загрузки правил присутствия: " + e.message, false);
+  }
+}
+
+async function createPresenceRule() {
+  const body = {
+    room: $("pr_room").value.trim(),
+    window_start: $("pr_start").value,
+    window_end: $("pr_end").value,
+    max_absence_min: parseInt($("pr_maxabs").value, 10) || 30,
+  };
+  if (!body.room) {
+    msg("Укажите помещение", false);
+    return;
+  }
+  if (!body.window_start || !body.window_end || body.window_start >= body.window_end) {
+    msg("Укажите дневное окно: начало раньше конца", false);
+    return;
+  }
+  try {
+    await api("/presence-rules", { method: "POST", body: JSON.stringify(body) });
+    $("pr_room").value = $("pr_maxabs").value = "";
+    loadPresenceRules();
+    msg("Правило присутствия добавлено");
+  } catch (e) {
+    msg("Ошибка добавления правила: " + e.message, false);
+  }
+}
+
+async function togglePresenceRule(id, enabled) {
+  try {
+    await api(`/presence-rules/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) });
+    loadPresenceRules();
+  } catch (e) {
+    msg("Ошибка изменения правила: " + e.message, false);
+  }
+}
+
+async function deletePresenceRule(id) {
+  try {
+    await api(`/presence-rules/${id}`, { method: "DELETE" });
+    loadPresenceRules();
+  } catch (e) {
+    msg("Ошибка удаления правила: " + e.message, false);
+  }
+}
+
 // ── Расписания (таймер) ──
 
 async function loadSchedules() {
@@ -781,6 +864,7 @@ function loadAll() {
   loadCameras();
   loadThresholds();
   loadCleaningRules();
+  loadPresenceRules();
   loadSchedules();
 }
 
@@ -801,6 +885,7 @@ $("clearPoly").onclick = () => {
 };
 $("th_add").onclick = createThreshold;
 $("cr_add").onclick = createCleaningRule;
+$("pr_add").onclick = createPresenceRule;
 $("rp_csv").onclick = downloadReportCsv;
 $("sc_add").onclick = createSchedule;
 
