@@ -1,5 +1,6 @@
 """Проверка генератора .env (scripts/init_env.py)."""
 
+import os
 import stat
 import sys
 from pathlib import Path
@@ -54,8 +55,11 @@ def test_main_creates_env_with_0600(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
     assert init_env.main() == 0
     assert env.exists()
-    mode = stat.S_IMODE(env.stat().st_mode)
-    assert mode == 0o600, f"ожидались права 0600, получены {oct(mode)}"
+    # POSIX-права осмысленны только на Linux/macOS; на Windows (NTFS) chmod
+    # не влияет на st_mode — там проверяем лишь создание файла.
+    if os.name == "posix":
+        mode = stat.S_IMODE(env.stat().st_mode)
+        assert mode == 0o600, f"ожидались права 0600, получены {oct(mode)}"
 
 
 def test_main_fails_on_missing_secret(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
