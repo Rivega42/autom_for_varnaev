@@ -101,3 +101,32 @@ def test_person_outside_forbidden_zone_no_event() -> None:
     _insert_task(engine, uuid4())
     sink = _run(engine, _pose(0.1, 0.1))  # бёдра вне зоны
     assert not any(e.type is EventType.FORBIDDEN_ZONE_ENTRY for e in sink.events)
+
+
+def test_person_in_work_zone_emits_presence_detected() -> None:
+    """Человек в рабочей зоне → presence_detected (раз на эпизод)."""
+    engine = _engine()
+    camera_id = uuid4()
+    with engine.begin() as conn:
+        conn.execute(
+            analysis_tasks.insert().values(
+                id=uuid4(),
+                created_at=datetime(2026, 6, 6, 10, 0, tzinfo=UTC),
+                source_type=SourceType.STREAM.value,
+                source_ref="rtsp://media-gateway/room-01",
+                room_id="room-01",
+                camera_id=camera_id,
+                pipeline="pose_v1",
+                status=TaskStatus.QUEUED.value,
+                trigger=TaskTrigger.SCHEDULE.value,
+            )
+        )
+        conn.execute(
+            camera_zones.insert().values(
+                id=2, camera_id=camera_id, zone_type="work", polygon=_FORBIDDEN
+            )
+        )
+    sink = _run(engine, _pose(0.7, 0.7))  # бёдра в рабочей зоне
+    presence = [e for e in sink.events if e.type is EventType.PRESENCE_DETECTED]
+    assert len(presence) == 1
+    assert presence[0].payload["zone_id"] == 2
