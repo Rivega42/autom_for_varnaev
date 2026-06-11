@@ -80,10 +80,19 @@ jobs:
     runs-on: ubuntu-latest
     # Собираем образ каждого сервиса (без публикации) — ловим ломающиеся Dockerfile
     # до мёрджа. Контекст сборки — корень репозитория (нужен пакет shared).
+    # Образы из db/ (migrate, seed, backup) задают свой dockerfile через include —
+    # они вне шаблона services/*/Dockerfile, но ломаются так же (#309).
     strategy:
       fail-fast: false
       matrix:
         service: [api-gateway, log-service, ingest-sensors, scheduler, video-analytics, demo-sensors]
+        include:
+          - service: migrate
+            dockerfile: db/Dockerfile
+          - service: seed
+            dockerfile: db/Dockerfile.seed
+          - service: backup
+            dockerfile: db/Dockerfile.backup
     steps:
       - uses: actions/checkout@v4
 
@@ -94,7 +103,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: services/${{ matrix.service }}/Dockerfile
+          file: ${{ matrix.dockerfile || format('services/{0}/Dockerfile', matrix.service) }}
           push: false
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
