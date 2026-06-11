@@ -61,6 +61,28 @@ def test_parse_api_keys_empty() -> None:
     assert parse_api_keys("") == {}
 
 
+def test_parse_api_keys_duplicate_keeps_first() -> None:
+    """Дубликат ключа не повышает роль молча — остаётся первая."""
+    assert parse_api_keys("k:operator,k:admin") == {"k": "operator"}
+
+
+def test_from_env_fails_closed_on_broken_api_keys(monkeypatch: Any) -> None:
+    """API_KEYS задан, но весь мусор, и нет API_KEY → ошибка старта (не fail-open)."""
+    import pytest
+
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.setenv("API_KEYS", "garbage,also:bad")
+    with pytest.raises(RuntimeError):
+        Settings.from_env()
+
+
+def test_from_env_no_keys_is_allowed(monkeypatch: Any) -> None:
+    """Полное отсутствие ключей — допустимо (dev/тесты): проверка отключена."""
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.delenv("API_KEYS", raising=False)
+    assert Settings.from_env().auth_enabled() is False
+
+
 # ── Разграничение по ролям ──
 
 

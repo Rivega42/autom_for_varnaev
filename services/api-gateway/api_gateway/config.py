@@ -31,6 +31,10 @@ def parse_api_keys(raw: str | None) -> dict[str, str]:
         if not sep or not key or role not in VALID_ROLES:
             logger.warning("API_KEYS: пропущен некорректный элемент (ожидается «ключ:роль»)")
             continue
+        if key in result:
+            # Дубликат ключа — оставляем первую роль (не повышаем молча по опечатке).
+            logger.warning("API_KEYS: дубликат ключа — оставлена первая роль")
+            continue
         result[key] = role
     return result
 
@@ -56,14 +60,25 @@ class Settings:
     @classmethod
     def from_env(cls) -> Settings:
         """Собрать настройки из окружения (значения по умолчанию — как в compose)."""
+        api_key = os.getenv("API_KEY") or None
+        api_keys_raw = os.getenv("API_KEYS")
+        api_keys = parse_api_keys(api_keys_raw)
+        # Fail-closed: если ключи ЗАДАВАЛИ (API_KEYS не пуст), но ни один не разобрался
+        # и legacy API_KEY тоже не задан — это явная ошибка конфигурации, а не «выкл.».
+        # Иначе сломанный API_KEYS молча открыл бы API без ключа (fail-open).
+        if api_keys_raw and api_keys_raw.strip() and not api_keys and not api_key:
+            raise RuntimeError(
+                "API_KEYS задан, но ни одна пара «ключ:роль» не разобрана, "
+                "а API_KEY не задан — проверьте .env (иначе API остался бы без защиты)"
+            )
         return cls(
             log_service_url=os.getenv("LOG_SERVICE_URL", "http://log-service:8000"),
-            api_key=os.getenv("API_KEY") or None,
+            api_key=api_key,
             aura_integration_enabled=os.getenv("AURA_INTEGRATION_ENABLED", "false").lower()
             == "true",
             go2rtc_url=os.getenv("GO2RTC_URL", "http://media-gateway:1984"),
             artifacts_dir=os.getenv("ARTIFACTS_DIR", "/data/artifacts"),
-            api_keys=parse_api_keys(os.getenv("API_KEYS")),
+            api_keys=api_keys,
         )
 
     def principals(self) -> dict[str, str]:
