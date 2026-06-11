@@ -318,6 +318,8 @@ services:
       SCHEDULER_TICK_S: ${SCHEDULER_TICK_S:-60}
       # Watchdog сервисов (#284): порог «тишины» heartbeat'а, минут.
       SERVICE_SILENT_MIN: ${SERVICE_SILENT_MIN:-5}
+      # Часовой пояс окон контроля присутствия (#300), IANA-имя.
+      PRESENCE_TZ: ${PRESENCE_TZ:-UTC}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - internal
