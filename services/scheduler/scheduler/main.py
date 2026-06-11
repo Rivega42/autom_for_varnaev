@@ -12,6 +12,7 @@ import os
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Engine
 
@@ -22,6 +23,7 @@ from scheduler.config import Settings
 from scheduler.db import build_engine
 from scheduler.events import HttpEventSink
 from scheduler.heartbeat import write_heartbeat
+from scheduler.presence_monitor import PresenceMonitor
 from scheduler.schedules import ScheduleEntry, load_schedules, load_schedules_db
 from scheduler.tick import run_tick
 from scheduler.watchdog import ServiceWatchdog
@@ -65,6 +67,7 @@ def run_forever(
     cleaning_monitor: CleaningMonitor | None = None,
     camera_monitor: CameraLivenessMonitor | None = None,
     watchdog: ServiceWatchdog | None = None,
+    presence_monitor: PresenceMonitor | None = None,
     service_name: str = "scheduler",
 ) -> None:
     """Цикл планировщика: тик, затем сон на `tick_interval_s`, и так по кругу.
@@ -73,7 +76,8 @@ def run_forever(
     цикл продолжается. `max_iterations` ограничивает число итераций (для тестов);
     при `None` цикл бесконечный. `cleaning_monitor` (если задан) проверяет на
     каждом тике контроль уборки (#265); `camera_monitor` — живость камер (#283);
-    `watchdog` — свежесть heartbeat'ов сервисов (#284). Планировщик пишет и свой
+    `watchdog` — свежесть heartbeat'ов сервисов (#284); `presence_monitor` —
+    присутствие в рабочих зонах по окну времени (#300). Планировщик пишет и свой
     heartbeat на каждой итерации.
     """
     iteration = 0
@@ -104,6 +108,12 @@ def run_forever(
             except Exception:
                 # Сбой watchdog не должен мешать остальным проверкам.
                 logger.exception("Watchdog сервисов: ошибка проверки, продолжаем")
+        if presence_monitor is not None:
+            try:
+                presence_monitor.check(engine, now)
+            except Exception:
+                # Сбой контроля присутствия не должен мешать остальным проверкам.
+                logger.exception("Контроль присутствия: ошибка проверки, продолжаем")
         iteration += 1
         if max_iterations is not None and iteration >= max_iterations:
             return
@@ -124,12 +134,14 @@ def main() -> None:
     cleaning = CleaningMonitor(sink)
     cameras = CameraLivenessMonitor(sink, Go2rtcCameraProber(settings.go2rtc_url))
     watchdog = ServiceWatchdog(sink, settings.service_silent_min)
+    presence = PresenceMonitor(sink, ZoneInfo(settings.presence_tz))
     run_forever(
         engine,
         settings,
         cleaning_monitor=cleaning,
         camera_monitor=cameras,
         watchdog=watchdog,
+        presence_monitor=presence,
     )
 
 

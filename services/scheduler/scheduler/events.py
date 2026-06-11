@@ -16,6 +16,7 @@ import httpx
 from monitoring_shared import Event, EventSource, EventType, Severity
 from scheduler.camera_store import CameraInfo
 from scheduler.cleaning import OverdueResult
+from scheduler.presence_control import MissingResult
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,27 @@ def build_cleaning_overdue(result: OverdueResult, now: datetime) -> Event:
         severity=Severity.WARNING,
         message=result.message,
         payload={"zone": result.zone_type, "reason": result.reason},
+    )
+
+
+def build_presence_missing(result: MissingResult, now: datetime) -> Event:
+    """Событие «нет присутствия в рабочей зоне в окне времени» (#300).
+
+    source=analytics: контроль построен на presence_detected видеоаналитики.
+    """
+    return Event(
+        id=uuid4(),
+        ts=now,
+        source=EventSource.ANALYTICS,
+        type=EventType.PRESENCE_MISSING,
+        room_id=result.room_id,
+        severity=Severity.WARNING,
+        message=result.message,
+        payload={
+            "rule_id": result.rule_id,
+            "window": result.window,
+            "absent_for_min": result.absent_for_min,
+        },
     )
 
 

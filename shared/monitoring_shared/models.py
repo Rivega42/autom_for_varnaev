@@ -83,6 +83,8 @@ class EventType(StrEnum):
     UNIFORM_VIOLATION = "uniform_violation"
     FORBIDDEN_ZONE_ENTRY = "forbidden_zone_entry"
     PRESENCE_DETECTED = "presence_detected"
+    # контроль присутствия по окну времени (#300)
+    PRESENCE_MISSING = "presence_missing"
     # санитарный контроль
     CLEANING_OVERDUE = "cleaning_overdue"
     # живость инфраструктуры (камеры, медиа-шлюз, сервисы)

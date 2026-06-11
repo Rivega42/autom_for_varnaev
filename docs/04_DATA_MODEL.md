@@ -107,6 +107,7 @@ task_id       uuid REFERENCES analysis_tasks(id) -- если событие от
 | analytics | `uniform_violation` | `{"flag":"no_uniform","duration_s":7.0,"brightness":0.4,"saturation":0.5}` | «Человек без спецодежды (белого халата) дольше 7 с» |
 | analytics | `forbidden_zone_entry` | `{"zone_id":3}` | «Человек в запретной зоне» |
 | analytics | `presence_detected` | `{"zone_id":4}` | «Зафиксировано присутствие в рабочей зоне» |
+| analytics | `presence_missing` | `{"rule_id":1,"window":"08:00–17:00","absent_for_min":35}` | «В помещении Цех приготовления нет присутствия в рабочей зоне 35 мин (окно 08:00–17:00, допустимо 30 мин)» |
 | analytics | `cleaning_overdue` | `{"zone":"table","reason":"не убиралась более 4 ч (прошло 5.2 ч)"}` | «Зона «стол» (помещение room-01): не убиралась более 4 ч» |
 | analytics | `camera_offline` | `{"camera_id":"...","camera_name":"Кухня-1"}` | «Камера «Кухня-1» в Цех приготовления не отвечает» |
 | analytics | `camera_online` | `{"camera_id":"...","camera_name":"Кухня-1"}` | «Камера «Кухня-1» в Цех приготовления снова на связи» |
@@ -278,6 +279,23 @@ UNIQUE (room_id, zone_type)
 Планировщик на каждом тике сверяет правила с последними `coverage_report` по
 зоне и при нарушении пишет `cleaning_overdue` (раз на эпизод; эпизод закрывается,
 когда зона снова убрана вовремя и с нормальным покрытием).
+
+### presence_rules (контроль присутствия по окну времени, #300)
+```
+id               serial PRIMARY KEY
+room_id          text NOT NULL REFERENCES rooms(id)
+window_start     time NOT NULL        -- начало окна (дневное окно: start < end)
+window_end       time NOT NULL        -- конец окна
+max_absence_min  int NOT NULL DEFAULT 30  -- допустимый перерыв присутствия, мин
+enabled          boolean DEFAULT true
+UNIQUE (room_id, window_start, window_end)
+```
+Планировщик на каждом тике сверяет правила с последними `presence_detected`
+(#302) по помещению: если внутри окна присутствия нет дольше `max_absence_min`
+минут — пишет `presence_missing` (раз на эпизод; эпизод закрывается новым
+присутствием или выходом из окна). Времена окна интерпретируются в часовом
+поясе `PRESENCE_TZ` планировщика (IANA-имя, по умолчанию UTC); окна через
+полночь в v1 не поддерживаются.
 
 ---
 
