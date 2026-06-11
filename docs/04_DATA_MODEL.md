@@ -105,6 +105,7 @@ task_id       uuid REFERENCES analysis_tasks(id) -- если событие от
 | analytics | `coverage_report` | `{"zone":"table","zone_id":7,"coverage_pct":63}` | «Покрытие зоны стола — 63%» |
 | analytics | `condition_flagged` | `{"flag":"no_uniform","brightness":0.4,"saturation":0.5}` | «Не распознана спецодежда (белый халат)» |
 | analytics | `uniform_violation` | `{"flag":"no_uniform","duration_s":7.0,"brightness":0.4,"saturation":0.5}` | «Человек без спецодежды (белого халата) дольше 7 с» |
+| analytics | `forbidden_zone_entry` | `{"zone_id":3}` | «Человек в запретной зоне» |
 | analytics | `cleaning_overdue` | `{"zone":"table","reason":"не убиралась более 4 ч (прошло 5.2 ч)"}` | «Зона «стол» (помещение room-01): не убиралась более 4 ч» |
 | analytics | `camera_offline` | `{"camera_id":"...","camera_name":"Кухня-1"}` | «Камера «Кухня-1» в Цех приготовления не отвечает» |
 | analytics | `camera_online` | `{"camera_id":"...","camera_name":"Кухня-1"}` | «Камера «Кухня-1» в Цех приготовления снова на связи» |
@@ -225,10 +226,13 @@ analytics     jsonb                -- тумблеры функций {pose,acti
 ```
 id            serial PRIMARY KEY
 camera_id     uuid REFERENCES cameras(id)
-zone_type     text NOT NULL        -- "table" | "floor" | "window"
+zone_type     text NOT NULL        -- "table" | "floor" | "window" | "forbidden"
 polygon       jsonb NOT NULL       -- вершины ROI-полигона (нормированные)
 note          text
 ```
+`forbidden` (#299) — запретная зона: вход репрезентативной точки человека
+(середина бёдер/плеч) в полигон → событие `forbidden_zone_entry` (раз на эпизод).
+Тумблер — `cameras.analytics.presence`.
 `video-analytics` берёт зоны камеры для расчёта `coverage_report` по типам.
 
 ---

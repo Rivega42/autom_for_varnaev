@@ -36,6 +36,12 @@ from video_analytics.detector import PoseDetector
 from video_analytics.event_sink import EventSink
 from video_analytics.landmarks import PoseLandmark
 from video_analytics.pose_events import SimplePoseAnalyzer, build_pose_event
+from video_analytics.presence import (
+    ForbiddenZoneMonitor,
+    build_forbidden_zone_entry,
+    forbidden_zones,
+    person_point,
+)
 from video_analytics.repository import (
     claim_next_task,
     load_camera,
@@ -66,7 +72,13 @@ _TORSO_LANDMARKS = (
 _MOTION_THRESHOLD = 25
 
 # Все функции аналитики выключены (для камеры с enabled=false).
-_ALL_OFF = {"pose": False, "actions": False, "uniform": False, "coverage": False}
+_ALL_OFF = {
+    "pose": False,
+    "actions": False,
+    "uniform": False,
+    "coverage": False,
+    "presence": False,
+}
 
 # Фабрика источника кадров по (тип, ссылка, целевой fps) — для подмены в тестах.
 SourceFactory = Callable[[SourceType, str, int], FrameSource]
@@ -135,10 +147,13 @@ def process_task(
     actions_on = _feature_on(analytics, "actions")
     uniform_on = _feature_on(analytics, "uniform")
     coverage_on = _feature_on(analytics, "coverage")
+    presence_on = _feature_on(analytics, "presence")
     poses = SimplePoseAnalyzer()
     actions = CompositeActionAnalyzer()
     # Полигоны зон «стол» — протирание засчитывается только над ними (PoC §2.1).
     table_polys = [z.polygon for z in zones if z.zone_type is ZoneType.TABLE]
+    # Монитор запретных зон (#299): вход человека в зону → событие.
+    forbidden_monitor = ForbiddenZoneMonitor(forbidden_zones(zones))
     frames = 0
     poses_found = 0
     events_sent = 0
@@ -181,6 +196,11 @@ def process_task(
                     sink.emit(
                         build_uniform_violation(duration, brightness, saturation, task.room_id, ts)
                     )
+                    events_sent += 1
+            # Запретные зоны (#299): вход репрезентативной точки человека в зону.
+            if presence_on:
+                for zone_id in forbidden_monitor.update(person_point(pose)):
+                    sink.emit(build_forbidden_zone_entry(zone_id, task.room_id, ts))
                     events_sent += 1
             # Запомнить первый кадр, на котором появились события (для скриншота).
             if evidence_frame is None and events_sent > events_before:
@@ -256,11 +276,9 @@ def run_once(
         # Тумблеры аналитики и ROI-зоны берём по камере задания.
         camera = load_camera(engine, task.camera_id) if task.camera_id else None
         analytics = _resolve_analytics(camera)
-        zones = (
-            load_camera_zones(engine, task.camera_id)
-            if task.camera_id and _feature_on(analytics, "coverage")
-            else []
-        )
+        # Зоны нужны для покрытия (coverage) и для запретных зон (presence, #299).
+        needs_zones = _feature_on(analytics, "coverage") or _feature_on(analytics, "presence")
+        zones = load_camera_zones(engine, task.camera_id) if task.camera_id and needs_zones else []
         result = process_task(
             task,
             source=source,
