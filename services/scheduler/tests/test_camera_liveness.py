@@ -49,10 +49,14 @@ class _CollectingSink:
 
 
 class _FakeProber:
-    """Фейковая проба: живость задаётся флагом, переключается в тесте."""
+    """Фейковая проба: живость камер и шлюза задаётся флагами из теста."""
 
-    def __init__(self, live: bool = True) -> None:
+    def __init__(self, live: bool = True, gateway_up: bool = True) -> None:
         self.live = live
+        self.gateway_up = gateway_up
+
+    def is_gateway_up(self) -> bool:
+        return self.gateway_up
 
     def is_live(self, stream_name: str) -> bool:
         return self.live
@@ -107,6 +111,9 @@ class _PerCameraProber:
     def __init__(self, live_by_name: dict[str, bool]) -> None:
         self.live_by_name = live_by_name
 
+    def is_gateway_up(self) -> bool:
+        return True
+
     def is_live(self, stream_name: str) -> bool:
         return self.live_by_name.get(stream_name, False)
 
@@ -128,6 +135,69 @@ def test_mixed_liveness_keyed_per_camera() -> None:
     assert monitor.check(engine, NOW) == 2
     kinds = {e.payload["camera_name"]: e.type.value for e in sink.events[1:]}
     assert kinds == {"Кухня-1": "camera_offline", "Склад-2": "camera_online"}
+
+
+# ── Агрегированный сигнал недоступности самого go2rtc (#286) ──
+
+
+def test_gateway_down_single_aggregate_event_no_camera_flood() -> None:
+    """Шлюз упал → одно media_gateway_offline за эпизод, без camera_offline по камерам."""
+    engine = _engine()
+    _add_camera(engine, "Кухня-1")
+    _add_camera(engine, "Склад-2")
+    sink = _CollectingSink()
+    prober = _FakeProber(live=False, gateway_up=False)
+    monitor = CameraLivenessMonitor(sink, prober)
+
+    assert monitor.check(engine, NOW) == 1
+    assert monitor.check(engine, NOW) == 0  # эпизод тот же — повтора нет
+    assert [e.type.value for e in sink.events] == ["media_gateway_offline"]
+    event = sink.events[0]
+    assert event.severity.value == "warning"
+    assert event.room_id is None
+    assert event.payload == {"service": "media-gateway"}
+    assert "go2rtc" in event.message
+
+
+def test_gateway_recovery_emits_online_and_resumes_camera_checks() -> None:
+    """Восстановление шлюза → media_gateway_online, и в тот же тик пробуются камеры."""
+    engine = _engine()
+    _add_camera(engine, "Кухня-1")
+    sink = _CollectingSink()
+    prober = _FakeProber(live=False, gateway_up=False)
+    monitor = CameraLivenessMonitor(sink, prober)
+
+    assert monitor.check(engine, NOW) == 1  # media_gateway_offline
+    prober.gateway_up = True  # шлюз вернулся, камера по-прежнему мертва
+    assert monitor.check(engine, NOW) == 2
+    kinds = [e.type.value for e in sink.events]
+    assert kinds == ["media_gateway_offline", "media_gateway_online", "camera_offline"]
+    assert sink.events[1].severity.value == "info"
+
+
+def test_gateway_down_freezes_camera_episodes() -> None:
+    """Эпизоды камер заморожены при упавшем шлюзе: ни снятий, ни новых отвалов."""
+    engine = _engine()
+    _add_camera(engine, "Кухня-1")
+    sink = _CollectingSink()
+    prober = _FakeProber(live=False, gateway_up=True)
+    monitor = CameraLivenessMonitor(sink, prober)
+
+    assert monitor.check(engine, NOW) == 1  # camera_offline (шлюз жив)
+    prober.gateway_up = False
+    assert monitor.check(engine, NOW) == 1  # только media_gateway_offline
+    # пока шлюз лежит, «оживление» камеры не порождает camera_online
+    prober.live = True
+    assert monitor.check(engine, NOW) == 0
+    prober.gateway_up = True
+    assert monitor.check(engine, NOW) == 2  # media_gateway_online + camera_online
+    kinds = [e.type.value for e in sink.events]
+    assert kinds == [
+        "camera_offline",
+        "media_gateway_offline",
+        "media_gateway_online",
+        "camera_online",
+    ]
 
 
 def test_disabled_cameras_ignored() -> None:
@@ -189,6 +259,23 @@ def test_prober_offline_on_http_error() -> None:
     """Сетевой сбой пробы (go2rtc недоступен) трактуется как «камера недоступна»."""
     prober = Go2rtcCameraProber("http://x", client=_RaisingHttpClient())
     assert prober.is_live("Кухня-1") is False
+
+
+def test_prober_gateway_up_on_200() -> None:
+    """200 от /api = шлюз жив; запрос идёт на корень API go2rtc."""
+    client = _FakeHttpClient(_FakeResp(200, b"{}"))
+    prober = Go2rtcCameraProber("http://media-gateway:1984", client=client)
+    assert prober.is_gateway_up() is True
+    assert client.calls[0]["url"].endswith("/api")
+
+
+def test_prober_gateway_down_on_error_or_non_200() -> None:
+    """Сетевой сбой или не-200 от /api = шлюз недоступен."""
+    assert Go2rtcCameraProber("http://x", client=_RaisingHttpClient()).is_gateway_up() is False
+    assert (
+        Go2rtcCameraProber("http://x", client=_FakeHttpClient(_FakeResp(503, b""))).is_gateway_up()
+        is False
+    )
 
 
 def test_room_name_falls_back_to_id() -> None:

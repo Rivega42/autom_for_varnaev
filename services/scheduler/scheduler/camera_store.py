@@ -50,7 +50,11 @@ def load_enabled_cameras(engine: Engine) -> list[CameraInfo]:
 
 
 class CameraProber(Protocol):
-    """Проба живости потока по имени (подменяется фейком в тестах)."""
+    """Проба живости шлюза и потоков (подменяется фейком в тестах)."""
+
+    def is_gateway_up(self) -> bool:
+        """True, если сам медиа-шлюз go2rtc отвечает (его API доступен)."""
+        ...
 
     def is_live(self, stream_name: str) -> bool:
         """True, если go2rtc отдаёт кадр потока (камера на связи)."""
@@ -61,13 +65,29 @@ class Go2rtcCameraProber:
     """Боевая проба: запрашивает у go2rtc один кадр потока.
 
     Кадр (`GET /api/frame.jpeg?src=<имя>`) приходит только если RTSP-источник
-    действительно отдаёт видео — это и есть проверка живости камеры.
+    действительно отдаёт видео — это и есть проверка живости камеры. Отдельная
+    проба `is_gateway_up` (`GET /api`) различает «упала камера» и «упал сам
+    go2rtc» — при недоступном шлюзе покамерные пробы бессмысленны (#286).
     """
 
     def __init__(self, base_url: str, timeout: float = 3.0, client: Any | None = None) -> None:
-        self._url = base_url.rstrip("/") + "/api/frame.jpeg"
+        base = base_url.rstrip("/")
+        self._api_url = base + "/api"
+        self._url = base + "/api/frame.jpeg"
         self._timeout = timeout
         self._client = client
+
+    def is_gateway_up(self) -> bool:
+        """Вернуть True, если API go2rtc отвечает 200 (шлюз жив)."""
+        try:
+            if self._client is not None:
+                resp = self._client.get(self._api_url, params={})
+            else:
+                resp = httpx.get(self._api_url, timeout=self._timeout)
+        except httpx.HTTPError as exc:
+            logger.debug("Проба медиа-шлюза не удалась: %s", exc)
+            return False
+        return bool(resp.status_code == 200)
 
     def is_live(self, stream_name: str) -> bool:
         """Вернуть True при 200 с непустым телом; недоступность go2rtc → False."""

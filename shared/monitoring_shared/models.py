@@ -85,9 +85,11 @@ class EventType(StrEnum):
     PRESENCE_DETECTED = "presence_detected"
     # санитарный контроль
     CLEANING_OVERDUE = "cleaning_overdue"
-    # живость инфраструктуры (камеры, сервисы)
+    # живость инфраструктуры (камеры, медиа-шлюз, сервисы)
     CAMERA_OFFLINE = "camera_offline"
     CAMERA_ONLINE = "camera_online"
+    MEDIA_GATEWAY_OFFLINE = "media_gateway_offline"
+    MEDIA_GATEWAY_ONLINE = "media_gateway_online"
     SERVICE_SILENT = "service_silent"
     SERVICE_RESTORED = "service_restored"
 
