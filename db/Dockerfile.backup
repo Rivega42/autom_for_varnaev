@@ -10,15 +10,18 @@
 FROM python:3.12-slim
 
 # pg_dump должен быть НЕ СТАРШЕ сервера (TimescaleDB на PostgreSQL 16), поэтому
-# ставим клиент именно 16-й версии из официального репозитория PGDG
-# (в bookworm по умолчанию только 15-й).
+# ставим клиент именно 16-й версии из официального репозитория PGDG.
+# Кодовое имя Debian берём из /etc/os-release, а не прибиваем гвоздями:
+# базовый python:3.12-slim перевозят между релизами Debian (bookworm → trixie),
+# и репозиторий чужого релиза ломает зависимости (libpq5/libldap, #309).
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends wget gnupg ca-certificates; \
     install -d /usr/share/postgresql-common/pgdg; \
     wget -q -O /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
         https://www.postgresql.org/media/keys/ACCC4CF8.asc; \
-    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+    codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"; \
+    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${codename}-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends postgresql-client-16; \
