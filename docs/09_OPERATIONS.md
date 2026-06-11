@@ -122,6 +122,25 @@ docker compose exec -T db sh -c \
 восстановление на тестовом контуре. Регламент срока хранения временных рядов —
 открытый вопрос (issue по `04_DATA_MODEL.md`).
 
+### Свёртки, сжатие и retention сырья (TimescaleDB, #295)
+
+Миграция 0018 включает (применяет сервис `migrate` на TimescaleDB):
+- **continuous aggregate** `sensor_readings_hourly` — почасовая свёртка
+  (avg/min/max), обновляется раз в час; для быстрых дашбордов на длинных рядах.
+- **сжатие** сырья `sensor_readings` (lossless) старше
+  `READINGS_COMPRESS_AFTER_DAYS` дней (по умолчанию 7).
+- **retention** сырья — `READINGS_RETENTION_DAYS` дней; **0 = выключено**
+  (значения финализируются по регламенту заказчика, #41). Включать осознанно:
+  retention безвозвратно удаляет старое сырьё (свёртка при этом сохраняется).
+
+```bash
+# Что насчитала свёртка / статус политик
+docker compose exec db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "SELECT view_name, materialization_hypertable_name FROM timescaledb_information.continuous_aggregates;"
+docker compose exec db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "SELECT * FROM timescaledb_information.jobs;"   # политики обновления/сжатия/retention
+```
+
 ---
 
 ## 5. Артефакты (скриншоты-доказательства)
