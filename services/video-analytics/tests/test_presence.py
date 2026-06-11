@@ -7,18 +7,20 @@ from uuid import uuid4
 
 from video_analytics.landmarks import POSE_LANDMARK_COUNT, Landmark, PoseLandmark, PoseResult
 from video_analytics.presence import (
-    ForbiddenZone,
-    ForbiddenZoneMonitor,
+    ZoneEntryMonitor,
+    ZonePolygon,
     build_forbidden_zone_entry,
+    build_presence_detected,
     forbidden_zones,
     person_point,
+    work_zones,
 )
 
 from monitoring_shared import CameraZone, EventType, ZoneType
 
 _T0 = datetime(2026, 6, 6, 10, 0, tzinfo=UTC)
 # Квадрат в правом-нижнем углу кадра.
-_ZONE = ForbiddenZone(zone_id=1, polygon=[[0.5, 0.5], [1.0, 0.5], [1.0, 1.0], [0.5, 1.0]])
+_ZONE = ZonePolygon(zone_id=1, polygon=[[0.5, 0.5], [1.0, 0.5], [1.0, 1.0], [0.5, 1.0]])
 
 
 def _pose(hip_x: float, hip_y: float, visible: float = 0.9) -> PoseResult:
@@ -38,20 +40,21 @@ def test_person_point_none_when_torso_invisible() -> None:
     assert person_point(_pose(0.6, 0.7, visible=0.1)) is None
 
 
-def test_forbidden_zones_filter() -> None:
-    """Из зон камеры отбираются только запретные."""
+def test_zone_type_filters() -> None:
+    """Из зон камеры отбираются запретные и рабочие по типу."""
     cam = uuid4()
     zones = [
         CameraZone(id=1, camera_id=cam, zone_type=ZoneType.TABLE, polygon=[[0, 0]], note=None),
         CameraZone(id=2, camera_id=cam, zone_type=ZoneType.FORBIDDEN, polygon=[[0, 0]], note=None),
+        CameraZone(id=3, camera_id=cam, zone_type=ZoneType.WORK, polygon=[[0, 0]], note=None),
     ]
-    picked = forbidden_zones(zones)
-    assert [z.zone_id for z in picked] == [2]
+    assert [z.zone_id for z in forbidden_zones(zones)] == [2]
+    assert [z.zone_id for z in work_zones(zones)] == [3]
 
 
 def test_monitor_fires_on_entry_once_then_resets() -> None:
     """Вход в зону — одно событие; пока внутри — тишина; выход и новый вход — снова."""
-    mon = ForbiddenZoneMonitor([_ZONE])
+    mon = ZoneEntryMonitor([_ZONE])
     assert mon.update((0.1, 0.1)) == []  # снаружи
     assert mon.update((0.7, 0.7)) == [1]  # вошёл → эпизод
     assert mon.update((0.8, 0.8)) == []  # всё ещё внутри — повтора нет
@@ -61,10 +64,17 @@ def test_monitor_fires_on_entry_once_then_resets() -> None:
 
 def test_monitor_none_point_treated_as_outside() -> None:
     """Нет точки человека (торс не виден) — как «снаружи», сбрасывает эпизод."""
-    mon = ForbiddenZoneMonitor([_ZONE])
+    mon = ZoneEntryMonitor([_ZONE])
     assert mon.update((0.7, 0.7)) == [1]
     assert mon.update(None) == []  # человека не видно
     assert mon.update((0.7, 0.7)) == [1]  # появился снова → новый эпизод
+
+
+def test_build_presence_detected() -> None:
+    ev = build_presence_detected(5, "room-01", _T0)
+    assert ev.type is EventType.PRESENCE_DETECTED
+    assert ev.severity.value == "info"
+    assert ev.payload["zone_id"] == 5
 
 
 def test_build_event() -> None:

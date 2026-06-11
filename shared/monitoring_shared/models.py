@@ -82,6 +82,7 @@ class EventType(StrEnum):
     CONDITION_FLAGGED = "condition_flagged"
     UNIFORM_VIOLATION = "uniform_violation"
     FORBIDDEN_ZONE_ENTRY = "forbidden_zone_entry"
+    PRESENCE_DETECTED = "presence_detected"
     # санитарный контроль
     CLEANING_OVERDUE = "cleaning_overdue"
     # живость инфраструктуры (камеры, сервисы)
@@ -220,6 +221,7 @@ class ZoneType(StrEnum):
     FLOOR = "floor"
     WINDOW = "window"
     FORBIDDEN = "forbidden"  # запретная зона: вход человека → событие (#299)
+    WORK = "work"  # рабочая зона: присутствие человека → сигнал (#302)
 
 
 class CameraZone(BaseModel):

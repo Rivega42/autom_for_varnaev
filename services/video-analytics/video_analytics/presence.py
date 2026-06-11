@@ -1,9 +1,10 @@
-"""Контроль запретных зон: вход человека в зону → событие (#299).
+"""Контроль присутствия по зонам: вход репрезентативной точки человека в зону.
 
-Репрезентативная точка человека — середина бёдер (если видны), иначе середина
-плеч. На каждом кадре проверяется её вхождение в полигоны запретных зон
-(point-in-polygon). Вход фиксируется один раз на эпизод по зоне (сброс при
-выходе), чтобы не спамить. Это присутствие по позе, не трекинг конкретных людей.
+Точка человека — середина бёдер (если видны), иначе плеч. На каждом кадре
+проверяется её вхождение в полигоны зон (point-in-polygon). Вход фиксируется
+один раз на эпизод по зоне (сброс при выходе). Используется для запретных зон
+(`forbidden_zone_entry`, #299) и рабочих зон (`presence_detected`, #302). Это
+присутствие по позе, не трекинг конкретных людей.
 """
 
 from __future__ import annotations
@@ -31,22 +32,32 @@ def person_point(pose: PoseResult) -> tuple[float, float] | None:
 
 
 @dataclass(frozen=True)
-class ForbiddenZone:
-    """Запретная зона: id и нормированный полигон."""
+class ZonePolygon:
+    """Зона для проверки присутствия: id и нормированный полигон."""
 
     zone_id: int
     polygon: list[list[float]]
 
 
-def forbidden_zones(zones: Sequence[CameraZone]) -> list[ForbiddenZone]:
-    """Отобрать запретные зоны из списка зон камеры."""
-    return [ForbiddenZone(z.id, z.polygon) for z in zones if z.zone_type is ZoneType.FORBIDDEN]
+def zones_of_type(zones: Sequence[CameraZone], zone_type: ZoneType) -> list[ZonePolygon]:
+    """Отобрать зоны заданного типа из списка зон камеры."""
+    return [ZonePolygon(z.id, z.polygon) for z in zones if z.zone_type is zone_type]
 
 
-class ForbiddenZoneMonitor:
-    """Фиксирует вход человека в запретные зоны (раз на эпизод по зоне)."""
+def forbidden_zones(zones: Sequence[CameraZone]) -> list[ZonePolygon]:
+    """Запретные зоны камеры (#299)."""
+    return zones_of_type(zones, ZoneType.FORBIDDEN)
 
-    def __init__(self, zones: Sequence[ForbiddenZone]) -> None:
+
+def work_zones(zones: Sequence[CameraZone]) -> list[ZonePolygon]:
+    """Рабочие зоны камеры (#302)."""
+    return zones_of_type(zones, ZoneType.WORK)
+
+
+class ZoneEntryMonitor:
+    """Фиксирует вход человека в зоны (раз на эпизод по зоне; сброс при выходе)."""
+
+    def __init__(self, zones: Sequence[ZonePolygon]) -> None:
         self._zones = list(zones)
         self._inside: set[int] = set()  # зоны, где человек уже отмечен внутри
 
@@ -73,5 +84,19 @@ def build_forbidden_zone_entry(zone_id: int, room_id: str | None, ts: datetime) 
         room_id=room_id,
         severity=Severity.WARNING,
         message="Человек в запретной зоне",
+        payload={"zone_id": zone_id},
+    )
+
+
+def build_presence_detected(zone_id: int, room_id: str | None, ts: datetime) -> Event:
+    """Событие «зафиксировано присутствие в рабочей зоне» (#302)."""
+    return Event(
+        id=uuid4(),
+        ts=ts,
+        source=EventSource.ANALYTICS,
+        type=EventType.PRESENCE_DETECTED,
+        room_id=room_id,
+        severity=Severity.INFO,
+        message="Зафиксировано присутствие в рабочей зоне",
         payload={"zone_id": zone_id},
     )
