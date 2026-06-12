@@ -32,6 +32,7 @@
     {
       "id": 1,
       "title": "Температура воздуха (air_temp), °C",
+      "description": "Диапазон до 48 ч — сырые показания; длиннее — почасовая свёртка sensor_readings_hourly (среднее за час).",
       "type": "timeseries",
       "datasource": { "type": "postgres", "uid": "${DS_TIMESCALEDB}" },
       "fieldConfig": { "defaults": { "unit": "celsius" }, "overrides": [] },
@@ -40,13 +41,14 @@
         {
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT ts AS \"time\", room_id AS metric, value FROM sensor_readings WHERE metric = 'air_temp' AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) ORDER BY ts"
+          "rawSql": "SELECT ts AS \"time\", room_id AS metric, value FROM sensor_readings WHERE metric = 'air_temp' AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) AND $__timeTo()::timestamptz - $__timeFrom()::timestamptz <= interval '48 hours' UNION ALL SELECT bucket AS \"time\", room_id AS metric, avg_value AS value FROM sensor_readings_hourly WHERE metric = 'air_temp' AND room_id IN (${room:singlequote}) AND $__timeFilter(bucket) AND $__timeTo()::timestamptz - $__timeFrom()::timestamptz > interval '48 hours' ORDER BY 1"
         }
       ]
     },
     {
       "id": 2,
       "title": "Влажность (humidity), %",
+      "description": "Диапазон до 48 ч — сырые показания; длиннее — почасовая свёртка sensor_readings_hourly (среднее за час).",
       "type": "timeseries",
       "datasource": { "type": "postgres", "uid": "${DS_TIMESCALEDB}" },
       "fieldConfig": { "defaults": { "unit": "humidity" }, "overrides": [] },
@@ -55,13 +57,14 @@
         {
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT ts AS \"time\", room_id AS metric, value FROM sensor_readings WHERE metric = 'humidity' AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) ORDER BY ts"
+          "rawSql": "SELECT ts AS \"time\", room_id AS metric, value FROM sensor_readings WHERE metric = 'humidity' AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) AND $__timeTo()::timestamptz - $__timeFrom()::timestamptz <= interval '48 hours' UNION ALL SELECT bucket AS \"time\", room_id AS metric, avg_value AS value FROM sensor_readings_hourly WHERE metric = 'humidity' AND room_id IN (${room:singlequote}) AND $__timeFilter(bucket) AND $__timeTo()::timestamptz - $__timeFrom()::timestamptz > interval '48 hours' ORDER BY 1"
         }
       ]
     },
     {
       "id": 3,
       "title": "ИК-температура поверхности (surface_ir), °C",
+      "description": "Диапазон до 48 ч — сырые показания; длиннее — почасовая свёртка sensor_readings_hourly (среднее за час).",
       "type": "timeseries",
       "datasource": { "type": "postgres", "uid": "${DS_TIMESCALEDB}" },
       "fieldConfig": { "defaults": { "unit": "celsius" }, "overrides": [] },
@@ -70,7 +73,7 @@
         {
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT ts AS \"time\", room_id AS metric, value FROM sensor_readings WHERE metric = 'surface_ir' AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) ORDER BY ts"
+          "rawSql": "SELECT ts AS \"time\", room_id AS metric, value FROM sensor_readings WHERE metric = 'surface_ir' AND room_id IN (${room:singlequote}) AND $__timeFilter(ts) AND $__timeTo()::timestamptz - $__timeFrom()::timestamptz <= interval '48 hours' UNION ALL SELECT bucket AS \"time\", room_id AS metric, avg_value AS value FROM sensor_readings_hourly WHERE metric = 'surface_ir' AND room_id IN (${room:singlequote}) AND $__timeFilter(bucket) AND $__timeTo()::timestamptz - $__timeFrom()::timestamptz > interval '48 hours' ORDER BY 1"
         }
       ]
     }
