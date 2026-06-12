@@ -3,261 +3,332 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Настройка видеоаналитики</title>
+  <title>Настройка · Мониторинг помещений</title>
   <style>
-    :root { --bd: #d0d7de; --bg: #f6f8fa; --accent: #3367d6; }
+    /* Дизайн-токены: одна палитра на всё приложение (и overview.html). */
+    :root {
+      --bd: #d0d7de; --bg: #f6f8fa; --accent: #3367d6; --accent-dark: #2856b8;
+      --text: #10204a; --muted: #57606a; --ok: #1a7f37; --danger: #cf222e;
+      --radius: 8px;
+    }
     * { box-sizing: border-box; }
-    body { font-family: system-ui, Arial, sans-serif; margin: 0; color: #10204a; }
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; color: var(--text); background: var(--bg); }
+
+    /* ── Шапка: бренд, ключ, статус ── */
     header { background: var(--accent); color: #fff; padding: 10px 16px; display: flex;
              gap: 12px; align-items: center; flex-wrap: wrap; }
-    header h1 { font-size: 16px; margin: 0; font-weight: 600; }
-    header input { padding: 4px 8px; border: none; border-radius: 4px; }
-    main { display: flex; gap: 16px; padding: 16px; flex-wrap: wrap; }
-    .panel { border: 1px solid var(--bd); border-radius: 8px; padding: 12px; background: #fff; }
-    #cameras { width: 260px; }
-    #cameras ul { list-style: none; padding: 0; margin: 0; }
-    #cameras li { padding: 8px; border-radius: 6px; cursor: pointer; }
-    #cameras li.active { background: var(--bg); font-weight: 600; }
+    header h1 { font-size: 16px; margin: 0 8px 0 0; font-weight: 600; white-space: nowrap; }
+    header a { color: #fff; font-size: 13px; opacity: .9; }
+    header a:hover { opacity: 1; }
+    header input { padding: 5px 9px; border: none; border-radius: 5px; min-width: 180px; }
+    #keystate { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,.15); }
+    #keystate.ok { background: #1a7f37; }
+    #keystate.bad { background: var(--danger); }
+    #msg { margin-left: auto; font-size: 13px; max-width: 40%; text-align: right; }
+
+    /* ── Вкладки ── */
+    nav { background: #fff; border-bottom: 1px solid var(--bd); padding: 0 16px; display: flex;
+          gap: 4px; flex-wrap: wrap; position: sticky; top: 0; z-index: 10; }
+    nav button { background: none; color: var(--muted); border: 0; border-bottom: 2px solid transparent;
+                 border-radius: 0; padding: 10px 14px; font-size: 14px; cursor: pointer; }
+    nav button:hover { color: var(--text); background: var(--bg); }
+    nav button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+    main { padding: 16px; max-width: 1400px; margin: 0 auto; }
+    .tab[hidden] { display: none; }
+
+    /* ── Карточки-секции ── */
+    .panel { border: 1px solid var(--bd); border-radius: var(--radius); padding: 16px;
+             background: #fff; margin-bottom: 16px; }
+    .panel h2 { margin: 0 0 4px; font-size: 16px; }
+    .panel h3 { margin: 18px 0 4px; font-size: 14px; }
+    .hint { color: var(--muted); font-size: 12.5px; margin: 2px 0 10px; }
+
+    /* ── Формы и кнопки ── */
+    .row { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+    input, select { padding: 6px 9px; border: 1px solid var(--bd); border-radius: 6px;
+                    font: inherit; background: #fff; }
+    input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    button { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+             padding: 7px 14px; cursor: pointer; font: inherit; }
+    button:hover { background: var(--accent-dark); }
+    button.sec { background: #eaeef2; color: var(--text); }
+    button.sec:hover { background: #dde3e9; }
+    button.danger { background: #fff; color: var(--danger); border: 1px solid var(--danger); padding: 4px 10px; }
+    button.danger:hover { background: var(--danger); color: #fff; }
+    label.flag { display: inline-flex; gap: 5px; align-items: center; margin-right: 12px; }
+
+    /* ── Таблицы ── */
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; font-size: 13px; }
+    th, td { border: 1px solid var(--bd); padding: 6px 9px; text-align: left; }
+    th { background: var(--bg); font-weight: 600; color: var(--muted); }
+    tbody tr:hover { background: #f3f6fb; }
+    tbody:empty::after { content: "— пока пусто —"; display: block; padding: 8px; color: var(--muted); font-size: 12.5px; }
+
+    canvas { border: 1px solid var(--bd); cursor: crosshair; max-width: 100%; background: #eee; border-radius: 6px; }
+    #cameras { width: 280px; flex-shrink: 0; }
+    #cameras ul { list-style: none; padding: 0; margin: 8px 0; }
+    #cameras li { padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+    #cameras li:hover { background: var(--bg); }
+    #cameras li.active { background: #e7eefc; font-weight: 600; color: var(--accent); }
     #cameras li.off { color: #98a; }
     .editor { flex: 1; min-width: 480px; }
-    label.flag { display: inline-flex; gap: 4px; align-items: center; margin-right: 14px; }
-    canvas { border: 1px solid var(--bd); cursor: crosshair; max-width: 100%; background: #eee; }
-    button { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
-             padding: 6px 12px; cursor: pointer; }
-    button.sec { background: #eaeef2; color: #10204a; }
-    .row { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
-    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
-    th, td { border: 1px solid var(--bd); padding: 4px 8px; text-align: left; font-size: 13px; }
-    #msg { margin-left: auto; font-size: 13px; }
-    .hint { color: #57606a; font-size: 12px; }
+    .cam-layout { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+    /* Заглушка «камера не выбрана» прячется, как только открыт редактор. */
+    #editor:not([hidden]) ~ #pickhint { display: none; }
+    .two-col { display: flex; gap: 24px; flex-wrap: wrap; }
+    .two-col > div { flex: 1; min-width: 320px; }
   </style>
 </head>
 <body>
   <header>
-    <h1>Настройка видеоаналитики</h1>
-    <input id="apikey" type="password" placeholder="X-API-Key" />
-    <button id="reload" class="sec">Загрузить камеры</button>
-    <a href="overview.html" style="color:#fff;font-size:13px">Обзор объекта</a>
-    <span id="msg"></span>
+    <h1>Мониторинг · Настройка</h1>
+    <a href="overview.html">Обзор объекта</a>
+    <input id="apikey" type="password" placeholder="X-API-Key" autocomplete="off" />
+    <span id="keystate" title="Состояние ключа API">ключ?</span>
+    <button id="reload" class="sec">Обновить данные</button>
+    <span id="msg" role="status"></span>
   </header>
 
-  <main>
-    <section class="panel" id="directories-panel" style="width:100%">
-      <h2 style="margin-top:0">Справочники объекта</h2>
-      <p class="hint">Заведите помещения и узлы датчиков. Без узла в справочнике
-        показания этого датчика по MQTT отбрасываются. Кнопка «Загрузить камеры»
-        в шапке подтягивает и справочники.</p>
-      <div class="row" style="align-items:flex-start">
-        <div style="flex:1; min-width:320px">
-          <strong>Помещения</strong>
-          <div class="row">
-            <input id="rm_id" placeholder="id (напр. room-01)" />
-            <input id="rm_name" placeholder="название" />
-            <label class="flag"><input type="checkbox" id="rm_cold" /> холодильная</label>
-            <button id="rm_add">Добавить</button>
-          </div>
-          <table id="rooms">
-            <thead><tr><th>id</th><th>название</th><th>холод</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <div style="flex:1; min-width:320px">
-          <strong>Узлы датчиков</strong>
-          <div class="row">
-            <input id="nd_id" placeholder="id (напр. node-01)" />
-            <input id="nd_room" placeholder="помещение (room id)" />
-            <input id="nd_place" placeholder="размещение (необяз.)" />
-            <button id="nd_add">Добавить</button>
-          </div>
-          <table id="nodes">
-            <thead><tr><th>id</th><th>помещение</th><th>размещение</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-  </main>
+  <nav aria-label="Разделы настройки">
+    <button data-tab="object">Объект</button>
+    <button data-tab="cameras">Камеры и аналитика</button>
+    <button data-tab="thresholds">Пороги датчиков</button>
+    <button data-tab="control">Контроль</button>
+    <button data-tab="schedules">Расписания</button>
+    <button data-tab="reports">Отчёты</button>
+  </nav>
 
   <main>
-    <section id="cameras" class="panel">
-      <strong>Камеры</strong>
-      <ul id="camlist"></ul>
-      <p id="emptyhint" class="hint" hidden>
-        Камер нет. Заведите камеру в форме ниже или через сид-конфиг
-        (<code>db/seeds/object.yaml</code> + <code>scripts/seed.py --apply</code>).
-      </p>
+    <!-- ───── Вкладка «Объект»: справочники ───── -->
+    <div class="tab" id="tab-object" hidden>
+      <section class="panel" id="directories-panel">
+        <h2>Справочники объекта</h2>
+        <p class="hint">Заведите помещения и узлы датчиков. Без узла в справочнике
+          показания этого датчика по MQTT отбрасываются.</p>
+        <div class="two-col">
+          <div>
+            <h3>Помещения</h3>
+            <div class="row">
+              <input id="rm_id" placeholder="id (напр. room-01)" />
+              <input id="rm_name" placeholder="название" />
+              <label class="flag"><input type="checkbox" id="rm_cold" /> холодильная</label>
+              <button id="rm_add">Добавить</button>
+            </div>
+            <table id="rooms">
+              <thead><tr><th>id</th><th>название</th><th>холод</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div>
+            <h3>Узлы датчиков</h3>
+            <div class="row">
+              <input id="nd_id" placeholder="id (напр. node-01)" />
+              <input id="nd_room" placeholder="помещение (room id)" />
+              <input id="nd_place" placeholder="размещение (необяз.)" />
+              <button id="nd_add">Добавить</button>
+            </div>
+            <table id="nodes">
+              <thead><tr><th>id</th><th>помещение</th><th>размещение</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
 
-      <details id="addcam">
-        <summary>Добавить камеру</summary>
-        <div class="row"><input id="nc_room" placeholder="помещение (room id)" /></div>
-        <div class="row"><input id="nc_name" placeholder="имя = поток в go2rtc" /></div>
-        <div class="row"><input id="nc_rtsp" placeholder="rtsp://…" /></div>
-        <div class="row"><button id="nc_save">Создать</button></div>
-        <p class="hint">Имя должно совпадать с именем потока в go2rtc.yaml.</p>
-      </details>
-    </section>
+    <!-- ───── Вкладка «Камеры и аналитика» ───── -->
+    <div class="tab" id="tab-cameras" hidden>
+      <div class="cam-layout">
+        <section id="cameras" class="panel">
+          <h2>Камеры</h2>
+          <ul id="camlist"></ul>
+          <p id="emptyhint" class="hint" hidden>
+            Камер нет. Заведите камеру в форме ниже или через сид-конфиг
+            (<code>db/seeds/object.yaml</code> + <code>scripts/seed.py --apply</code>).
+          </p>
+          <details id="addcam">
+            <summary>Добавить камеру</summary>
+            <div class="row"><input id="nc_room" placeholder="помещение (room id)" /></div>
+            <div class="row"><input id="nc_name" placeholder="имя = поток в go2rtc" /></div>
+            <div class="row"><input id="nc_rtsp" placeholder="rtsp://…" /></div>
+            <div class="row"><button id="nc_save">Создать</button></div>
+            <p class="hint">Имя должно совпадать с именем потока в go2rtc.yaml.</p>
+          </details>
+        </section>
 
-    <section class="editor panel" id="editor" hidden>
-      <h2 id="camname" style="margin-top:0"></h2>
+        <section class="editor panel" id="editor" hidden>
+          <h2 id="camname"></h2>
 
-      <div class="row">
-        <label class="flag"><input type="checkbox" id="enabled" /> камера включена</label>
+          <div class="row">
+            <label class="flag"><input type="checkbox" id="enabled" /> камера включена</label>
+          </div>
+          <div class="row">
+            <span>Функции аналитики:</span>
+            <label class="flag"><input type="checkbox" id="f_pose" /> позы</label>
+            <label class="flag"><input type="checkbox" id="f_actions" /> действия</label>
+            <label class="flag"><input type="checkbox" id="f_uniform" /> спецодежда</label>
+            <label class="flag"><input type="checkbox" id="f_coverage" /> покрытие</label>
+            <button id="saveCam">Сохранить настройки</button>
+            <button id="runAnalysis" class="sec">Запустить анализ сейчас</button>
+            <button id="liveAnalysis" class="sec">Живой анализ (скелет)</button>
+          </div>
+
+          <h3>ROI-зоны</h3>
+          <div class="row">
+            <button id="loadFrame" class="sec">Загрузить кадр</button>
+            <button id="liveToggle" class="sec">Живой просмотр</button>
+            <button id="videoToggle" class="sec">Видео (поток)</button>
+            <label>тип зоны:
+              <select id="zoneType">
+                <option value="table">стол</option>
+                <option value="floor">пол</option>
+                <option value="window">окно</option>
+              </select>
+            </label>
+            <button id="saveZone">Сохранить зону</button>
+            <button id="clearPoly" class="sec">Очистить точки</button>
+          </div>
+          <p class="hint">Клик по кадру — добавить вершину полигона (≥3). Зоны можно
+            рисовать и прямо на живом видео — кнопка «Зоны ✎» в «Живом анализе».</p>
+          <canvas id="canvas" width="640" height="360"></canvas>
+          <img id="livevideo" alt="живой поток" hidden
+               style="max-width:100%; border:1px solid var(--bd); background:#eee; border-radius:6px" />
+
+          <table id="zones">
+            <thead><tr><th>id</th><th>тип</th><th>вершин</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+
+          <h3>События (онлайн)</h3>
+          <p class="hint">Лента событий аналитики по помещению камеры; обновляется автоматически.</p>
+          <table id="camevents">
+            <thead><tr><th>время</th><th>тип</th><th>сообщение</th></tr></thead>
+            <tbody></tbody>
+          </table>
+
+          <h3>Живой анализ (скелет/распознавание)</h3>
+          <p class="hint">Браузерный анализ камеры: скелет, распознавание протирки,
+            % покрытия зон, журнал и стоп-кадры — на том же ядре, что и сервер.
+            События пишутся в журнал (Grafana).</p>
+          <div id="liveMount" hidden></div>
+        </section>
+
+        <section class="panel" id="pickhint" style="flex:1; min-width:320px">
+          <h2>Камера не выбрана</h2>
+          <p class="hint">Выберите камеру в списке слева — откроются настройки
+            аналитики, ROI-зоны, события и живой анализ.</p>
+        </section>
       </div>
-      <div class="row">
-        <span>Функции аналитики:</span>
-        <label class="flag"><input type="checkbox" id="f_pose" /> позы</label>
-        <label class="flag"><input type="checkbox" id="f_actions" /> действия</label>
-        <label class="flag"><input type="checkbox" id="f_uniform" /> спецодежда</label>
-        <label class="flag"><input type="checkbox" id="f_coverage" /> покрытие</label>
-        <button id="saveCam">Сохранить настройки</button>
-        <button id="runAnalysis" class="sec">Запустить анализ сейчас</button>
-        <button id="liveAnalysis" class="sec">Живой анализ (скелет)</button>
-      </div>
+    </div>
 
-      <h3>ROI-зоны</h3>
-      <div class="row">
-        <button id="loadFrame" class="sec">Загрузить кадр</button>
-        <button id="liveToggle" class="sec">Живой просмотр</button>
-        <button id="videoToggle" class="sec">Видео (поток)</button>
-        <label>тип зоны:
-          <select id="zoneType">
+    <!-- ───── Вкладка «Пороги датчиков» ───── -->
+    <div class="tab" id="tab-thresholds" hidden>
+      <section class="panel" id="thresholds-panel">
+        <h2>Пороги датчиков</h2>
+        <p class="hint">Критерии событий: превышение/возврат к норме. Применяются воркером в течение минуты.</p>
+        <div class="row">
+          <input id="th_room" placeholder="помещение (пусто = все)" />
+          <select id="th_metric">
+            <option value="air_temp">темп. воздуха</option>
+            <option value="humidity">влажность</option>
+            <option value="surface_ir">темп. поверхности</option>
+          </select>
+          <select id="th_op">
+            <option value="&gt;">&gt;</option>
+            <option value="&lt;">&lt;</option>
+            <option value="&gt;=">&ge;</option>
+            <option value="&lt;=">&le;</option>
+          </select>
+          <input id="th_value" type="number" step="0.1" placeholder="значение" style="width:90px" />
+          <select id="th_sev">
+            <option value="warning">warning</option>
+            <option value="critical">critical</option>
+          </select>
+          <button id="th_add">Добавить порог</button>
+        </div>
+        <table id="thresholds">
+          <thead><tr><th>помещение</th><th>метрика</th><th>усл.</th><th>знач.</th><th>важность</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </div>
+
+    <!-- ───── Вкладка «Контроль»: уборка + присутствие ───── -->
+    <div class="tab" id="tab-control" hidden>
+      <section class="panel" id="cleaning-panel">
+        <h2>Правила уборки (санитарный контроль)</h2>
+        <p class="hint">Зона должна убираться не реже интервала; покрытие последней уборки — не ниже
+          порога. Нарушение — событие «не убрано вовремя» (журнал/Grafana, уведомления).</p>
+        <div class="row">
+          <input id="cr_room" placeholder="помещение" />
+          <select id="cr_zone">
             <option value="table">стол</option>
             <option value="floor">пол</option>
             <option value="window">окно</option>
           </select>
-        </label>
-        <button id="saveZone">Сохранить зону</button>
-        <button id="clearPoly" class="sec">Очистить точки</button>
-      </div>
-      <p class="hint">Клик по кадру — добавить вершину полигона (≥3). Координаты нормируются [0..1].</p>
-      <canvas id="canvas" width="640" height="360"></canvas>
-      <img id="livevideo" alt="живой поток" hidden
-           style="max-width:100%; border:1px solid var(--bd); background:#eee" />
+          <input id="cr_interval" type="number" step="0.5" min="0.5" placeholder="интервал, ч" style="width:120px" />
+          <input id="cr_minpct" type="number" min="0" max="100" placeholder="мин. покрытие, % (0 = не проверять)" style="width:230px" />
+          <input id="cr_name" placeholder="подпись зоны (опц.)" />
+          <button id="cr_add">Добавить правило</button>
+        </div>
+        <table id="cleaningrules">
+          <thead><tr><th>помещение</th><th>зона</th><th>интервал, ч</th><th>мин. %</th><th>подпись</th><th>вкл</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
 
-      <table id="zones">
-        <thead><tr><th>id</th><th>тип</th><th>вершин</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
+      <section class="panel" id="presence-panel">
+        <h2>Контроль присутствия (рабочие зоны)</h2>
+        <p class="hint">В окне времени присутствие в рабочей зоне помещения должно фиксироваться не
+          реже допустимого перерыва. Нарушение — событие «нет присутствия» (журнал/Grafana,
+          уведомления). Времена окна — в поясе PRESENCE_TZ планировщика.</p>
+        <div class="row">
+          <input id="pr_room" placeholder="помещение" />
+          <input id="pr_start" type="time" value="08:00" style="width:110px" />
+          <input id="pr_end" type="time" value="17:00" style="width:110px" />
+          <input id="pr_maxabs" type="number" min="1" placeholder="перерыв, мин (30)" style="width:150px" />
+          <button id="pr_add">Добавить правило</button>
+        </div>
+        <table id="presencerules">
+          <thead><tr><th>помещение</th><th>окно</th><th>перерыв, мин</th><th>вкл</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </div>
 
-      <h3>События (онлайн)</h3>
-      <p class="hint">Лента событий аналитики по помещению камеры; обновляется автоматически.</p>
-      <table id="camevents">
-        <thead><tr><th>время</th><th>тип</th><th>сообщение</th></tr></thead>
-        <tbody></tbody>
-      </table>
+    <!-- ───── Вкладка «Расписания» ───── -->
+    <div class="tab" id="tab-schedules" hidden>
+      <section class="panel" id="schedules-panel">
+        <h2>Расписания видеоанализа (таймер)</h2>
+        <p class="hint">Периодический запуск анализа. Изменения подхватываются планировщиком на следующем тике.</p>
+        <div class="row">
+          <input id="sc_name" placeholder="имя (уникальное)" />
+          <input id="sc_ref" placeholder="rtsp://… (или выберите камеру)" style="min-width:240px" />
+          <select id="sc_camera"><option value="">камера (опц.)</option></select>
+          <input id="sc_room" placeholder="помещение" />
+          <input id="sc_interval" type="number" placeholder="интервал, мин" style="width:130px" />
+          <button id="sc_add">Добавить расписание</button>
+        </div>
+        <table id="schedules">
+          <thead><tr><th>имя</th><th>источник</th><th>помещение</th><th>интервал, мин</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </div>
 
-      <h3>Живой анализ (скелет/распознавание)</h3>
-      <p class="hint">Браузерный анализ камеры: скелет, распознавание протирки,
-        % покрытия зон, журнал и стоп-кадры. Работает прямо здесь (без отдельного
-        окна), на том же ядре, что и сервер. События пишутся в журнал (Grafana).</p>
-      <div id="liveMount" hidden></div>
-    </section>
-  </main>
-
-  <main>
-    <section class="panel" id="thresholds-panel" style="width:100%">
-      <h2 style="margin-top:0">Пороги датчиков</h2>
-      <p class="hint">Критерии событий: превышение/возврат к норме. Применяются воркером в течение минуты.</p>
-      <div class="row">
-        <input id="th_room" placeholder="помещение (пусто = все)" />
-        <select id="th_metric">
-          <option value="air_temp">темп. воздуха</option>
-          <option value="humidity">влажность</option>
-          <option value="surface_ir">темп. поверхности</option>
-        </select>
-        <select id="th_op">
-          <option value="&gt;">&gt;</option>
-          <option value="&lt;">&lt;</option>
-          <option value="&gt;=">&ge;</option>
-          <option value="&lt;=">&le;</option>
-        </select>
-        <input id="th_value" type="number" step="0.1" placeholder="значение" style="width:90px" />
-        <select id="th_sev">
-          <option value="warning">warning</option>
-          <option value="critical">critical</option>
-        </select>
-        <button id="th_add">Добавить порог</button>
-      </div>
-      <table id="thresholds">
-        <thead><tr><th>помещение</th><th>метрика</th><th>усл.</th><th>знач.</th><th>важность</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </section>
-  </main>
-
-  <main>
-    <section class="panel" id="report-panel" style="width:100%">
-      <h2 style="margin-top:0">Отчёт за период (санинспекция/ППК)</h2>
-      <p class="hint">Уборки, просрочки и холодовая цепь (мин/макс/среднее, время вне нормы). CSV открывается в Excel.</p>
-      <div class="row">
-        <label>с <input id="rp_from" type="datetime-local" /></label>
-        <label>по <input id="rp_to" type="datetime-local" /></label>
-        <button id="rp_csv">Скачать CSV</button>
-      </div>
-    </section>
-  </main>
-
-  <main>
-    <section class="panel" id="cleaning-panel" style="width:100%">
-      <h2 style="margin-top:0">Правила уборки (санитарный контроль)</h2>
-      <p class="hint">Зона должна убираться не реже интервала; покрытие последней уборки — не ниже
-        порога. Нарушение — событие «не убрано вовремя» (журнал/Grafana, уведомления).</p>
-      <div class="row">
-        <input id="cr_room" placeholder="помещение" />
-        <select id="cr_zone">
-          <option value="table">стол</option>
-          <option value="floor">пол</option>
-          <option value="window">окно</option>
-        </select>
-        <input id="cr_interval" type="number" step="0.5" min="0.5" placeholder="интервал, ч" style="width:120px" />
-        <input id="cr_minpct" type="number" min="0" max="100" placeholder="мин. покрытие, % (0 = не проверять)" style="width:230px" />
-        <input id="cr_name" placeholder="подпись зоны (опц.)" />
-        <button id="cr_add">Добавить правило</button>
-      </div>
-      <table id="cleaningrules">
-        <thead><tr><th>помещение</th><th>зона</th><th>интервал, ч</th><th>мин. %</th><th>подпись</th><th>вкл</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </section>
-  </main>
-
-  <main>
-    <section class="panel" id="presence-panel" style="width:100%">
-      <h2 style="margin-top:0">Контроль присутствия (рабочие зоны)</h2>
-      <p class="hint">В окне времени присутствие в рабочей зоне помещения должно фиксироваться не
-        реже допустимого перерыва. Нарушение — событие «нет присутствия» (журнал/Grafana,
-        уведомления). Времена окна — в поясе PRESENCE_TZ планировщика.</p>
-      <div class="row">
-        <input id="pr_room" placeholder="помещение" />
-        <input id="pr_start" type="time" value="08:00" style="width:110px" />
-        <input id="pr_end" type="time" value="17:00" style="width:110px" />
-        <input id="pr_maxabs" type="number" min="1" placeholder="перерыв, мин (30)" style="width:150px" />
-        <button id="pr_add">Добавить правило</button>
-      </div>
-      <table id="presencerules">
-        <thead><tr><th>помещение</th><th>окно</th><th>перерыв, мин</th><th>вкл</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </section>
-  </main>
-
-  <main>
-    <section class="panel" id="schedules-panel" style="width:100%">
-      <h2 style="margin-top:0">Расписания видеоанализа (таймер)</h2>
-      <p class="hint">Периодический запуск анализа. Изменения подхватываются планировщиком на следующем тике.</p>
-      <div class="row">
-        <input id="sc_name" placeholder="имя (уникальное)" />
-        <input id="sc_ref" placeholder="rtsp://… (или выберите камеру)" style="min-width:240px" />
-        <select id="sc_camera"><option value="">камера (опц.)</option></select>
-        <input id="sc_room" placeholder="помещение" />
-        <input id="sc_interval" type="number" placeholder="интервал, мин" style="width:130px" />
-        <button id="sc_add">Добавить расписание</button>
-      </div>
-      <table id="schedules">
-        <thead><tr><th>имя</th><th>источник</th><th>помещение</th><th>интервал, мин</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </section>
+    <!-- ───── Вкладка «Отчёты» ───── -->
+    <div class="tab" id="tab-reports" hidden>
+      <section class="panel" id="report-panel">
+        <h2>Отчёт за период (санинспекция/ППК)</h2>
+        <p class="hint">Уборки, просрочки и холодовая цепь (мин/макс/среднее, время вне нормы). CSV открывается в Excel.</p>
+        <div class="row">
+          <label>с <input id="rp_from" type="datetime-local" /></label>
+          <label>по <input id="rp_to" type="datetime-local" /></label>
+          <button id="rp_csv">Скачать CSV</button>
+        </div>
+      </section>
+    </div>
   </main>
 
   <script src="app.js"></script>

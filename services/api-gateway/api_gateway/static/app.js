@@ -24,6 +24,14 @@ function msg(text, ok = true) {
   el.style.color = ok ? "#cdf" : "#ffd0d0";
 }
 
+/* Индикатор состояния ключа API в шапке (#321): принят / не принят. */
+function setKeyState(ok) {
+  const el = $("keystate");
+  if (!el) return;
+  el.textContent = ok ? "ключ принят" : "ключ не принят";
+  el.className = ok ? "ok" : "bad";
+}
+
 function headers(json = true) {
   const h = { "X-API-Key": keyInput.value };
   if (json) h["Content-Type"] = "application/json";
@@ -51,8 +59,10 @@ async function loadCameras() {
     renderCamList();
     fillCameraSelect();
     msg(`Камер: ${cameras.length}`);
+    setKeyState(true);
   } catch (e) {
     msg("Ошибка загрузки камер: " + e.message, false);
+    setKeyState(false);
   }
 }
 
@@ -400,7 +410,7 @@ async function loadZones() {
       const td = document.createElement("td");
       const btn = document.createElement("button");
       btn.textContent = "удалить";
-      btn.className = "sec";
+      btn.className = "danger";
       btn.onclick = () => deleteZone(z.id);
       td.appendChild(btn);
       tr.appendChild(td);
@@ -412,6 +422,7 @@ async function loadZones() {
 }
 
 async function deleteZone(id) {
+  if (!window.confirm("Удалить зону? Покрытие и правила по ней перестанут считаться.")) return;
   try {
     await api(`/zones/${id}`, { method: "DELETE" });
     loadZones();
@@ -469,7 +480,7 @@ async function loadThresholds() {
       const td = document.createElement("td");
       const btn = document.createElement("button");
       btn.textContent = "удалить";
-      btn.className = "sec";
+      btn.className = "danger";
       btn.onclick = () => deleteThreshold(t.id);
       td.appendChild(btn);
       tr.appendChild(td);
@@ -504,6 +515,7 @@ async function createThreshold() {
 }
 
 async function deleteThreshold(id) {
+  if (!window.confirm("Удалить порог? События по нему перестанут создаваться.")) return;
   try {
     await api(`/thresholds/${id}`, { method: "DELETE" });
     loadThresholds();
@@ -572,7 +584,7 @@ async function loadCleaningRules() {
       td.appendChild(toggle);
       const btn = document.createElement("button");
       btn.textContent = "удалить";
-      btn.className = "sec";
+      btn.className = "danger";
       btn.onclick = () => deleteCleaningRule(r.id);
       td.appendChild(btn);
       tr.appendChild(td);
@@ -620,6 +632,7 @@ async function toggleCleaningRule(id, enabled) {
 }
 
 async function deleteCleaningRule(id) {
+  if (!window.confirm("Удалить правило уборки?")) return;
   try {
     await api(`/cleaning-rules/${id}`, { method: "DELETE" });
     loadCleaningRules();
@@ -657,7 +670,7 @@ async function loadPresenceRules() {
       td.appendChild(toggle);
       const btn = document.createElement("button");
       btn.textContent = "удалить";
-      btn.className = "sec";
+      btn.className = "danger";
       btn.onclick = () => deletePresenceRule(r.id);
       td.appendChild(btn);
       tr.appendChild(td);
@@ -703,6 +716,7 @@ async function togglePresenceRule(id, enabled) {
 }
 
 async function deletePresenceRule(id) {
+  if (!window.confirm("Удалить правило присутствия?")) return;
   try {
     await api(`/presence-rules/${id}`, { method: "DELETE" });
     loadPresenceRules();
@@ -735,7 +749,7 @@ async function loadSchedules() {
       const td = document.createElement("td");
       const btn = document.createElement("button");
       btn.textContent = "удалить";
-      btn.className = "sec";
+      btn.className = "danger";
       btn.onclick = () => deleteSchedule(s.id);
       td.appendChild(btn);
       tr.appendChild(td);
@@ -775,6 +789,7 @@ async function createSchedule() {
 }
 
 async function deleteSchedule(id) {
+  if (!window.confirm("Удалить расписание? Периодический анализ по нему остановится.")) return;
   try {
     await api(`/schedules/${id}`, { method: "DELETE" });
     loadSchedules();
@@ -889,4 +904,26 @@ $("pr_add").onclick = createPresenceRule;
 $("rp_csv").onclick = downloadReportCsv;
 $("sc_add").onclick = createSchedule;
 
+// ── Вкладки (#321): раздел в hash URL, последний открытый — в localStorage ──
+const TABS = ["object", "cameras", "thresholds", "control", "schedules", "reports"];
+
+function showTab(name) {
+  if (!TABS.includes(name)) name = TABS[0];
+  for (const t of TABS) {
+    const panel = $("tab-" + t);
+    if (panel) panel.hidden = t !== name;
+    const btn = document.querySelector(`nav [data-tab="${t}"]`);
+    if (btn) btn.classList.toggle("active", t === name);
+  }
+  localStorage.setItem("uiTab", name);
+  if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+}
+
+document.querySelectorAll("nav [data-tab]").forEach((b) => {
+  b.onclick = () => showTab(b.dataset.tab);
+});
+window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+showTab(location.hash.slice(1) || localStorage.getItem("uiTab") || "object");
+
 if (keyInput.value) loadAll();
+else setKeyState(false);
