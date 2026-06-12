@@ -25,6 +25,7 @@ from ingest_sensors.parsing import RoomResolver
 from ingest_sensors.pipeline import make_reading_handler
 from ingest_sensors.silence_tracker import SilenceTracker
 from ingest_sensors.thresholds import ThresholdMonitor, load_thresholds
+from monitoring_shared import install_stop_event
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,14 @@ def main() -> None:
         len(nodes),
         default_silent_min,
     )
-    run(handler=handler, on_tick=on_tick)
+    # Мягкая остановка по SIGTERM/SIGINT (#206): docker stop отключает клиента
+    # от брокера штатно, engine закрывается в finally.
+    stop = install_stop_event()
+    try:
+        run(handler=handler, on_tick=on_tick, stop_event=stop)
+    finally:
+        engine.dispose()
+        logger.info("ingest-sensors остановлен штатно")
 
 
 if __name__ == "__main__":

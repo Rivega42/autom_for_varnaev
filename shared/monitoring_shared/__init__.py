@@ -33,6 +33,7 @@ from monitoring_shared.models import (
     ThresholdOp,
     ZoneType,
 )
+from monitoring_shared.shutdown import install_stop_event
 
 __version__ = "0.1.0"
 
@@ -62,5 +63,6 @@ __all__ = [
     "ZoneType",
     "__version__",
     "error",
+    "install_stop_event",
     "ok",
 ]

@@ -44,7 +44,10 @@ def create_zone(engine: Engine, camera_id: UUID, body: CameraZoneCreate) -> dict
     with engine.begin() as conn:
         result = conn.execute(camera_zones.insert().values(**values))
         inserted = result.inserted_primary_key
-        assert inserted is not None  # insert всегда возвращает первичный ключ
+        if inserted is None:
+            # Страховка вместо assert (#206): assert исчезает под `python -O`,
+            # а здесь сбой должен дойти до клиента как 500 INTERNAL в конверте.
+            raise RuntimeError("INSERT camera_zones не вернул первичный ключ")
         zone_id = inserted[0]
         row = (
             conn.execute(select(camera_zones).where(camera_zones.c.id == zone_id)).mappings().one()

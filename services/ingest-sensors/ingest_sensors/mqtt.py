@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable
 from typing import Any
@@ -67,6 +68,8 @@ def run(
     *,
     on_tick: TickHandler | None = None,
     tick_interval_s: float = 60.0,
+    stop_event: threading.Event | None = None,
+    client_factory: Callable[[Settings, MessageHandler | None], mqtt.Client] = build_client,
 ) -> None:
     """Запустить воркер: подключиться к брокеру и слушать (блокирующе).
 
@@ -74,25 +77,39 @@ def run(
     основном потоке периодически (раз в `tick_interval_s` сек) вызывается `on_tick`
     — это используется для проверки «тишины» узлов независимо от входящих
     сообщений. Без `on_tick` поведение прежнее (loop_forever).
+
+    `stop_event` — мягкая остановка (#206): взведённый Event сразу прерывает
+    ожидание, клиент штатно отключается от брокера. `client_factory` — фабрика
+    клиента (для тестов без брокера).
     """
     settings = settings or Settings.from_env()
-    client = build_client(settings, handler)
+    client = client_factory(settings, handler)
     # Автопереподключение с экспоненциальной задержкой (обрыв сети — норма).
     client.reconnect_delay_set(min_delay=1, max_delay=32)
     logger.info("Подключение к брокеру %s:%s", settings.mqtt_host, settings.mqtt_port)
     client.connect(settings.mqtt_host, settings.mqtt_port)
 
-    if on_tick is None:
+    if on_tick is None and stop_event is None:
         client.loop_forever()
         return
 
     client.loop_start()
     try:
         while True:
-            time.sleep(tick_interval_s)
+            if stop_event is not None:
+                # Сон прерывается сигналом остановки; True = пора выходить.
+                if stop_event.wait(tick_interval_s):
+                    logger.info("ingest-sensors: получен сигнал остановки — отключаемся")
+                    return
+            else:
+                time.sleep(tick_interval_s)
+            if on_tick is None:
+                continue
             try:
                 on_tick()
             except Exception:
                 logger.exception("Ошибка периодической проверки (тик)")
     finally:
+        # Штатное отключение: DISCONNECT уходит, пока сетевой поток ещё жив.
+        client.disconnect()
         client.loop_stop()

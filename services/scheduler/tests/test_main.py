@@ -87,3 +87,11 @@ def test_run_forever_max_iterations(tmp_path: Path) -> None:
     # Два разных слота → два задания; между двумя тиками ровно один сон.
     assert _task_count(engine) == 2
     assert sleeps == [60]
+
+
+def test_run_forever_stops_on_signal(tmp_path: Path) -> None:
+    """Взведённый should_stop завершает цикл до первой итерации (#206)."""
+    engine = _engine()
+    settings = _settings(tmp_path)
+    run_forever(engine, settings, should_stop=lambda: True)
+    assert _task_count(engine) == 0, "Тик не должен был выполниться"

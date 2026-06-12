@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import Engine
 
+from monitoring_shared import install_stop_event
 from scheduler.camera_liveness import CameraLivenessMonitor
 from scheduler.camera_store import Go2rtcCameraProber
 from scheduler.cleaning_monitor import CleaningMonitor
@@ -61,9 +62,11 @@ def run_forever(
     engine: Engine,
     settings: Settings,
     *,
-    sleep: Callable[[float], None] = time.sleep,
+    # object, а не None: сюда удобно передавать Event.wait (возвращает bool).
+    sleep: Callable[[float], object] = time.sleep,
     now_fn: Callable[[], datetime] = _now_utc,
     max_iterations: int | None = None,
+    should_stop: Callable[[], bool] | None = None,
     cleaning_monitor: CleaningMonitor | None = None,
     camera_monitor: CameraLivenessMonitor | None = None,
     watchdog: ServiceWatchdog | None = None,
@@ -78,10 +81,14 @@ def run_forever(
     каждом тике контроль уборки (#265); `camera_monitor` — живость камер (#283);
     `watchdog` — свежесть heartbeat'ов сервисов (#284); `presence_monitor` —
     присутствие в рабочих зонах по окну времени (#300). Планировщик пишет и свой
-    heartbeat на каждой итерации.
+    heartbeat на каждой итерации. `should_stop` — мягкая остановка (#206):
+    проверяется перед каждой итерацией.
     """
     iteration = 0
     while True:
+        if should_stop is not None and should_stop():
+            logger.info("Планировщик: получен сигнал остановки — выходим из цикла")
+            return
         now = now_fn()  # один момент времени на итерацию (тик + мониторы)
         write_heartbeat(engine, service_name, now)  # отметка живости самого планировщика
         try:
@@ -135,14 +142,23 @@ def main() -> None:
     cameras = CameraLivenessMonitor(sink, Go2rtcCameraProber(settings.go2rtc_url))
     watchdog = ServiceWatchdog(sink, settings.service_silent_min)
     presence = PresenceMonitor(sink, ZoneInfo(settings.presence_tz))
-    run_forever(
-        engine,
-        settings,
-        cleaning_monitor=cleaning,
-        camera_monitor=cameras,
-        watchdog=watchdog,
-        presence_monitor=presence,
-    )
+    # Мягкая остановка по SIGTERM/SIGINT (#206): docker stop завершает цикл
+    # между тиками, сон прерывается сразу (sleep = stop.wait).
+    stop = install_stop_event()
+    try:
+        run_forever(
+            engine,
+            settings,
+            cleaning_monitor=cleaning,
+            camera_monitor=cameras,
+            watchdog=watchdog,
+            presence_monitor=presence,
+            sleep=stop.wait,
+            should_stop=stop.is_set,
+        )
+    finally:
+        engine.dispose()
+        logger.info("Планировщик остановлен штатно")
 
 
 if __name__ == "__main__":
