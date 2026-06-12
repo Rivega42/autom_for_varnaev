@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Обзор объекта</title>
+  <!-- Обзорный экран дежурного (#289): мнемосхема помещений поверх GET /api/v1/overview.
+       Сам HTML отдаётся без ключа (как и весь /ui/); данные тянутся fetch'ем с
+       заголовком X-API-Key. Ключ общий с GUI настройки: localStorage["apiKey"]. -->
+  <style>
+    :root { --bd: #d0d7de; --bg: #f6f8fa; --accent: #3367d6;
+            --ok: #1a7f37; --warn: #bc4c00; --crit: #cf222e; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; color: #10204a; background: var(--bg); }
+    header { background: var(--accent); color: #fff; padding: 10px 16px; display: flex;
+             gap: 12px; align-items: center; flex-wrap: wrap; }
+    header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+    header input { padding: 4px 8px; border: none; border-radius: 4px; }
+    header a { color: #fff; font-size: 13px; }
+    #alerts { display: none; background: var(--crit); color: #fff; border-radius: 12px;
+              padding: 2px 10px; font-size: 13px; font-weight: 600; }
+    #msg { margin-left: auto; font-size: 13px; }
+    main { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .panel { border: 1px solid var(--bd); border-radius: 8px; padding: 12px; background: #fff; }
+    h2 { margin: 0 0 8px; font-size: 15px; }
+    .hint { color: #57606a; font-size: 12px; }
+    #rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .room { border: 1px solid var(--bd); border-radius: 8px; padding: 10px; background: #fff; }
+    .room.alert { border-color: var(--crit); box-shadow: 0 0 0 2px rgba(207,34,46,.15); }
+    .room h3 { margin: 0 0 6px; font-size: 14px; display: flex; gap: 6px; align-items: center; }
+    .room h3 .badge { font-size: 11px; font-weight: 600; color: var(--crit); }
+    .metric { display: flex; justify-content: space-between; font-size: 13px; padding: 2px 0; }
+    .metric .val { font-weight: 600; }
+    .metric.stale .val { color: #98a; font-weight: 400; }
+    .chips { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip { font-size: 12px; border-radius: 12px; padding: 2px 8px; border: 1px solid var(--bd); }
+    .chip.on { background: #dafbe1; border-color: var(--ok); color: var(--ok); }
+    .chip.off { background: #ffebe9; border-color: var(--crit); color: var(--crit); }
+    .chip.dis { color: #98a; }
+    .chip a { color: inherit; text-decoration: none; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid var(--bd); padding: 4px 8px; text-align: left; font-size: 13px; }
+    tr.warning td { background: #fff8f0; }
+    tr.critical td { background: #ffebe9; }
+    tr.acked td { color: #57606a; }
+    .sev { font-weight: 600; }
+    .sev.warning { color: var(--warn); }
+    .sev.critical { color: var(--crit); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Обзор объекта</h1>
+    <span id="alerts" title="Неподтверждённые предупреждения и тревоги"></span>
+    <input id="apikey" type="password" placeholder="X-API-Key" />
+    <a id="grafana" href="#" target="_blank" rel="noopener">Grafana</a>
+    <a href="/ui/">Настройка</a>
+    <span id="msg"></span>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Помещения</h2>
+      <p class="hint">Красная рамка — по помещению есть неподтверждённый алерт.
+        Серые значения — показание старше 10 минут. Красные ярлыки — узел/камера не на связи.</p>
+      <div id="rooms"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Последние события</h2>
+      <table>
+        <thead>
+          <tr><th>Время</th><th>Важность</th><th>Помещение</th><th>Сообщение</th></tr>
+        </thead>
+        <tbody id="events"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script>
+    "use strict";
+    const API = "/api/v1";
+    const REFRESH_MS = 10000;     // период автообновления экрана
+    const STALE_MIN = 10;         // показание старше N минут считаем устаревшим
+    // Человекочитаемые подписи метрик (ключи — как в sensor_readings.metric).
+    const METRIC_LABELS = {
+      air_temp: "Т° воздуха",
+      humidity: "Влажность",
+      surface_ir: "Т° поверхности (ИК)",
+      uv_index: "УФ-индекс",
+      uv_c: "УФ-C",
+    };
+
+    const keyInput = document.getElementById("apikey");
+    keyInput.value = localStorage.getItem("apiKey") || "";
+    keyInput.addEventListener("change", () => {
+      localStorage.setItem("apiKey", keyInput.value.trim());
+      load();
+    });
+    // Grafana опубликована на хосте рядом с api-gateway (порт 3000, docs/02_NETWORK.md).
+    document.getElementById("grafana").href =
+      location.protocol + "//" + location.hostname + ":3000/d/sensors-env/";
+
+    const el = (tag, cls, text) => {
+      const node = document.createElement(tag);
+      if (cls) node.className = cls;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+
+    const fmtAge = (now, ts) => {
+      // Возраст показания/события относительно серверного "now".
+      const sec = Math.max(0, Math.round((new Date(now) - new Date(ts)) / 1000));
+      if (sec < 60) return sec + " с";
+      if (sec < 3600) return Math.round(sec / 60) + " мин";
+      return Math.round(sec / 3600) + " ч";
+    };
+
+    function renderRooms(data, alertRooms) {
+      const root = document.getElementById("rooms");
+      root.replaceChildren();
+      for (const room of data.rooms) {
+        const card = el("div", "room" + (alertRooms.has(room.id) ? " alert" : ""));
+        const title = el("h3", null, (room.is_cold ? "❄ " : "") + room.name);
+        if (alertRooms.has(room.id)) title.append(el("span", "badge", "АЛЕРТ"));
+        card.append(title);
+
+        for (const [metric, m] of Object.entries(room.metrics)) {
+          const ageMin = (new Date(data.now) - new Date(m.ts)) / 60000;
+          const row = el("div", "metric" + (ageMin > STALE_MIN ? " stale" : ""));
+          row.append(el("span", null, METRIC_LABELS[metric] || metric));
+          row.append(el("span", "val",
+            m.value.toFixed(1) + " " + m.unit + " · " + fmtAge(data.now, m.ts)));
+          card.append(row);
+        }
+        if (!Object.keys(room.metrics).length) {
+          card.append(el("div", "hint", "Показаний ещё нет"));
+        }
+
+        const chips = el("div", "chips");
+        for (const node of data.nodes.filter((n) => n.room_id === room.id)) {
+          chips.append(el("span", "chip " + (node.online ? "on" : "off"),
+            "узел " + node.id + (node.online ? "" : " — нет связи")));
+        }
+        for (const cam of data.cameras.filter((c) => c.room_id === room.id)) {
+          const chip = el("span",
+            "chip " + (cam.enabled ? (cam.online ? "on" : "off") : "dis"));
+          const link = el("a", null, "📷 " + cam.name +
+            (cam.enabled ? (cam.online ? "" : " — нет связи") : " — выключена"));
+          // Живой просмотр камеры (паттерн live.html: cam/room/api_key в query).
+          link.href = "/ui/live.html?cam=" + encodeURIComponent(cam.name) +
+            "&room=" + encodeURIComponent(cam.room_id) +
+            "&api_key=" + encodeURIComponent(keyInput.value.trim());
+          chip.append(link);
+          chips.append(chip);
+        }
+        if (chips.childNodes.length) card.append(chips);
+        root.append(card);
+      }
+      if (!data.rooms.length) {
+        root.append(el("div", "hint", "Справочник помещений пуст — заведите их в GUI настройки."));
+      }
+    }
+
+    function renderEvents(data) {
+      const tbody = document.getElementById("events");
+      tbody.replaceChildren();
+      for (const ev of data.recent_events) {
+        const active = !ev.acknowledged_at &&
+          (ev.severity === "warning" || ev.severity === "critical");
+        const tr = el("tr", (active ? ev.severity : "") + (ev.acknowledged_at ? " acked" : ""));
+        tr.append(el("td", null, new Date(ev.ts).toLocaleTimeString("ru-RU") +
+          " · " + fmtAge(data.now, ev.ts) + " назад"));
+        const sevCell = el("td");
+        sevCell.append(el("span", "sev " + ev.severity, ev.severity));
+        tr.append(sevCell);
+        tr.append(el("td", null, ev.room || "—"));
+        tr.append(el("td", null, ev.message || ev.type));
+        tbody.append(tr);
+      }
+    }
+
+    async function load() {
+      const msg = document.getElementById("msg");
+      try {
+        const resp = await fetch(API + "/overview",
+          { headers: { "X-API-Key": keyInput.value.trim() } });
+        const body = await resp.json();
+        if (!resp.ok) throw new Error((body.error && body.error.message) || resp.status);
+        const data = body.data;
+
+        // Помещения с неподтверждёнными warning/critical — подсветка карточки.
+        const alertRooms = new Set(data.recent_events
+          .filter((e) => !e.acknowledged_at &&
+            (e.severity === "warning" || e.severity === "critical") && e.room)
+          .map((e) => e.room));
+
+        const alerts = document.getElementById("alerts");
+        alerts.textContent = "Активных алертов: " + data.active_alerts;
+        alerts.style.display = data.active_alerts > 0 ? "inline-block" : "none";
+
+        renderRooms(data, alertRooms);
+        renderEvents(data);
+        msg.textContent = "Обновлено " + new Date().toLocaleTimeString("ru-RU");
+      } catch (err) {
+        msg.textContent = "Ошибка: " + err.message + " (проверьте X-API-Key)";
+      }
+    }
+
+    load();
+    setInterval(load, REFRESH_MS);
+  </script>
+</body>
+</html>
