@@ -28,7 +28,8 @@ def _index() -> str:
     client = TestClient(create_app(settings=_SETTINGS, engine=_engine()))
     resp = client.get("/ui/")
     assert resp.status_code == 200
-    return resp.text
+    body: str = resp.text
+    return body
 
 
 def test_tabs_navigation_present() -> None:
