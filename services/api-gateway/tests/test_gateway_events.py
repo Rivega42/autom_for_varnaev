@@ -73,6 +73,25 @@ def test_list_events_wraps_payload() -> None:
     assert fake.last_params["type"] == "threshold_exceeded"
 
 
+def test_list_events_invalid_dates_rejected() -> None:
+    """Кривые from/to в GET /events → 422 ещё в шлюзе, без похода в log-service (#205)."""
+    fake = _FakeEventsClient(None)
+    client = TestClient(create_app(settings=_SETTINGS, events_client=fake))
+    for params in ({"from": "не-дата"}, {"to": "2026-13-45"}):
+        resp = client.get("/api/v1/events", params=params)
+        assert resp.status_code == 422, params
+        assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert fake.last_params is None, "Запрос не должен был дойти до log-service"
+
+    # Валидные даты (включая без зоны — трактуются как UTC) проходят как раньше.
+    okresp = client.get(
+        "/api/v1/events", params={"from": "2026-06-01T00:00:00", "to": "2026-06-05T10:30:00Z"}
+    )
+    assert okresp.status_code == 200
+    assert fake.last_params is not None
+    assert fake.last_params["from"] == "2026-06-01T00:00:00"
+
+
 def test_get_event_found() -> None:
     """GET /events/{id} существующего события → конверт ok."""
     ev = _event()
