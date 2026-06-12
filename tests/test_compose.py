@@ -188,3 +188,18 @@ def test_release_variants_under_release_profile() -> None:
         svc = services[name]
         assert svc["profiles"] == ["release"], f"{name} должен быть под профилем release"
         assert svc["build"]["dockerfile"] == df
+
+
+def test_node_analytics_worker_under_profile() -> None:
+    """Node-воркер аналитики (#255) — под профилем node-analytics, не в дефолте.
+
+    Полевая проверка идёт параллельно Python-воркеру: общая очередь, та же
+    модель на томе, только внутренняя сеть, без публикации портов.
+    """
+    svc = _compose()["services"]["video-analytics-node"]
+    assert svc["profiles"] == ["node-analytics"]
+    assert svc["build"]["dockerfile"] == "services/video-analytics-node/Dockerfile"
+    assert svc["networks"] == ["internal"]
+    assert "ports" not in svc, "Node-воркер не должен публиковать порты"
+    assert any("models:/models" in v for v in svc["volumes"]), "Нет тома модели"
+    assert svc["depends_on"]["migrate"]["condition"] == "service_completed_successfully"

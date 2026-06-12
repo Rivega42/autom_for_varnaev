@@ -375,6 +375,42 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  video-analytics-node:
+    # Node-воркер видеоаналитики на едином JS-ядре analysis-core (#241 Фаза 3,
+    # #255). Поднимается ТОЛЬКО под профилем node-analytics — для полевой
+    # проверки ПАРАЛЛЕЛЬНО Python-воркеру (очередь общая, claim защищён
+    # FOR UPDATE SKIP LOCKED). Вывод Python-детекторов — отдельным шагом после
+    # полевой проверки:  docker compose --profile node-analytics up -d --build
+    profiles: ["node-analytics"]
+    build:
+      context: .
+      dockerfile: services/video-analytics-node/Dockerfile
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+      LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
+      ANALYTICS_FPS: ${ANALYTICS_FPS:-5}
+      ANALYTICS_MODEL_PATH: ${ANALYTICS_MODEL_PATH:-/models/pose_landmarker.task}
+      ANALYTICS_MAX_STREAM_FRAMES: ${ANALYTICS_MAX_STREAM_FRAMES:-150}
+    networks:
+      - internal
+    volumes:
+      # Та же модель PoseLandmarker, что у Python-воркера и браузера.
+      - ./models:/models:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      log-service:
+        condition: service_started
+      media-gateway:
+        condition: service_started
+    restart: unless-stopped
+
   # ── Профиль release (E9.7): закрытые сборки через Nuitka ──
   # dev-сервисы выше работают ПО УМОЛЧАНИЮ. Release-варианты ниже поднимаются
   # ТОЛЬКО под профилем release (не дефолт), прежде всего для СБОРКИ закрытых

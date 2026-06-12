@@ -16,6 +16,7 @@ _SERVICES = {
     "ingest-sensors",
     "scheduler",
     "video-analytics",
+    "video-analytics-node",
     "demo-sensors",
 }
 

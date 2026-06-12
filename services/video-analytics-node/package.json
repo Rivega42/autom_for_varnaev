@@ -1,13 +1,19 @@
 {
   "name": "video-analytics-node",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Серверный воркер видеоаналитики на едином ядре analysis-core (Фаза 3 #241)",
   "type": "module",
   "bin": {
-    "analyze-recording": "bin/analyze.mjs"
+    "analyze-recording": "bin/analyze.mjs",
+    "analytics-worker": "bin/worker.mjs"
   },
   "scripts": {
     "test": "node --test"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "0.10.18",
+    "gl": "^8.1.6",
+    "pg": "^8.13.0"
   },
   "license": "UNLICENSED"
 }

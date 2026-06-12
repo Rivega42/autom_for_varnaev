@@ -85,7 +85,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [api-gateway, log-service, ingest-sensors, scheduler, video-analytics, demo-sensors]
+        service: [api-gateway, log-service, ingest-sensors, scheduler, video-analytics, video-analytics-node, demo-sensors]
         include:
           - service: migrate
             dockerfile: db/Dockerfile
