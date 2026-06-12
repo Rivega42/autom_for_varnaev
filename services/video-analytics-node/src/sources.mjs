@@ -32,22 +32,36 @@ export async function* recordingFrames(recording) {
   }
 }
 
-/* СТЫК (Фаза 3, требует проверки на хосте): источник кадров из RTSP/видеофайла
- * через MediaPipe PoseLandmarker в Node.
+/* Живой источник кадров (Фаза 3, #255): RTSP/видеофайл → ffmpeg → детектор поз.
  *
- * Реализация намеренно не написана: извлечение кадров из RTSP (ffmpeg/go2rtc) и
- * запуск MediaPipe tasks-vision в Node — нетривиальны и НЕ проверяются в
- * CI-окружении ассистента (нужен реальный поток/камера и нативные зависимости).
- * Поэтому интерфейс зафиксирован, а наполнение согласуется отдельно — чтобы
- * результат можно было проверить на твоём хосте, а не «вслепую».
+ * Конвейер: rawFrames (ffmpeg, сырые RGBA-кадры фиксированного размера) →
+ * detector.detect(frame, ts) → {lm, world} → кадры контракта runner'а.
+ * Кадры без позы пропускаются (как в Python-воркере), но учитываются в stats.
  *
- * Ожидаемая сигнатура будущей реализации:
- *   async function* mediapipeFrames({ source, fps, maxFrames }) -> {lm, world, ts}
- * где source — RTSP-URL или путь к файлу.
+ * detector инъектируется: в проде — MediaPipe PoseLandmarker в Node
+ * (src/mediapipe.mjs), в тестах — фейк. framesImpl — источник сырых кадров
+ * (по умолчанию ffmpeg; в тестах — синтетический генератор).
  */
-export async function* mediapipeFrames() {
-  throw new Error(
-    'mediapipeFrames: источник RTSP/файл+MediaPipe ещё не реализован (Фаза 3, ' +
-    'проверяется на хосте). Используй arrayFrames для готовых поз.',
-  );
+export async function* mediapipeFrames({
+  source,
+  fps = 5,
+  maxFrames = 150,
+  detector,
+  framesImpl,
+  stats = {},
+}) {
+  if (!detector) throw new Error('mediapipeFrames: нужен detector (детектор поз)');
+  if (!framesImpl) {
+    // Ленивая загрузка: тестам с фейковым framesImpl модуль ffmpeg не нужен.
+    ({ rawFrames: framesImpl } = await import('./ffmpeg.mjs'));
+  }
+  stats.framesRead = 0;
+  stats.posesFound = 0;
+  for await (const raw of framesImpl({ source, fps, maxFrames })) {
+    stats.framesRead++;
+    const pose = await detector.detect(raw, raw.ts);
+    if (!pose || !pose.lm) continue; // в кадре нет человека
+    stats.posesFound++;
+    yield { lm: pose.lm, world: pose.world ?? null, ts: raw.ts, wallTs: raw.wallTs };
+  }
 }

@@ -103,6 +103,31 @@
 
 ---
 
+## 3a. Единый движок (эпик #241): Node-воркер рядом с Python
+
+Чтобы поведение сервера совпадало с PoC «точь-в-точь», логика детекторов
+вынесена в единое JS-ядро **`services/analysis-core`** (код PoC без DOM).
+Браузерный «Живой анализ» уже работает на нём; серверная половина — воркер
+**`services/video-analytics-node`** (#255):
+
+- кадры: ffmpeg (RTSP/файл, rawvideo) → MediaPipe PoseLandmarker **в Node**
+  (тот же `@mediapipe/tasks-vision`, что в браузере; WebGL — headless-gl);
+- очередь: та же `analysis_tasks`, claim через `FOR UPDATE SKIP LOCKED` —
+  безопасно работает **параллельно** Python-воркеру; heartbeat — под именем
+  `video-analytics-node`;
+- события: `action_detected` / `coverage_report` в той же форме, что у Python
+  (контракт `03_API_CONTRACT.md` и Grafana не меняются).
+
+Запуск — профиль compose `node-analytics` (в дефолтный стек не входит):
+`docker compose --profile node-analytics up -d --build video-analytics-node`.
+Самопроверка цепочки на объекте — `bin/selfcheck.mjs` (см. README сервиса).
+
+До вывода Python-детекторов из эксплуатации (#255 шаг 3, после полевой
+проверки): `uniform_violation`, `forbidden_zone_entry`/`presence_detected` и
+скриншоты-артефакты остаются за Python-воркером.
+
+---
+
 ## 4. Границы и масштабирование (важно — что НЕ тащим в v1)
 
 В прошлых проработках был намечен путь масштабирования на 50–200 камер: пул
