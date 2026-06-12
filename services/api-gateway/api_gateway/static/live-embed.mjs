@@ -25,11 +25,14 @@ async function initModel() {
   return _landmarker;
 }
 
+/* Русские имена типов зон (подписи, журнал). */
+const RU_ZONE = { table: "стол", floor: "пол", window: "окно" };
+const zoneLabel = (z) => z.note || RU_ZONE[z.zone_type] || z.zone_type;
+
 /* зоны БД (zone_type/polygon/id) → ROI ядра (type/pts/name/zoneId) */
 function zonesToRois(zones) {
-  const RU = { table: "стол", floor: "пол", window: "окно" };
   return (zones || []).map((z) => ({
-    type: z.zone_type, pts: z.polygon, zoneId: z.id, name: z.note || RU[z.zone_type] || z.zone_type, cov: 0,
+    type: z.zone_type, pts: z.polygon, zoneId: z.id, name: zoneLabel(z), cov: 0,
   }));
 }
 
@@ -52,7 +55,8 @@ export function mountLiveAnalysis(container, opts) {
   container.innerHTML = "";
   container.classList.add("live-embed");
 
-  // DOM: видео (MJPEG как <img>), оверлей-скелет, heat-заливка, журнал, статус.
+  // DOM: видео (MJPEG как <img>), оверлей-скелет, heat-заливка, слой разметки
+  // зон, журнал, статус.
   const stage = document.createElement("div");
   stage.style.cssText = "position:relative;background:#060807;border:1px solid var(--bd,#444);border-radius:8px;overflow:hidden";
   const img = document.createElement("img");
@@ -60,18 +64,38 @@ export function mountLiveAnalysis(container, opts) {
   img.style.cssText = "display:block;width:100%";
   const heat = document.createElement("canvas");
   const skel = document.createElement("canvas");
-  for (const c of [heat, skel]) c.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none";
-  stage.append(img, heat, skel);
+  const edit = document.createElement("canvas"); // разметка ROI-зон (#256)
+  for (const c of [heat, skel, edit]) c.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none";
+  stage.append(img, heat, skel, edit);
 
   const bar = document.createElement("div");
-  bar.style.cssText = "display:flex;gap:10px;align-items:center;margin:8px 0;font-size:13px";
+  bar.style.cssText = "display:flex;gap:10px;align-items:center;margin:8px 0;font-size:13px;flex-wrap:wrap";
   const stopBtn = document.createElement("button");
   stopBtn.textContent = "Остановить анализ";
+  const zonesBtn = document.createElement("button");
+  zonesBtn.textContent = "Зоны ✎";
+  zonesBtn.className = "sec";
+  // Инструменты разметки (видны только в режиме редактирования зон).
+  const tools = document.createElement("span");
+  tools.style.cssText = "display:none;gap:6px;align-items:center";
+  const typeSel = document.createElement("select");
+  for (const [v, t] of [["table", "стол"], ["floor", "пол"], ["window", "окно"]]) {
+    const o = document.createElement("option");
+    o.value = v; o.textContent = t; typeSel.appendChild(o);
+  }
+  const delBtn = document.createElement("button");
+  delBtn.textContent = "Удалить зону";
+  delBtn.className = "sec";
+  delBtn.style.display = "none";
+  const hint = document.createElement("span");
+  hint.style.cssText = "color:var(--muted,#888);font-size:12px";
+  hint.textContent = "растяните прямоугольник; углы зон можно таскать";
+  tools.append(typeSel, delBtn, hint);
   const status = document.createElement("span");
   status.style.color = "var(--muted,#888)";
   const cov = document.createElement("span");
   cov.style.cssText = "margin-left:auto;font-family:monospace;font-size:12px";
-  bar.append(stopBtn, status, cov);
+  bar.append(stopBtn, zonesBtn, tools, status, cov);
 
   const logBox = document.createElement("div");
   logBox.style.cssText = "max-height:220px;overflow:auto;border:1px solid var(--bd,#444);border-radius:8px;padding:6px;font-family:monospace;font-size:12.5px";
@@ -144,9 +168,196 @@ export function mountLiveAnalysis(container, opts) {
 
   function setSizes(w, h) {
     if (w && h && (skel.width !== w || skel.height !== h)) {
-      skel.width = heat.width = w; skel.height = heat.height = h;
+      skel.width = heat.width = edit.width = w;
+      skel.height = heat.height = edit.height = h;
+      if (editing) drawZones();
     }
   }
+
+  /* ── Разметка ROI-зон прямо на живом видео (#256) ──
+   * Прямоугольник растягивается мышью, тип берётся из селекта, сохранение —
+   * сразу POST /cameras/{id}/zones; углы сохранённых зон таскаются (PATCH),
+   * клик внутри зоны выделяет её для удаления. Движок подхватывает изменения
+   * на лету: engine.rois переприсваивается после каждой правки. */
+  const ZONE_COLORS = { table: "#2e7d32", floor: "#ef6c00", window: "#1565c0" };
+  const editCtx = edit.getContext("2d");
+  let editing = false;
+  let liveZones = (zones || []).map((z) => ({ ...z })); // локальная копия зон БД
+  let selected = -1;    // индекс выделенной зоны (для удаления)
+  let rubber = null;    // {x0,y0,x1,y1} — растягиваемый прямоугольник
+  let dragging = null;  // {zi, pi, moved} — перетаскиваемый угол зоны
+
+  async function zoneApi(path, method, body) {
+    const resp = await fetch("/api/v1" + path, {
+      method,
+      headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error((json.error && json.error.message) || "HTTP " + resp.status);
+    return json.data;
+  }
+
+  /* Перечитать зоны из БД и отдать их движку (ядро видит правки сразу). */
+  async function refreshZones() {
+    const data = await zoneApi(`/cameras/${cameraId}/zones`, "GET");
+    liveZones = data.items || [];
+    engine.rois = zonesToRois(liveZones);
+    if (selected >= liveZones.length) selected = -1;
+    delBtn.style.display = selected >= 0 ? "" : "none";
+    drawZones();
+  }
+
+  const clamp01 = (v) => Math.min(1, Math.max(0, v));
+  /* Координаты события мыши → нормализованные [0..1] (по CSS-размеру слоя). */
+  function normPos(ev) {
+    const r = edit.getBoundingClientRect();
+    return [clamp01((ev.clientX - r.left) / r.width), clamp01((ev.clientY - r.top) / r.height)];
+  }
+  /* Точка внутри полигона (ray casting) — для выделения зоны кликом. */
+  function inPoly(x, y, pts) {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, yi] = pts[i], [xj, yj] = pts[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+
+  function drawZones() {
+    const W = edit.width, H = edit.height;
+    editCtx.clearRect(0, 0, W, H);
+    if (!editing) return;
+    liveZones.forEach((z, zi) => {
+      const color = ZONE_COLORS[z.zone_type] || "#888";
+      editCtx.beginPath();
+      z.polygon.forEach(([x, y], i) => (i ? editCtx.lineTo(x * W, y * H) : editCtx.moveTo(x * W, y * H)));
+      editCtx.closePath();
+      editCtx.lineWidth = zi === selected ? 4 : 2;
+      editCtx.strokeStyle = color;
+      editCtx.fillStyle = color + (zi === selected ? "55" : "33");
+      editCtx.fill(); editCtx.stroke();
+      // Углы — ручки перетаскивания.
+      z.polygon.forEach(([x, y]) => {
+        editCtx.beginPath(); editCtx.fillStyle = "#fff"; editCtx.strokeStyle = color;
+        editCtx.arc(x * W, y * H, zi === selected ? 7 : 5, 0, 7); editCtx.fill(); editCtx.stroke();
+      });
+      // Подпись типа у первой вершины.
+      const [lx, ly] = z.polygon[0];
+      editCtx.font = `${Math.max(12, W * 0.018)}px system-ui`;
+      editCtx.fillStyle = color;
+      editCtx.fillText(zoneLabel(z), lx * W + 8, ly * H - 8);
+    });
+    if (rubber) {
+      editCtx.setLineDash([6, 4]);
+      editCtx.strokeStyle = "#3367d6"; editCtx.lineWidth = 2;
+      editCtx.fillStyle = "rgba(51,103,214,0.15)";
+      const x = Math.min(rubber.x0, rubber.x1) * W, y = Math.min(rubber.y0, rubber.y1) * H;
+      const w = Math.abs(rubber.x1 - rubber.x0) * W, h = Math.abs(rubber.y1 - rubber.y0) * H;
+      editCtx.fillRect(x, y, w, h); editCtx.strokeRect(x, y, w, h);
+      editCtx.setLineDash([]);
+    }
+  }
+
+  function onDown(ev) {
+    ev.preventDefault();
+    const [x, y] = normPos(ev);
+    const r = edit.getBoundingClientRect();
+    const grab = 10 / Math.min(r.width, r.height); // радиус захвата угла, ~10px CSS
+    // 1) угол существующей зоны → перетаскивание (выделенная зона — приоритетнее).
+    const order = selected >= 0 ? [selected, ...liveZones.keys()] : [...liveZones.keys()];
+    for (const zi of order) {
+      const z = liveZones[zi];
+      if (!z) continue;
+      const pi = z.polygon.findIndex(([px, py]) => Math.hypot(px - x, py - y) < grab);
+      if (pi >= 0) { dragging = { zi, pi, moved: false }; selected = zi; drawZones(); return; }
+    }
+    // 2) клик внутри зоны → выделение (для удаления).
+    const hit = liveZones.findIndex((z) => inPoly(x, y, z.polygon));
+    if (hit >= 0) {
+      selected = hit;
+      delBtn.style.display = "";
+      drawZones();
+      return;
+    }
+    // 3) пустое место → начинаем растягивать прямоугольник новой зоны.
+    selected = -1; delBtn.style.display = "none";
+    rubber = { x0: x, y0: y, x1: x, y1: y };
+    drawZones();
+  }
+  function onMove(ev) {
+    if (!editing || (!rubber && !dragging)) return;
+    const [x, y] = normPos(ev);
+    if (dragging) {
+      const z = liveZones[dragging.zi];
+      z.polygon[dragging.pi] = [x, y];
+      dragging.moved = true;
+    } else {
+      rubber.x1 = x; rubber.y1 = y;
+    }
+    drawZones();
+  }
+  async function onUp() {
+    if (dragging) {
+      const { zi, moved } = dragging;
+      dragging = null;
+      if (!moved) return;
+      const z = liveZones[zi];
+      try {
+        await zoneApi(`/zones/${z.id}`, "PATCH", { polygon: z.polygon });
+        log(`Зона «${zoneLabel(z)}» изменена`, "#3367d6");
+      } catch (e) {
+        log("Не удалось изменить зону: " + e.message, "#ff5d6c");
+      }
+      refreshZones().catch(() => {});
+      return;
+    }
+    if (rubber) {
+      const { x0, y0, x1, y1 } = rubber;
+      rubber = null;
+      // Слишком маленький прямоугольник — считаем случайным кликом.
+      if (Math.abs(x1 - x0) < 0.03 || Math.abs(y1 - y0) < 0.03) { drawZones(); return; }
+      const xa = Math.min(x0, x1), xb = Math.max(x0, x1);
+      const ya = Math.min(y0, y1), yb = Math.max(y0, y1);
+      const polygon = [[xa, ya], [xb, ya], [xb, yb], [xa, yb]];
+      try {
+        await zoneApi(`/cameras/${cameraId}/zones`, "POST", { zone_type: typeSel.value, polygon });
+        log(`Зона «${typeSel.options[typeSel.selectedIndex].text}» сохранена`, "#3367d6");
+      } catch (e) {
+        log("Не удалось сохранить зону: " + e.message, "#ff5d6c");
+      }
+      refreshZones().catch(() => {});
+    }
+  }
+  edit.addEventListener("pointerdown", onDown);
+  edit.addEventListener("pointermove", onMove);
+  edit.addEventListener("pointerup", onUp);
+  edit.addEventListener("pointerleave", onUp);
+
+  delBtn.onclick = async () => {
+    const z = liveZones[selected];
+    if (!z) return;
+    try {
+      await zoneApi(`/zones/${z.id}`, "DELETE");
+      log(`Зона «${zoneLabel(z)}» удалена`, "#3367d6");
+    } catch (e) {
+      log("Не удалось удалить зону: " + e.message, "#ff5d6c");
+    }
+    selected = -1; delBtn.style.display = "none";
+    refreshZones().catch(() => {});
+  };
+
+  zonesBtn.onclick = () => {
+    editing = !editing;
+    zonesBtn.textContent = editing ? "Готово" : "Зоны ✎";
+    zonesBtn.className = editing ? "" : "sec";
+    tools.style.display = editing ? "inline-flex" : "none";
+    edit.style.pointerEvents = editing ? "auto" : "none";
+    edit.style.cursor = editing ? "crosshair" : "";
+    if (editing && cameraId) refreshZones().catch((e) => log("Зоны: " + e.message, "#ff5d6c"));
+    else { selected = -1; delBtn.style.display = "none"; rubber = null; dragging = null; drawZones(); }
+  };
+  if (!cameraId) zonesBtn.style.display = "none"; // без камеры зоны сохранять некуда
 
   /* сбросить заливку: и визуальный heat-канвас, и сетку покрытия движка (как в
      PoC после стоп-кадра/в начале сессии) — иначе % копится между уборками. */
