@@ -13,10 +13,11 @@ import os
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import Engine
 
-from monitoring_shared import SourceType
+from monitoring_shared import SourceType, install_stop_event
 from video_analytics.capture import create_frame_source
 from video_analytics.config import Settings
 from video_analytics.db import build_engine, write_heartbeat
@@ -55,20 +56,27 @@ def run_forever(
     detector: PoseDetector,
     sink: EventSink,
     source_factory: SourceFactory,
-    sleep: Callable[[float], None] = time.sleep,
+    # object, а не None: сюда удобно передавать Event.wait (возвращает bool).
+    sleep: Callable[[float], object] = time.sleep,
     idle_sleep_s: float = 5.0,
     now_fn: Callable[[], datetime] = _now_utc,
     max_iterations: int | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> None:
     """Цикл воркера: обрабатывать задания, при пустой очереди ждать `idle_sleep_s`.
 
     `max_iterations` ограничивает число итераций (для тестов); при `None` цикл
-    бесконечный. Раз в сутки (и при старте) выполняется ротация артефактов:
-    скриншоты старше `artifacts_retention_days` удаляются вместе со строками.
+    бесконечный. `should_stop` — мягкая остановка (#206): проверяется перед
+    каждой итерацией, текущее задание не прерывается. Раз в сутки (и при старте)
+    выполняется ротация артефактов: скриншоты старше `artifacts_retention_days`
+    удаляются вместе со строками.
     """
     iteration = 0
     next_cleanup = now_fn()  # первая зачистка — сразу при старте
     while True:
+        if should_stop is not None and should_stop():
+            logger.info("Видеоаналитика: получен сигнал остановки — выходим из цикла")
+            return
         # Отметка живости (#284). Пишется между заданиями: SERVICE_SILENT_MIN
         # должен превышать длительность самого долгого одиночного run_once
         # (окно анализа ограничено ANALYTICS_MAX_STREAM_FRAMES, обычно ≈30 c).
@@ -104,6 +112,16 @@ def main() -> None:
     """Собрать боевые зависимости (БД, детектор, сток) и запустить цикл."""
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
     settings = Settings.from_env()
+    # Понятная диагностика вместо трудночитаемого падения MediaPipe (#206):
+    # модель — бинарный ассет, его кладут на объект отдельно (models/README.md).
+    if not Path(settings.model_path).is_file():
+        logger.error(
+            "Файл модели MediaPipe не найден: %s — положите pose_landmarker.task "
+            "в ./models (bash scripts/fetch_model.sh, см. models/README.md) или "
+            "задайте путь переменной ANALYTICS_MODEL_PATH",
+            settings.model_path,
+        )
+        raise SystemExit(1)
     engine = build_engine()
     detector = MediaPipePoseDetector(settings.model_path)
     sink = HttpEventSink(settings.log_service_url)
@@ -112,13 +130,22 @@ def main() -> None:
         settings.model_path,
         settings.log_service_url,
     )
-    run_forever(
-        engine,
-        settings,
-        detector=detector,
-        sink=sink,
-        source_factory=_make_source_factory(settings),
-    )
+    # Мягкая остановка по SIGTERM/SIGINT (#206): docker stop завершает цикл
+    # между заданиями, сон прерывается сразу (sleep = stop.wait).
+    stop = install_stop_event()
+    try:
+        run_forever(
+            engine,
+            settings,
+            detector=detector,
+            sink=sink,
+            source_factory=_make_source_factory(settings),
+            sleep=stop.wait,
+            should_stop=stop.is_set,
+        )
+    finally:
+        engine.dispose()
+        logger.info("Видеоаналитика остановлена штатно")
 
 
 if __name__ == "__main__":
