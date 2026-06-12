@@ -28,6 +28,8 @@ scripts/bootstrap.sh --demo
 Открыть:
 - **Grafana** — http://localhost:3000 (логин `admin`, пароль — из `.env`, ключ `GF_SECURITY_ADMIN_PASSWORD`): ряды показаний и события порогов.
 - **GUI настройки** — http://localhost:8000/ui/ (поле `X-API-Key` — из `.env`, ключ `API_KEY`).
+- **Обзор объекта (экран дежурного)** — http://localhost:8000/ui/overview.html
+  (тот же ключ; помещения с показаниями, статусы узлов/камер, лента событий, автообновление).
 - **API** — http://localhost:8000/api/v1/health.
 
 Остановить: `docker compose -f docker-compose.yml -f docker-compose.demo.yml down`
