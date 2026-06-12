@@ -197,6 +197,10 @@ def create_app(
         offset: int = Query(default=0, ge=0),
     ) -> dict[str, Any]:
         """Лента событий журнала (проксируется к log-service)."""
+        # Даты валидируются ДО проксирования (#205): иначе 422 от log-service
+        # превращается в 500 на raise_for_status HTTP-клиента.
+        _parse_query_dt(from_)
+        _parse_query_dt(to)
         data = events.list_events(
             {
                 "from": from_,
