@@ -46,3 +46,21 @@ def test_dashboard_has_room_filter() -> None:
     """Есть переменная-фильтр по помещению."""
     names = {v["name"] for v in _dashboard()["templating"]["list"]}
     assert "room" in names
+
+
+def test_panels_switch_to_hourly_rollup_on_long_ranges() -> None:
+    """Каждая панель датчиков на длинных диапазонах читает свёртку (#296).
+
+    Один запрос на панель: до 48 ч — сырьё sensor_readings, дольше — почасовой
+    continuous aggregate sensor_readings_hourly (avg_value); ветки переключаются
+    по ширине выбранного диапазона ($__timeTo() - $__timeFrom()).
+    """
+    for panel in _dashboard()["panels"]:
+        sql = " ".join(t["rawSql"] for t in panel["targets"])
+        assert "sensor_readings_hourly" in sql, f"Панель «{panel['title']}» не читает свёртку"
+        assert "avg_value" in sql, f"Панель «{panel['title']}» не берёт avg_value из свёртки"
+        assert "$__timeFilter(bucket)" in sql, f"Панель «{panel['title']}»: нет фильтра bucket"
+        assert "UNION ALL" in sql, f"Панель «{panel['title']}»: нет объединения сырья и свёртки"
+        assert sql.count("interval '48 hours'") == 2, (
+            f"Панель «{panel['title']}»: обе ветки должны переключаться на границе 48 часов"
+        )
