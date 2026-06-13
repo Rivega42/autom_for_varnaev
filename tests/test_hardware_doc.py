@@ -15,6 +15,7 @@ _DOC = REPO_ROOT / "docs" / "11_HARDWARE.md"
 _NODE_YAML = REPO_ROOT / "firmware" / "esphome" / "node.example.yaml"
 _SVG_NODE = REPO_ROOT / "docs" / "diagrams" / "08_node_wiring.svg"
 _SVG_COLD = REPO_ROOT / "docs" / "diagrams" / "09_cold_chamber_wiring.svg"
+_SVG_PINOUT = REPO_ROOT / "docs" / "diagrams" / "10_esp32c3_pinout.svg"
 
 
 def _firmware_pins() -> dict[str, str]:
@@ -35,12 +36,22 @@ def test_doc_pinout_matches_firmware() -> None:
 
 
 def test_doc_references_wiring_diagrams() -> None:
-    """Обе схемы существуют и встроены в раздел."""
+    """Схемы и распиновка платы существуют и встроены в раздел."""
     assert _SVG_NODE.is_file(), "Нет схемы обычного узла"
     assert _SVG_COLD.is_file(), "Нет схемы холодильной камеры"
+    assert _SVG_PINOUT.is_file(), "Нет распиновки платы ESP32-C3"
     doc = _DOC.read_text(encoding="utf-8")
     assert "diagrams/08_node_wiring.svg" in doc
     assert "diagrams/09_cold_chamber_wiring.svg" in doc
+    assert "diagrams/10_esp32c3_pinout.svg" in doc
+
+
+def test_doc_warns_about_silkscreen_pins() -> None:
+    """Раздел предупреждает, что шёлкография SDA/SCL (8/9) ≠ пины прошивки (5/6)."""
+    doc = _DOC.read_text(encoding="utf-8")
+    assert "шёлкограф" in doc.lower() or "8 и 9" in doc, "Нет предупреждения про пины 8/9"
+    # SHT30 требует другой платформы ESPHome, чем SHT4x — это должно быть отражено.
+    assert "sht3xd" in doc, "Нет указания платформы sht3xd для SHT30"
 
 
 def test_doc_covers_all_v1_metrics() -> None:

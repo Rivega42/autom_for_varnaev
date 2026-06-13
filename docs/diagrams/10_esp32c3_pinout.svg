@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 700" font-family="'Segoe UI', 'PT Sans', Arial, sans-serif">
+  <defs>
+    <style>
+      .t{fill:#1f2a36;}
+      .muted{fill:#5b6b7a;}
+      .board{fill:#20242b;stroke:#3a4250;stroke-width:2;}
+      .num{font-size:13px;font-weight:700;fill:#fff;}
+      .fn{font-size:10.5px;fill:#fff;}
+      .digital{fill:#7a2f8f;}
+      .analog{fill:#6b3f1d;}
+      .pwr{fill:#d23b36;}
+      .gnd{fill:#2a2e35;}
+      .pad{fill:#d9b25a;stroke:#9a7e3c;stroke-width:1.2;}
+      .ring{fill:none;stroke:#ff8a1f;stroke-width:3.4;}
+      .h{font-size:15px;font-weight:700;}
+      .lbl-s{font-size:11px;}
+      .use{font-size:12px;font-weight:700;}
+    </style>
+  </defs>
+
+  <text x="24" y="34" class="t h" font-size="18">10 · Распиновка платы ESP32-C3 SuperMini</text>
+  <text x="24" y="55" class="muted lbl-s">Оранжевым обведены пины, которые использует наша прошивка (firmware/esphome/node.example.yaml). Подробности — docs/11_HARDWARE.md.</text>
+
+  <!-- Board -->
+  <rect x="320" y="92" width="150" height="520" rx="14" class="board"/>
+  <rect x="372" y="80" width="46" height="20" rx="4" fill="#c9ccd1"/>
+  <text x="395" y="94" font-size="9" fill="#20242b" text-anchor="middle">USB-C</text>
+  <text x="395" y="360" font-size="10" fill="#7c8694" text-anchor="middle" transform="rotate(0)">ESP32-C3</text>
+  <!-- BOOT / RST buttons -->
+  <rect x="338" y="120" width="22" height="22" rx="3" fill="#e7e9ec"/><text x="349" y="152" font-size="8" class="muted" text-anchor="middle">BOOT</text>
+  <rect x="430" y="120" width="22" height="22" rx="3" fill="#e7e9ec"/><text x="441" y="152" font-size="8" class="muted" text-anchor="middle">RST</text>
+
+  <!-- LEFT pins: pad at cx=320, label box 150..312 -->
+  <!-- row0 y150: 5 MISO/A5 -->
+  <circle cx="320" cy="170" r="6" class="pad"/>
+  <rect x="150" y="153" width="162" height="34" rx="5" class="digital"/>
+  <text x="166" y="175" class="num">5</text><text x="190" y="174" class="fn">MISO · A5</text>
+  <circle cx="320" cy="170" r="12" class="ring"/>
+  <text x="142" y="174" class="use" text-anchor="end" fill="#2e9b6b">SDA →</text>
+
+  <!-- row1 y226: 6 MOSI -->
+  <circle cx="320" cy="226" r="6" class="pad"/>
+  <rect x="150" y="209" width="162" height="34" rx="5" class="digital"/>
+  <text x="166" y="231" class="num">6</text><text x="190" y="230" class="fn">MOSI</text>
+  <circle cx="320" cy="226" r="12" class="ring"/>
+  <text x="142" y="230" class="use" text-anchor="end" fill="#3367d6">SCL →</text>
+
+  <!-- row2 y282: 7 SS -->
+  <circle cx="320" cy="282" r="6" class="pad"/>
+  <rect x="150" y="265" width="162" height="34" rx="5" class="digital"/>
+  <text x="166" y="287" class="num">7</text><text x="190" y="286" class="fn">SS</text>
+
+  <!-- row3 y338: 8 SDA (silkscreen) -->
+  <circle cx="320" cy="338" r="6" class="pad"/>
+  <rect x="150" y="321" width="162" height="34" rx="5" class="digital"/>
+  <text x="166" y="343" class="num">8</text><text x="190" y="342" class="fn">SDA (шёлкография)</text>
+
+  <!-- row4 y394: 9 SCL (silkscreen) -->
+  <circle cx="320" cy="394" r="6" class="pad"/>
+  <rect x="150" y="377" width="162" height="34" rx="5" class="digital"/>
+  <text x="166" y="399" class="num">9</text><text x="190" y="398" class="fn">SCL (шёлкография)</text>
+
+  <!-- row5 y450: 10 -->
+  <circle cx="320" cy="450" r="6" class="pad"/>
+  <rect x="150" y="433" width="162" height="34" rx="5" class="digital"/>
+  <text x="166" y="455" class="num">10</text>
+
+  <!-- row6 y506: 20 RX -->
+  <circle cx="320" cy="506" r="6" class="pad"/>
+  <rect x="150" y="489" width="162" height="34" rx="5" class="digital"/>
+  <text x="166" y="511" class="num">20</text><text x="196" y="510" class="fn">RX</text>
+
+  <!-- row7 y562: 21 TX -->
+  <circle cx="320" cy="562" r="6" class="pad"/>
+  <rect x="150" y="545" width="162" height="34" rx="5" class="digital"/>
+  <text x="166" y="567" class="num">21</text><text x="196" y="566" class="fn">TX</text>
+
+  <!-- RIGHT pins: pad at cx=470, label box 478..640 -->
+  <!-- row0 y170: 5V -->
+  <circle cx="470" cy="170" r="6" class="pad"/>
+  <rect x="478" y="153" width="120" height="34" rx="5" class="pwr"/>
+  <text x="494" y="175" class="num">5V</text>
+
+  <!-- row1 y226: G GND -->
+  <circle cx="470" cy="226" r="6" class="pad"/>
+  <rect x="478" y="209" width="120" height="34" rx="5" class="gnd"/>
+  <text x="494" y="231" class="num">G · GND</text>
+  <circle cx="470" cy="226" r="12" class="ring"/>
+  <text x="648" y="230" class="use" fill="#3a4250">← GND</text>
+
+  <!-- row2 y282: 3.3 -->
+  <circle cx="470" cy="282" r="6" class="pad"/>
+  <rect x="478" y="265" width="120" height="34" rx="5" class="pwr"/>
+  <text x="494" y="287" class="num">3.3 V</text>
+  <circle cx="470" cy="282" r="12" class="ring"/>
+  <text x="648" y="286" class="use" fill="#d23b36">← 3V3 питание</text>
+
+  <!-- row3 y338: 4 A4 SCK -->
+  <circle cx="470" cy="338" r="6" class="pad"/>
+  <rect x="478" y="321" width="120" height="34" rx="5" class="analog"/>
+  <text x="494" y="343" class="num">4</text><text x="516" y="342" class="fn">A4 · SCK</text>
+
+  <!-- row4 y394: 3 A3 -->
+  <circle cx="470" cy="394" r="6" class="pad"/>
+  <rect x="478" y="377" width="120" height="34" rx="5" class="analog"/>
+  <text x="494" y="399" class="num">3</text><text x="516" y="398" class="fn">A3 (ADC)</text>
+  <circle cx="470" cy="394" r="12" class="ring"/>
+  <text x="648" y="398" class="use" fill="#9b6dc4">← ADC · УФ-C (опц.)</text>
+
+  <!-- row5 y450: 2 A2 -->
+  <circle cx="470" cy="450" r="6" class="pad"/>
+  <rect x="478" y="433" width="120" height="34" rx="5" class="analog"/>
+  <text x="494" y="455" class="num">2</text><text x="516" y="454" class="fn">A2</text>
+
+  <!-- row6 y506: 1 A1 -->
+  <circle cx="470" cy="506" r="6" class="pad"/>
+  <rect x="478" y="489" width="120" height="34" rx="5" class="analog"/>
+  <text x="494" y="511" class="num">1</text><text x="516" y="510" class="fn">A1</text>
+
+  <!-- row7 y562: 0 A0 -->
+  <circle cx="470" cy="562" r="6" class="pad"/>
+  <rect x="478" y="545" width="120" height="34" rx="5" class="analog"/>
+  <text x="494" y="567" class="num">0</text><text x="516" y="566" class="fn">A0</text>
+
+  <!-- Warning box -->
+  <rect x="60" y="624" width="660" height="58" rx="9" fill="#fff6e6" stroke="#d8a23a" stroke-width="1.6"/>
+  <text x="76" y="646" class="t lbl-s" font-weight="700">⚠ Шёлкография подписывает SDA/SCL на пинах 8 и 9, но прошивка использует GPIO5 (SDA) и GPIO6 (SCL).</text>
+  <text x="76" y="666" class="muted lbl-s">Пины 8/9 на ESP32-C3 — strapping/BOOT, поэтому I²C вынесен на 5/6. Подключайте датчики к ФИЗИЧЕСКИМ пинам 5 и 6, а не к подписанным SDA/SCL.</text>
+</svg>
