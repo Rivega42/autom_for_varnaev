@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 560" font-family="'Segoe UI', 'PT Sans', Arial, sans-serif">
+  <defs>
+    <style>
+      .t{fill:#1f2a36;}
+      .muted{fill:#5b6b7a;}
+      .mcu{fill:#e8eef9;stroke:#3d5266;stroke-width:1.6;}
+      .i2c{fill:#e8f5ee;stroke:#54a777;stroke-width:1.6;}
+      .chamber{fill:#eef3f8;stroke:#8aa0b4;stroke-width:2;stroke-dasharray:none;}
+      .metal{fill:#dde6ee;stroke:#8aa0b4;stroke-width:2;}
+      .h{font-size:15px;font-weight:700;}
+      .lbl{font-size:13px;}
+      .lbl-s{font-size:11px;}
+      .pin{font-size:11px;font-weight:600;}
+      .ribbon{stroke:#7a8696;stroke-width:10;fill:none;stroke-linecap:round;}
+      .w-vcc{stroke:#e0584f;stroke-width:2.2;fill:none;}
+      .w-gnd{stroke:#3a4250;stroke-width:2.2;fill:none;}
+      .w-sda{stroke:#2e9b6b;stroke-width:2.2;fill:none;}
+      .w-scl{stroke:#3367d6;stroke-width:2.2;fill:none;}
+    </style>
+  </defs>
+
+  <text x="24" y="34" class="t h" font-size="18">09 · Расключение узла холодильной камеры</text>
+  <text x="24" y="55" class="muted lbl">Металл камеры — клетка Фарадея: контроллер снаружи, датчики внутри, I²C-шлейф через уплотнитель двери. Источник: firmware/esphome/cold_chamber.example.yaml</text>
+
+  <!-- Chamber (metal box) -->
+  <rect x="430" y="100" width="470" height="380" rx="6" class="metal"/>
+  <text x="665" y="128" class="t h" text-anchor="middle">Холодильная / морозильная камера (металл)</text>
+  <text x="665" y="148" class="muted lbl-s" text-anchor="middle">радио сквозь закрытую дверь не проходит</text>
+
+  <!-- Door gap on left wall of chamber -->
+  <rect x="424" y="250" width="12" height="80" fill="#fff"/>
+  <text x="430" y="244" class="muted lbl-s" text-anchor="middle">уплотнитель</text>
+  <text x="430" y="346" class="muted lbl-s" text-anchor="middle">двери</text>
+
+  <!-- Sensors inside -->
+  <rect x="560" y="200" width="180" height="74" rx="9" class="i2c"/>
+  <text x="650" y="228" class="t h" text-anchor="middle">SHT41 / SHT40</text>
+  <text x="650" y="248" class="muted lbl-s" text-anchor="middle">воздух: t° + влажность</text>
+  <text x="650" y="264" class="muted lbl-s" text-anchor="middle">I²C 0x44</text>
+
+  <rect x="560" y="320" width="180" height="74" rx="9" class="i2c"/>
+  <text x="650" y="348" class="t h" text-anchor="middle">MLX90614</text>
+  <text x="650" y="368" class="muted lbl-s" text-anchor="middle">ИК t° продукта / полки</text>
+  <text x="650" y="384" class="muted lbl-s" text-anchor="middle">I²C 0x5A · навести на поверхность</text>
+
+  <!-- short I2C stub inside connecting two sensors -->
+  <line x1="560" y1="237" x2="520" y2="237" class="w-sda"/>
+  <line x1="560" y1="357" x2="520" y2="357" class="w-scl"/>
+  <line x1="520" y1="237" x2="520" y2="357" stroke="#7a8696" stroke-width="1.4"/>
+
+  <!-- MCU outside -->
+  <rect x="60" y="220" width="170" height="150" rx="10" class="mcu"/>
+  <text x="145" y="252" class="t h" text-anchor="middle">ESP32-C3</text>
+  <text x="145" y="271" class="muted lbl-s" text-anchor="middle">SuperMini · СНАРУЖИ</text>
+  <text x="145" y="290" class="muted lbl-s" text-anchor="middle">Wi-Fi · питание USB-C</text>
+  <text x="222" y="316" class="pin" text-anchor="end">3V3 · GND</text>
+  <text x="222" y="338" class="pin" text-anchor="end" fill="#2e9b6b">GPIO5·SDA</text>
+  <text x="222" y="356" class="pin" text-anchor="end" fill="#3367d6">GPIO6·SCL</text>
+
+  <!-- Ribbon cable through gasket: MCU (x230) -> gap (x430) -->
+  <path d="M230,300 C320,300 340,290 430,290" class="ribbon"/>
+  <text x="300" y="276" class="muted lbl-s" text-anchor="middle">плоский I²C-шлейф (4 жилы)</text>
+  <text x="300" y="324" class="muted lbl-s" text-anchor="middle">короткий; через уплотнитель</text>
+
+  <!-- inside: ribbon to sensor stub -->
+  <path d="M436,290 C480,290 490,297 520,297" class="ribbon"/>
+
+  <!-- Notes panel -->
+  <rect x="60" y="410" width="350" height="120" rx="9" fill="#fff6e6" stroke="#d8a23a" stroke-width="1.4"/>
+  <text x="76" y="434" class="t lbl" font-weight="700">Важно при монтаже</text>
+  <text x="76" y="456" class="muted lbl-s">• Контроллер и питание — СНАРУЖИ (радио + удобство).</text>
+  <text x="76" y="474" class="muted lbl-s">• Шлейф держать минимальной длины; частота I²C 50 кГц.</text>
+  <text x="76" y="492" class="muted lbl-s">• ИК наводить на продукт/полку, не на воздух.</text>
+  <text x="76" y="510" class="muted lbl-s">• Блестящий металл матировать (эмиссивность ε≈0,95).</text>
+
+  <!-- Legend -->
+  <g>
+    <text x="760" y="430" class="t lbl" font-weight="700">Шлейф = 4 жилы</text>
+    <line x1="760" y1="446" x2="792" y2="446" class="w-vcc"/><text x="800" y="450" class="muted lbl-s">3V3</text>
+    <line x1="760" y1="466" x2="792" y2="466" class="w-gnd"/><text x="800" y="470" class="muted lbl-s">GND</text>
+    <line x1="760" y1="486" x2="792" y2="486" class="w-sda"/><text x="800" y="490" class="muted lbl-s">SDA</text>
+    <line x1="760" y1="506" x2="792" y2="506" class="w-scl"/><text x="800" y="510" class="muted lbl-s">SCL</text>
+  </g>
+</svg>
