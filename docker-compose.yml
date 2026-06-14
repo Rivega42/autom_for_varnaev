@@ -315,6 +315,9 @@ services:
       LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:8000}
       # Медиа-шлюз: проба живости камер (#283).
       GO2RTC_URL: ${GO2RTC_URL:-http://media-gateway:1984}
+      # Таймаут пробы живости камеры, сек (#331): «холодный» кадр RTSP бывает
+      # дольше 3 с; короткий таймаут даёт ложные camera_offline.
+      CAMERA_PROBE_TIMEOUT_S: ${CAMERA_PROBE_TIMEOUT_S:-8}
       SCHEDULER_TICK_S: ${SCHEDULER_TICK_S:-60}
       # Watchdog сервисов (#284): порог «тишины» heartbeat'а, минут.
       SERVICE_SILENT_MIN: ${SERVICE_SILENT_MIN:-5}
