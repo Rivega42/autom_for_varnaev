@@ -6,6 +6,16 @@ import sqlalchemy as sa
 
 metadata = sa.MetaData()
 
+# Ключ-значение настроек контура, редактируемых из GUI (лицензия, #335).
+app_config = sa.Table(
+    "app_config",
+    metadata,
+    sa.Column("key", sa.Text, primary_key=True),
+    sa.Column("value", sa.Text, nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+
 rooms = sa.Table(
     "rooms",
     metadata,

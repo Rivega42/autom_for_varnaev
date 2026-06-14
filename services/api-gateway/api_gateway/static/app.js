@@ -50,6 +50,74 @@ async function api(path, opts = {}) {
   return resp.status === 200 ? (await resp.json()).data : null;
 }
 
+// ── Лицензия: баннер тарифа/расхода и ввод ключа (#335) ──
+// Лимиты выводятся из тарифа (демо — 1/1/1; ключ расширяет). Баннер показывает
+// расход по каждому лимиту и подсвечивает превышение/проблему с ключом.
+const LICENSE_ROLES = [
+  ["rooms", "помещения"],
+  ["cameras", "камеры"],
+  ["nodes", "узлы"],
+];
+const LICENSE_STATUS = {
+  demo: "демо",
+  active: "лицензия активна",
+  expired: "подписка истекла — действуют демо-лимиты",
+  invalid: "ключ недействителен — действуют демо-лимиты",
+};
+
+// Тревожный тон — если ключ просрочен/недействителен либо превышен любой лимит.
+function licenseOverLimit(info) {
+  return LICENSE_ROLES.some(([k]) => {
+    const lim = info.limits[k];
+    return lim != null && (info.usage[k] || 0) > lim;
+  });
+}
+
+function renderLicense(info) {
+  const bar = $("licbar");
+  if (!bar) return;
+  bar.hidden = false;
+  const warn = info.status === "expired" || info.status === "invalid" || licenseOverLimit(info);
+  bar.className = "licbar " + (warn ? "warn" : info.status === "active" ? "ok" : "");
+
+  let tier = `Тариф: ${info.tier}`;
+  if (info.customer) tier += ` · ${info.customer}`;
+  $("lictier").textContent = tier;
+
+  const parts = LICENSE_ROLES.map(([k, label]) => {
+    const used = info.usage[k] || 0;
+    const lim = info.limits[k];
+    const over = lim != null && used > lim;
+    return `${label} ${used}/${lim == null ? "∞" : lim}${over ? " (превышено)" : ""}`;
+  });
+  let note = LICENSE_STATUS[info.status] || info.status;
+  if (info.expires) note += `, до ${info.expires}`;
+  $("licusage").textContent = `${parts.join(" · ")} — ${note}`;
+}
+
+async function loadLicense() {
+  try {
+    renderLicense(await api("/license"));
+  } catch (_) {
+    // Баннер некритичен (например, ключ API ещё не введён) — молча скрываем.
+    const bar = $("licbar");
+    if (bar) bar.hidden = true;
+  }
+}
+
+// Применить/сбросить лицензионный ключ из GUI (PUT /license, нужна роль admin).
+async function applyLicenseKey(key) {
+  try {
+    renderLicense(await api("/license", { method: "PUT", body: JSON.stringify({ key }) }));
+    $("lickey").value = "";
+    $("lickeyForm").hidden = true;
+    msg(key ? "Лицензионный ключ применён" : "Ключ сброшен — демо-лимиты");
+    loadAll(); // лимиты изменились — перечитать списки и счётчики расхода
+  } catch (e) {
+    msg("Ошибка применения ключа: " + e.message, false);
+  }
+}
+
 // ── Камеры ──
 
 async function loadCameras() {
@@ -900,6 +968,7 @@ async function createNode() {
 }
 
 function loadAll() {
+  loadLicense();
   loadRooms();
   loadNodes();
   loadCameras();
@@ -910,6 +979,13 @@ function loadAll() {
 }
 
 $("reload").onclick = loadAll;
+$("lickeyBtn").onclick = () => {
+  const form = $("lickeyForm");
+  form.hidden = !form.hidden;
+  if (!form.hidden) $("lickey").focus();
+};
+$("lickeySave").onclick = () => applyLicenseKey($("lickey").value.trim());
+$("lickeyClear").onclick = () => applyLicenseKey("");
 $("rm_add").onclick = createRoom;
 $("nd_add").onclick = createNode;
 $("nc_save").onclick = createCamera;

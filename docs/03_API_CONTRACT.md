@@ -116,14 +116,20 @@ GET /api/v1/health → 200 {"status":"ok","data":{"service":"api-gateway","up":t
 
 ### 3.1a Лицензия (тариф и лимиты, #335)
 ```
-GET /api/v1/license   # текущий тариф, лимиты и расход (для баннера в GUI)
+GET /api/v1/license            # текущий тариф, лимиты и расход (для баннера в GUI)
+PUT /api/v1/license  {"key":…} # ввести/сменить ключ из GUI (роль admin); "" — сброс
 ```
-`data`: `status` (`demo|active|expired|invalid`), `tier`, `customer`, `expires`,
-`limits` (`{rooms, cameras, nodes}`, число или `null` = без ограничения),
-`usage` (текущий расход по тем же сущностям). Демо без ключа — лимит 1/1/1.
-Заведение сверх лимита (`POST /rooms·/cameras·/sensor-nodes`) → `409
-LICENSE_LIMIT`. Расширение — лицензионным ключом (`LICENSE_KEY`, см.
-`docs/14_LICENSING.md`). Граница АУРА лицензирования не касается (наш контур).
+`GET` `data`: `status` (`demo|active|expired|invalid`), `tier`, `customer`,
+`expires`, `limits` (`{rooms, cameras, nodes}`, число или `null` = без
+ограничения), `usage` (текущий расход по тем же сущностям). Демо без ключа —
+лимит 1/1/1. Заведение сверх лимита (`POST /rooms·/cameras·/sensor-nodes`) → `409
+LICENSE_LIMIT`. Расширение — лицензионным ключом.
+
+`PUT` принимает `{"key": "<ключ>"}` и возвращает то же тело, что `GET` (для
+обновления баннера). Ключ сохраняется в БД (`app_config`) и **приоритетнее**
+переменной окружения `LICENSE_KEY`; пустой `key` очищает запись и возвращает
+контур к `LICENSE_KEY`/демо. Подробнее — `docs/14_LICENSING.md`. Граница АУРА
+лицензирования не касается (наш контур).
 
 ### 3.2 События (журнал)
 ```
