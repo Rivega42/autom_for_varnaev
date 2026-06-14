@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -50,6 +51,7 @@ from api_gateway.db import build_engine
 from api_gateway.errors import api_error, register_error_handlers
 from api_gateway.events_client import EventsClient, HttpEventsClient
 from api_gateway.integration import register_integration_routes
+from api_gateway.licensing import evaluate_license, limit_reached
 from api_gateway.overview_repository import build_overview
 from api_gateway.presence_rules_repository import (
     DuplicatePresenceRuleError,
@@ -183,10 +185,46 @@ def create_app(
     # Для медиа-эндпойнтов (кадр/видеопоток): ключ из заголовка ИЛИ query (<img>).
     media_auth = Depends(make_require_api_key_media(settings))
 
+    # Лицензионные лимиты (#335): демо — 1 помещение/камера/узел; расширение по
+    # ключу. Счётчики активных сущностей считаем по справочникам (камеры — без
+    # мягко удалённых, list_cameras уже фильтрует deleted_at).
+    _license_counters: dict[str, Callable[[], int]] = {
+        "rooms": lambda: len(list_rooms(engine)),
+        "cameras": lambda: len(list_cameras(engine)),
+        "nodes": lambda: len(list_nodes(engine)),
+    }
+    _license_names = {"rooms": "помещений", "cameras": "камер", "nodes": "узлов датчиков"}
+
+    def _ensure_license_allows(role: str) -> None:
+        """Бросить 409 LICENSE_LIMIT, если заведение превысит лимит тарифа."""
+        info = evaluate_license(settings.license_key, datetime.now(UTC).date())
+        if limit_reached(info, role, _license_counters[role]()):
+            raise api_error(
+                ErrorCode.LICENSE_LIMIT,
+                f"Достигнут лимит {_license_names[role]} ({info.limits[role]}) для тарифа "
+                f"«{info.tier}». Введите лицензионный ключ для расширения "
+                f"(см. docs/14_LICENSING.md).",
+            )
+
     @app.get(f"{API_PREFIX}/health")
     def health() -> dict[str, Any]:
         """Проверка живости сервиса (конверт ok; ключ не требуется)."""
         return ok({"service": "api-gateway", "up": True})
+
+    @app.get(f"{API_PREFIX}/license", dependencies=[auth])
+    def get_license() -> dict[str, Any]:
+        """Текущий тариф, лимиты и расход (для баннера в GUI, #335)."""
+        info = evaluate_license(settings.license_key, datetime.now(UTC).date())
+        return ok(
+            {
+                "status": info.status,
+                "tier": info.tier,
+                "customer": info.customer,
+                "expires": info.expires,
+                "limits": info.limits,
+                "usage": {role: counter() for role, counter in _license_counters.items()},
+            }
+        )
 
     @app.get(f"{API_PREFIX}/events", dependencies=[auth])
     def get_events(
@@ -395,6 +433,7 @@ def create_app(
     @app.post(f"{API_PREFIX}/rooms", dependencies=[audited_admin])
     def post_room(body: RoomCreate) -> dict[str, Any]:
         """Завести помещение или 409 ROOM_ALREADY_EXISTS при занятом id."""
+        _ensure_license_allows("rooms")
         try:
             return ok(create_room(engine, body))
         except RoomAlreadyExistsError:
@@ -412,6 +451,7 @@ def create_app(
     @app.post(f"{API_PREFIX}/sensor-nodes", dependencies=[audited_admin])
     def post_sensor_node(body: SensorNodeCreate) -> dict[str, Any]:
         """Завести узел датчиков (404 если помещения нет, 409 при занятом id)."""
+        _ensure_license_allows("nodes")
         try:
             return ok(create_node(engine, body))
         except RoomNotFoundForNodeError:
@@ -436,6 +476,7 @@ def create_app(
     @app.post(f"{API_PREFIX}/cameras", dependencies=[audited_admin])
     def post_camera(body: CameraCreate) -> dict[str, Any]:
         """Завести камеру в справочнике объекта (альтернатива сид-конфигу)."""
+        _ensure_license_allows("cameras")
         return ok(create_camera(engine, body))
 
     @app.get(f"{API_PREFIX}/cameras/{{camera_id}}", dependencies=[auth])
