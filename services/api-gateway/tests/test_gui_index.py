@@ -47,6 +47,13 @@ def test_header_has_key_state_and_overview_link() -> None:
     assert "overview.html" in text
 
 
+def test_license_banner_present() -> None:
+    """Баннер лицензии в шапке: тариф, расход и поле ввода ключа (#335)."""
+    text = _index()
+    for el in ("licbar", "lictier", "licusage", "lickey", "lickeySave", "lickeyClear"):
+        assert f'id="{el}"' in text, f"Нет элемента баннера лицензии {el}"
+
+
 def test_all_sections_preserved() -> None:
     """Редизайн не потерял ни одной секции и интерактивных элементов."""
     text = _index()

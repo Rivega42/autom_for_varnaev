@@ -61,6 +61,16 @@ class AnalyticsEventCreate(BaseModel):
     image: str | None = None
 
 
+class LicenseKeyUpdate(BaseModel):
+    """Тело PUT /license: ввод лицензионного ключа оператором из GUI (#335).
+
+    Пустая строка очищает ключ в БД — контур возвращается к ключу из переменной
+    окружения LICENSE_KEY (или к демо, если её нет). Сам ключ хранится в app_config.
+    """
+
+    key: str = ""
+
+
 class RoomCreate(BaseModel):
     """Тело POST /rooms: завести помещение в справочнике объекта.
 

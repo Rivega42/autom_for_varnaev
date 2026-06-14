@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Engine
 
+from api_gateway.app_config_repository import clear_config, get_config, set_config
 from api_gateway.artifacts_repository import get_artifact, insert_artifact
 from api_gateway.artifacts_store import (
     build_artifact_path,
@@ -92,6 +93,7 @@ from api_gateway.schemas import (
     CameraZoneUpdate,
     CleaningRuleCreate,
     CleaningRuleUpdate,
+    LicenseKeyUpdate,
     PresenceRuleCreate,
     PresenceRuleUpdate,
     RoomCreate,
@@ -194,10 +196,28 @@ def create_app(
         "nodes": lambda: len(list_nodes(engine)),
     }
     _license_names = {"rooms": "помещений", "cameras": "камер", "nodes": "узлов датчиков"}
+    # Ключ настройки в app_config, где лежит ключ, введённый из GUI (#335).
+    _license_key_setting = "license_key"
+
+    def _current_license_key() -> str | None:
+        """Действующий ключ: введённый в GUI (БД) приоритетнее переменной окружения."""
+        return get_config(engine, _license_key_setting) or settings.license_key
+
+    def _license_payload() -> dict[str, Any]:
+        """Тариф, лимиты и расход — общее тело для GET и PUT /license (баннер GUI)."""
+        info = evaluate_license(_current_license_key(), datetime.now(UTC).date())
+        return {
+            "status": info.status,
+            "tier": info.tier,
+            "customer": info.customer,
+            "expires": info.expires,
+            "limits": info.limits,
+            "usage": {role: counter() for role, counter in _license_counters.items()},
+        }
 
     def _ensure_license_allows(role: str) -> None:
         """Бросить 409 LICENSE_LIMIT, если заведение превысит лимит тарифа."""
-        info = evaluate_license(settings.license_key, datetime.now(UTC).date())
+        info = evaluate_license(_current_license_key(), datetime.now(UTC).date())
         if limit_reached(info, role, _license_counters[role]()):
             raise api_error(
                 ErrorCode.LICENSE_LIMIT,
@@ -214,17 +234,17 @@ def create_app(
     @app.get(f"{API_PREFIX}/license", dependencies=[auth])
     def get_license() -> dict[str, Any]:
         """Текущий тариф, лимиты и расход (для баннера в GUI, #335)."""
-        info = evaluate_license(settings.license_key, datetime.now(UTC).date())
-        return ok(
-            {
-                "status": info.status,
-                "tier": info.tier,
-                "customer": info.customer,
-                "expires": info.expires,
-                "limits": info.limits,
-                "usage": {role: counter() for role, counter in _license_counters.items()},
-            }
-        )
+        return ok(_license_payload())
+
+    @app.put(f"{API_PREFIX}/license", dependencies=[audited_admin])
+    def put_license(body: LicenseKeyUpdate) -> dict[str, Any]:
+        """Ввести/сменить лицензионный ключ из GUI (admin). Пустой ключ — сброс к env/демо."""
+        key = body.key.strip()
+        if key:
+            set_config(engine, _license_key_setting, key, datetime.now(UTC))
+        else:
+            clear_config(engine, _license_key_setting)
+        return ok(_license_payload())
 
     @app.get(f"{API_PREFIX}/events", dependencies=[auth])
     def get_events(

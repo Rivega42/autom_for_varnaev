@@ -151,3 +151,68 @@ def test_license_endpoint_reports_tier_and_usage() -> None:
     assert data["tier"] == "demo" and data["status"] == "demo"
     assert data["limits"] == {"rooms": 1, "cameras": 1, "nodes": 1}
     assert data["usage"]["cameras"] == 1
+
+
+# ── Ввод ключа из GUI (PUT /license, хранение в app_config) ──
+
+
+def test_put_license_key_from_gui_raises_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ключ, введённый через PUT /license, поднимает лимит и виден в GET (демо снято)."""
+    priv, pub = _keypair()
+    monkeypatch.setattr(lic, "EMBEDDED_PUBLIC_KEY_HEX", pub)
+    client = TestClient(create_app(settings=_SETTINGS, engine=_engine()))
+    # До ввода ключа — демо: вторая камера блокируется.
+    client.post(
+        "/api/v1/cameras", json={"room": "room-01", "name": "cam-01", "rtsp_url": "rtsp://x"}
+    )
+    blocked = client.post(
+        "/api/v1/cameras", json={"room": "room-01", "name": "cam-02", "rtsp_url": "rtsp://y"}
+    )
+    assert blocked.status_code == 409
+
+    key = _sign(priv, {"customer": "Пекарня", "tier": "pro", "max_cameras": 5})
+    put = client.put("/api/v1/license", json={"key": key})
+    assert put.status_code == 200, put.text
+    body = put.json()["data"]
+    assert body["tier"] == "pro" and body["status"] == "active" and body["customer"] == "Пекарня"
+
+    # Теперь вторая камера заводится, и GET показывает новый тариф.
+    ok_now = client.post(
+        "/api/v1/cameras", json={"room": "room-01", "name": "cam-02", "rtsp_url": "rtsp://y"}
+    )
+    assert ok_now.status_code == 200, ok_now.text
+    assert client.get("/api/v1/license").json()["data"]["tier"] == "pro"
+
+
+def test_put_empty_license_key_resets_to_demo(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Пустой ключ через PUT очищает запись в БД — контур возвращается к демо."""
+    priv, pub = _keypair()
+    monkeypatch.setattr(lic, "EMBEDDED_PUBLIC_KEY_HEX", pub)
+    client = TestClient(create_app(settings=_SETTINGS, engine=_engine()))
+    key = _sign(priv, {"customer": "X", "tier": "pro", "max_cameras": 5})
+    client.put("/api/v1/license", json={"key": key})
+    assert client.get("/api/v1/license").json()["data"]["tier"] == "pro"
+
+    reset = client.put("/api/v1/license", json={"key": ""})
+    assert reset.status_code == 200
+    assert reset.json()["data"]["tier"] == "demo"
+    assert client.get("/api/v1/license").json()["data"]["tier"] == "demo"
+
+
+def test_db_key_overrides_env_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ключ из GUI (БД) приоритетнее ключа из переменной окружения LICENSE_KEY."""
+    priv, pub = _keypair()
+    monkeypatch.setattr(lic, "EMBEDDED_PUBLIC_KEY_HEX", pub)
+    env_key = _sign(priv, {"customer": "ENV", "tier": "pro", "max_cameras": 3})
+    settings = Settings(
+        log_service_url="http://log-service:8000",
+        api_key=None,
+        aura_integration_enabled=False,
+        license_key=env_key,
+    )
+    client = TestClient(create_app(settings=settings, engine=_engine()))
+    assert client.get("/api/v1/license").json()["data"]["customer"] == "ENV"
+
+    gui_key = _sign(priv, {"customer": "GUI", "tier": "ent", "max_cameras": 50})
+    client.put("/api/v1/license", json={"key": gui_key})
+    assert client.get("/api/v1/license").json()["data"]["customer"] == "GUI"
