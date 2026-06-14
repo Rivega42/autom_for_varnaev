@@ -26,6 +26,7 @@ from api_gateway.cameras_repository import (
     create_camera,
     get_camera,
     list_cameras,
+    soft_delete_camera,
     update_camera,
 )
 from api_gateway.cleaning_rules_repository import (
@@ -452,6 +453,17 @@ def create_app(
         if item is None:
             raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
         return ok(item)
+
+    @app.delete(f"{API_PREFIX}/cameras/{{camera_id}}", dependencies=[audited_admin])
+    def remove_camera(camera_id: UUID) -> dict[str, Any]:
+        """Мягко удалить камеру (#329): скрыть из справочника, ROI-зоны убрать.
+
+        История анализа и стоп-кадры сохраняются (доказательная база ППК).
+        404 CAMERA_NOT_FOUND, если активной камеры с таким id нет.
+        """
+        if not soft_delete_camera(engine, camera_id, datetime.now(UTC)):
+            raise api_error(ErrorCode.CAMERA_NOT_FOUND, "Камера не найдена")
+        return ok({"deleted": str(camera_id)})
 
     @app.get(f"{API_PREFIX}/cameras/{{camera_id}}/snapshot", dependencies=[media_auth])
     def camera_snapshot(camera_id: UUID) -> Response:

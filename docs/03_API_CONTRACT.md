@@ -258,6 +258,7 @@ GET   /api/v1/cameras                         # список камер
 POST  /api/v1/cameras                         # завести камеру в справочнике
 GET   /api/v1/cameras/{camera_id}             # камера или 404 CAMERA_NOT_FOUND
 PATCH /api/v1/cameras/{camera_id}             # enabled и/или тумблеры analytics
+DELETE /api/v1/cameras/{camera_id}            # мягко удалить камеру или 404 CAMERA_NOT_FOUND
 GET   /api/v1/cameras/{camera_id}/snapshot    # JPEG-кадр от go2rtc (фон для ROI)
 GET   /api/v1/cameras/{camera_id}/stream.mjpeg # живой MJPEG-видеопоток (прокси go2rtc)
 GET   /api/v1/cameras/{camera_id}/zones       # ROI-зоны камеры
@@ -293,6 +294,15 @@ DELETE /api/v1/zones/{zone_id}                # удалить зону или 4
 ```
 Функции аналитики: `pose`, `actions`, `uniform`, `coverage`. Отсутствие ключа или
 `analytics=null` = функция включена. `enabled=false` отключает всю аналитику камеры.
+
+**`DELETE /cameras/{id}` — мягкое удаление.** Камера и её ROI-зоны исчезают из
+справочника и обзора, камера перестаёт опрашиваться планировщиком. **История
+анализа, стоп-кадры и события по камере сохраняются** (доказательная база ППК) —
+строка помечается `deleted_at` и `enabled=false`, физически не удаляется.
+Восстановление через интерфейс не предусмотрено. Ответ `data`:
+`{ "deleted": "<uuid>" }`; повторное удаление → 404 `CAMERA_NOT_FOUND`. Для
+временного отключения камеры (с сохранением в списке) используйте
+`PATCH {enabled:false}`.
 
 **Тело `POST /cameras/{id}/zones`** (полигон — ≥3 вершин, координаты нормированы [0..1]):
 ```json

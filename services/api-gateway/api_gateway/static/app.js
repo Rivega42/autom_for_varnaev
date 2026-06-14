@@ -219,6 +219,32 @@ async function saveCamera() {
   }
 }
 
+// Мягкое удаление камеры (#329): скрывает камеру и её ROI-зоны; история анализа
+// и стоп-кадры сохраняются. Чтобы временно отключить камеру (с сохранением в
+// списке) — снимите галочку «камера включена».
+async function deleteCamera() {
+  if (!current) return;
+  const ok = window.confirm(
+    `Удалить камеру «${current.name}»?\n\n` +
+      "Камера и её ROI-зоны исчезнут из справочника. История анализа и " +
+      "стоп-кадры сохранятся. Восстановить камеру через интерфейс нельзя.",
+  );
+  if (!ok) return;
+  try {
+    await api(`/cameras/${current.id}`, { method: "DELETE" });
+    const name = current.name;
+    current = null;
+    stopLive();
+    stopVideo();
+    stopLiveAnalysis();
+    $("editor").hidden = true;
+    await loadCameras();
+    msg(`Камера «${name}» удалена`);
+  } catch (e) {
+    msg("Ошибка удаления камеры: " + e.message, false);
+  }
+}
+
 // ── Кадр-превью и разметка ──
 
 async function loadFrame() {
@@ -888,6 +914,7 @@ $("rm_add").onclick = createRoom;
 $("nd_add").onclick = createNode;
 $("nc_save").onclick = createCamera;
 $("saveCam").onclick = saveCamera;
+$("deleteCam").onclick = deleteCamera;
 $("runAnalysis").onclick = runAnalysisNow;
 $("liveAnalysis").onclick = openLiveAnalysis;
 $("loadFrame").onclick = loadFrame;

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from api_gateway.app import create_app
 from api_gateway.config import Settings
@@ -68,6 +68,47 @@ def test_get_camera_missing() -> None:
     resp = _client(_engine()).get(f"/api/v1/cameras/{uuid4()}")
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "CAMERA_NOT_FOUND"
+
+
+def test_delete_camera_soft_hides_and_drops_zones() -> None:
+    """DELETE камеры скрывает её и ROI-зоны; повторное чтение → 404 (#329)."""
+    engine = _engine()
+    cam_id = _seed_camera(engine)
+    client = _client(engine)
+
+    # У камеры есть ROI-зона.
+    client.post(
+        f"/api/v1/cameras/{cam_id}/zones",
+        json={"zone_type": "table", "polygon": [[0, 0], [0.5, 0], [0.5, 0.5]]},
+    )
+
+    resp = client.delete(f"/api/v1/cameras/{cam_id}")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["deleted"] == cam_id
+
+    # Камера исчезла из справочника и не читается.
+    assert client.get("/api/v1/cameras").json()["data"]["total"] == 0
+    assert client.get(f"/api/v1/cameras/{cam_id}").status_code == 404
+    # Зоны удалены вместе с камерой (404 при обращении к зонам несуществующей).
+    assert client.get(f"/api/v1/cameras/{cam_id}/zones").status_code == 404
+
+    # Строка осталась в БД (мягкое удаление: история цела), но deleted_at заполнен.
+    with engine.connect() as conn:
+        row = conn.execute(cameras.select().where(cameras.c.id == UUID(cam_id))).mappings().one()
+    assert row["deleted_at"] is not None
+    assert row["enabled"] is False
+
+
+def test_delete_camera_missing() -> None:
+    """DELETE отсутствующей/уже удалённой камеры → 404 CAMERA_NOT_FOUND."""
+    engine = _engine()
+    cam_id = _seed_camera(engine)
+    client = _client(engine)
+    assert client.delete(f"/api/v1/cameras/{cam_id}").status_code == 200
+    # Повторное удаление — уже 404 (камера мягко удалена).
+    again = client.delete(f"/api/v1/cameras/{cam_id}")
+    assert again.status_code == 404
+    assert again.json()["error"]["code"] == "CAMERA_NOT_FOUND"
 
 
 def test_create_camera() -> None:

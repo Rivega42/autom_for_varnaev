@@ -69,6 +69,8 @@ cameras = sa.Table(
     sa.Column("viewpoint", sa.JSON),
     sa.Column("enabled", sa.Boolean, nullable=False),
     sa.Column("analytics", sa.JSON),
+    # Мягкое удаление (#329): NULL = камера активна; время = скрыта, история цела.
+    sa.Column("deleted_at", sa.DateTime(timezone=True)),
 )
 
 
