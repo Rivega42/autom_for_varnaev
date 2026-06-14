@@ -139,7 +139,10 @@ def main() -> None:
     )
     sink = HttpEventSink(settings.log_service_url)
     cleaning = CleaningMonitor(sink)
-    cameras = CameraLivenessMonitor(sink, Go2rtcCameraProber(settings.go2rtc_url))
+    cameras = CameraLivenessMonitor(
+        sink,
+        Go2rtcCameraProber(settings.go2rtc_url, timeout=settings.camera_probe_timeout_s),
+    )
     watchdog = ServiceWatchdog(sink, settings.service_silent_min)
     presence = PresenceMonitor(sink, ZoneInfo(settings.presence_tz))
     # Мягкая остановка по SIGTERM/SIGINT (#206): docker stop завершает цикл
