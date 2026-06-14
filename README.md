@@ -177,6 +177,7 @@ Camunda Modeler / bpmn.io) с SVG-превью. Топология и сетев
 ├─ mqtt/                      # конфиг Mosquitto
 ├─ grafana/                   # provisioning datasource + дашборды + алерты
 ├─ firmware/esphome/          # эталонные YAML узлов ESP32-C3
+├─ integration/              # артефакты интеграции АУРА (Postman + OpenAPI-фрагмент)
 ├─ models/                    # бинарная модель MediaPipe (внешний ассет)
 ├─ config/                    # расписания планировщика
 ├─ scripts/                   # утилиты (проверки, сиды)

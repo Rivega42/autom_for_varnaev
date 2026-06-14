@@ -1,0 +1,126 @@
+{
+  "info": {
+    "_postman_id": "aura0001-0000-4000-8000-000000000001",
+    "name": "Контур мониторинга — интеграция АУРА (D.1–D.5)",
+    "description": "Машиночитаемые запросы интеграции для разработчиков АУРА. Импортируйте коллекцию, задайте переменные base_url и api_key (вкладка Variables), затем шлите запросы D.1–D.5. Полный разбор — docs/customer/РУКОВОДСТВО_ЗАКАЗЧИКА.md, Приложение D; контракт — docs/03_API_CONTRACT.md §4. В версии 1 все /integration/* отвечают HTTP 501 (NOT_IMPLEMENTED), пока выключен фичефлаг AURA_INTEGRATION_ENABLED.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api/v1",
+      "type": "string",
+      "description": "Базовый адрес внешнего шлюза контура (внутри сервера обычно http://api-gateway:8000/api/v1)."
+    },
+    {
+      "key": "api_key",
+      "value": "change-me",
+      "type": "string",
+      "description": "Значение X-API-Key (API_KEY из .env контура)."
+    },
+    {
+      "key": "task_id",
+      "value": "a1b2c3d4-0007-4f00-8000-000000000007",
+      "type": "string",
+      "description": "id задания из ответа D.1 (для опроса D.2)."
+    },
+    {
+      "key": "callback_url",
+      "value": "http://aura/notify",
+      "type": "string",
+      "description": "Адрес приёмника АУРА для уведомления D.5 (его реализует АУРА)."
+    }
+  ],
+  "item": [
+    {
+      "name": "D.1 — поставить задание на анализ файла",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-API-Key", "value": "{{api_key}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/integration/analysis-tasks",
+          "host": ["{{base_url}}"],
+          "path": ["integration", "analysis-tasks"]
+        },
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"source_type\": \"file\",\n  \"source_ref\": \"/data/artifacts/2026-06-05/clip-0007.mp4\",\n  \"room\": \"room-03\",\n  \"camera_id\": \"33333333-3333-3333-3333-333333333333\",\n  \"pipeline\": \"pose_v1\",\n  \"params\": { \"fps\": 5 },\n  \"callback_url\": \"{{callback_url}}\"\n}"
+        },
+        "description": "АУРА кладёт видеофрагмент на общий том artifacts и просит проанализировать. v1 → 501; v2 → 200 c заданием (status=queued, trigger=aura). Сохраните data.id в переменную task_id для D.2."
+      }
+    },
+    {
+      "name": "D.2 — опросить статус и результат задания",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+        "url": {
+          "raw": "{{base_url}}/analysis-tasks/{{task_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["analysis-tasks", "{{task_id}}"]
+        },
+        "description": "Опрос задания по id (тем же ключом). Доступен в v1 и v2 (это не /integration/* разъём). Статусы: queued → running → done | failed. Нет задания → 404 TASK_NOT_FOUND."
+      }
+    },
+    {
+      "name": "D.3 — прочитать события за период",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
+        "url": {
+          "raw": "{{base_url}}/integration/events?from=2026-06-08T00:00:00Z&to=2026-06-08T23:59:59Z&type=coverage_report",
+          "host": ["{{base_url}}"],
+          "path": ["integration", "events"],
+          "query": [
+            { "key": "from", "value": "2026-06-08T00:00:00Z" },
+            { "key": "to", "value": "2026-06-08T23:59:59Z" },
+            { "key": "type", "value": "coverage_report" }
+          ]
+        },
+        "description": "АУРА забирает события датчиков и аналитики (не показания и не видео). Параметры from/to/type — необязательны. v1 → 501; v2 → 200 c data.items[] и data.total."
+      }
+    },
+    {
+      "name": "D.4 — передать настройки (пороги, расписания, пайплайны)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "X-API-Key", "value": "{{api_key}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/integration/settings",
+          "host": ["{{base_url}}"],
+          "path": ["integration", "settings"]
+        },
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"thresholds\": [\n    { \"room\": \"room-02\", \"metric\": \"air_temp\", \"max\": 8.0, \"silent_min\": 10 },\n    { \"room\": \"room-01\", \"metric\": \"humidity\", \"min\": 30.0, \"max\": 70.0 }\n  ],\n  \"schedules\": [\n    { \"camera_id\": \"33333333-3333-3333-3333-333333333333\", \"interval_min\": 15 }\n  ],\n  \"pipelines_enabled\": [\"pose_v1\"]\n}"
+        },
+        "description": "АУРА задаёт пороги, расписания и набор включённых пайплайнов. v1 → 501; v2 → 200 c применёнными настройками в data."
+      }
+    },
+    {
+      "name": "D.5 — (АУРА реализует приёмник) пример уведомления о готовности",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{callback_url}}",
+          "host": ["{{callback_url}}"]
+        },
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"task_id\": \"{{task_id}}\",\n  \"status\": \"done\",\n  \"events\": [\"e0000001-0000-4000-8000-000000000001\"],\n  \"artifacts\": [\"/data/artifacts/2026-06-05/clip-0007_kp.json\"]\n}"
+        },
+        "description": "Единственный ОБРАТНЫЙ вызов: наш контур → АУРА. Если в D.1 задан callback_url, по завершении анализа наш контур шлёт на него этот POST. Приёмник реализует АУРА (вернуть 200, обрабатывать идемпотентно по task_id). Здесь — пример тела для отладки приёмника: направьте callback_url на свой эндпойнт и отправьте."
+      }
+    }
+  ]
+}

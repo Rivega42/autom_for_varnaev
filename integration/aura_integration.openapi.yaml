@@ -1,0 +1,337 @@
+openapi: 3.1.0
+info:
+  title: Контур мониторинга — интеграционная поверхность для АУРА
+  version: "1.0"
+  description: >
+    Машиночитаемый фрагмент REST-контракта для разработчиков АУРА: разъёмы
+    `/api/v1/integration/*` (АУРА → наш внешний шлюз) плюс опрос задания и
+    обратное уведомление о готовности. Полный разбор с примерами —
+    docs/customer/РУКОВОДСТВО_ЗАКАЗЧИКА.md, Приложение D (D.1–D.5);
+    контракт — docs/03_API_CONTRACT.md §4.
+
+    Граница версий: в v1 все `/integration/*` отвечают HTTP 501
+    (`error.code = NOT_IMPLEMENTED`), пока выключен фичефлаг
+    `AURA_INTEGRATION_ENABLED`. Адреса и тела при этом уже стабильны — клиента
+    можно генерировать заранее. В v2 те же эндпойнты отвечают 200.
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: локально / один сервер объекта
+  - url: http://api-gateway:8000/api/v1
+    description: имя контейнера во внутренней сети integration
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: integration
+    description: разъёмы АУРА (стабильные адреса; в v1 отвечают 501)
+  - name: tasks
+    description: задания на анализ (опрос статуса)
+
+paths:
+  /integration/analysis-tasks:
+    post:
+      tags: [integration]
+      summary: D.1 — АУРА ставит задание на анализ файла
+      description: >
+        АУРА кладёт видеофрагмент на общий том artifacts и просит его
+        проанализировать. В v1 → 501; в v2 → 200 с созданным заданием
+        (`status: queued`, `trigger: aura`).
+      operationId: integrationCreateAnalysisTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalysisTaskCreate"
+      responses:
+        "200":
+          description: (v2) задание создано
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisTaskEnvelope"
+        "501":
+          $ref: "#/components/responses/NotImplementedV1"
+
+  /integration/events:
+    get:
+      tags: [integration]
+      summary: D.3 — АУРА читает события (не показания и не видео)
+      description: >
+        АУРА забирает события датчиков и аналитики за период. Сырые ряды
+        показаний и бинарное видео по этому каналу не передаются — только
+        события и пути к артефактам на общем томе. В v1 → 501; в v2 → 200.
+      operationId: integrationListEvents
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: начало периода (ISO-8601 UTC)
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: конец периода (ISO-8601 UTC)
+        - name: type
+          in: query
+          required: false
+          schema: { type: string, example: coverage_report }
+          description: фильтр по типу события (Приложение C)
+      responses:
+        "200":
+          description: (v2) события за период
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventListEnvelope"
+        "501":
+          $ref: "#/components/responses/NotImplementedV1"
+
+  /integration/settings:
+    put:
+      tags: [integration]
+      summary: D.4 — АУРА передаёт настройки (пороги, расписания, пайплайны)
+      description: "В v1 → 501; в v2 → 200 с применёнными настройками в data."
+      operationId: integrationPutSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IntegrationSettings"
+      responses:
+        "200":
+          description: (v2) настройки приняты
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "501":
+          $ref: "#/components/responses/NotImplementedV1"
+
+  /analysis-tasks/{id}:
+    get:
+      tags: [tasks]
+      summary: D.2 — опрос статуса и результата задания
+      description: >
+        Помимо уведомления D.5, АУРА может опросить задание по его id (тем же
+        ключом). Доступен в v1 и v2 (это не /integration/* разъём).
+      operationId: getAnalysisTask
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: задание (queued | running | done | failed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisTaskEnvelope"
+        "404":
+          description: задания с таким id нет
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+              example:
+                status: error
+                data: null
+                error: { code: TASK_NOT_FOUND, message: "Задание не найдено" }
+                ts: "2026-06-08T10:31:00Z"
+
+webhooks:
+  taskCompleted:
+    post:
+      tags: [integration]
+      summary: D.5 — уведомление о готовности задания (наш контур → АУРА)
+      description: >
+        Единственный обратный вызов. Если в задании (D.1) задан `callback_url`,
+        по завершении анализа наш контур шлёт на него POST. Приёмник реализует
+        АУРА; должен вернуть 200 и обрабатывать уведомление идемпотентно по
+        `task_id` (возможна повторная доставка).
+      operationId: taskCompletedCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskCompletionNotice"
+      responses:
+        "200":
+          description: АУРА приняла уведомление (тело необязательно)
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: значение API_KEY из .env контура
+
+  responses:
+    NotImplementedV1:
+      description: >
+        (v1) интеграция с АУРА выключена — разъём заглушён до включения
+        фичефлага AURA_INTEGRATION_ENABLED.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            status: error
+            data: null
+            error: { code: NOT_IMPLEMENTED, message: "Интеграция с АУРА отключена" }
+            ts: "2026-06-08T10:30:00Z"
+
+  schemas:
+    Envelope:
+      type: object
+      description: единый конверт ответа контура (docs/03 §1)
+      required: [status, ts]
+      properties:
+        status: { type: string, enum: [ok, error] }
+        data: { nullable: true }
+        error:
+          oneOf:
+            - { $ref: "#/components/schemas/ErrorBody" }
+            - { type: "null" }
+        ts: { type: string, format: date-time }
+
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: NOT_IMPLEMENTED }
+        message: { type: string }
+
+    ErrorEnvelope:
+      allOf:
+        - { $ref: "#/components/schemas/Envelope" }
+        - type: object
+          properties:
+            status: { type: string, enum: [error] }
+
+    AnalysisTaskCreate:
+      type: object
+      required: [source_type, source_ref, pipeline]
+      properties:
+        source_type: { type: string, enum: [file, stream], example: file }
+        source_ref:
+          type: string
+          description: путь к видеофайлу на общем томе (для file) или RTSP-URL (stream)
+          example: /data/artifacts/2026-06-05/clip-0007.mp4
+        room: { type: string, nullable: true, example: room-03 }
+        camera_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: применит тумблеры функций и ROI-зоны этой камеры
+        pipeline: { type: string, example: pose_v1 }
+        params:
+          type: object
+          nullable: true
+          additionalProperties: true
+          example: { fps: 5 }
+        callback_url:
+          type: string
+          nullable: true
+          description: куда прислать уведомление о готовности (D.5)
+          example: http://aura/notify
+
+    AnalysisTask:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        source_type: { type: string, enum: [file, stream] }
+        source_ref: { type: string }
+        room: { type: string, nullable: true }
+        camera_id: { type: string, format: uuid, nullable: true }
+        pipeline: { type: string }
+        params: { type: object, nullable: true, additionalProperties: true }
+        status: { type: string, enum: [queued, running, done, failed, cancelled] }
+        trigger: { type: string, enum: [schedule, manual, aura] }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        result:
+          type: object
+          nullable: true
+          properties:
+            events: { type: array, items: { type: string, format: uuid } }
+            artifacts: { type: array, items: { type: string } }
+        error: { type: string, nullable: true }
+
+    AnalysisTaskEnvelope:
+      allOf:
+        - { $ref: "#/components/schemas/Envelope" }
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/AnalysisTask" }
+
+    Event:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        ts: { type: string, format: date-time }
+        source: { type: string, enum: [sensors, analytics] }
+        type: { type: string, example: coverage_report }
+        room: { type: string, nullable: true }
+        severity: { type: string, enum: [info, warning, critical] }
+        message: { type: string, description: готовая фраза для оператора (рус.) }
+        payload: { type: object, additionalProperties: true }
+        artifact_path:
+          type: string
+          nullable: true
+          description: путь к скриншоту-доказательству на общем томе или null
+
+    EventListEnvelope:
+      allOf:
+        - { $ref: "#/components/schemas/Envelope" }
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                items: { type: array, items: { $ref: "#/components/schemas/Event" } }
+                total: { type: integer }
+
+    IntegrationSettings:
+      type: object
+      description: пороги, расписания и включённые пайплайны (v2)
+      properties:
+        thresholds:
+          type: array
+          items:
+            type: object
+            properties:
+              room: { type: string }
+              metric: { type: string, example: air_temp }
+              min: { type: number, nullable: true }
+              max: { type: number, nullable: true }
+              silent_min: { type: integer, nullable: true }
+        schedules:
+          type: array
+          items:
+            type: object
+            properties:
+              camera_id: { type: string, format: uuid }
+              interval_min: { type: integer }
+        pipelines_enabled:
+          type: array
+          items: { type: string }
+          example: [pose_v1]
+
+    TaskCompletionNotice:
+      type: object
+      description: тело обратного уведомления D.5 (наш контур → АУРА)
+      required: [task_id, status]
+      properties:
+        task_id: { type: string, format: uuid }
+        status: { type: string, enum: [done, failed] }
+        events: { type: array, items: { type: string, format: uuid } }
+        artifacts: { type: array, items: { type: string } }
