@@ -11,6 +11,18 @@
 
 Для нетерпеливых и для тестирования. Подробные ручные шаги — в разделах ниже.
 
+**На свежей Ubuntu/Debian** хостовые предпосылки (Docker + compose v2, Python 3,
+git) ставит `scripts/install.sh` (под root). С нуля — одной строкой:
+
+```bash
+sudo apt-get update && sudo apt-get install -y git \
+  && git clone https://github.com/Rivega42/autom_for_varnaev monitoring \
+  && cd monitoring && sudo bash scripts/install.sh && scripts/bootstrap.sh --demo
+```
+
+`install.sh` идемпотентен и добавляет пользователя в группу `docker` (нужен
+повторный вход). Если Docker/Python уже стоят — переходите сразу к `bootstrap.sh`.
+
 **Демо без железа** — поднять весь контур с *синтетическими* данными датчиков
 (данные и события идут сами, видны в Grafana; видеоаналитика отключена — в демо
 нет камер и модели):
