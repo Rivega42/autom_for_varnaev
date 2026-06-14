@@ -94,6 +94,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) прогоняет `
 | 10 | [`docs/10_DEPLOYMENT.md`](docs/10_DEPLOYMENT.md) | Развёртывание с нуля: .env, ассеты, миграции, сиды, проверка | DevOps |
 | 11 | [`docs/11_HARDWARE.md`](docs/11_HARDWARE.md) | Железо узла датчиков: спецификация, схемы расключения, прошивка | монтажник · наладчик |
 | 12 | [`docs/12_QUICKSTART_LAPTOP.md`](docs/12_QUICKSTART_LAPTOP.md) | Быстрый старт на ноутбуке: демо без железа и подключение реальных камер | DevOps · проверка |
+| 13 | [`docs/13_PRODUCTION_READINESS.md`](docs/13_PRODUCTION_READINESS.md) | Готовность к проду: что готово/заглушено/разрывы, деплой одной командой, удобное заведение объекта | руководитель · DevOps |
 | — | [`docs/customer/`](docs/customer/README.md) | **Пакет для заказчика** (самодостаточный): единое руководство + схемы; только то, что можно передавать | заказчик |
 | — | [`docs/diagrams/`](docs/diagrams/README.md) | Схемы: состав продукта и взаимодействие (Mermaid) + BPMN/SVG | все |
 
