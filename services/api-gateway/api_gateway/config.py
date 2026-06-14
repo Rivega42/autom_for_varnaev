@@ -56,6 +56,9 @@ class Settings:
     artifacts_dir: str = "/data/artifacts"
     # Ключи per-user с ролями (API_KEYS=ключ:роль,...). Роли: operator|admin (#291).
     api_keys: dict[str, str] = field(default_factory=dict)
+    # Лицензионный ключ (#335). Пусто = демо-тариф (1 помещение/камера/узел).
+    # Строка вида payload.signature (Ed25519), см. docs/14_LICENSING.md.
+    license_key: str | None = None
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -79,6 +82,7 @@ class Settings:
             go2rtc_url=os.getenv("GO2RTC_URL", "http://media-gateway:1984"),
             artifacts_dir=os.getenv("ARTIFACTS_DIR", "/data/artifacts"),
             api_keys=api_keys,
+            license_key=os.getenv("LICENSE_KEY") or None,
         )
 
     def principals(self) -> dict[str, str]:

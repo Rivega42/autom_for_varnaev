@@ -2,18 +2,50 @@
 
 from __future__ import annotations
 
+import base64
+import json
+
+import api_gateway.licensing as lic
+import pytest
 from api_gateway.app import create_app
 from api_gateway.config import Settings
 from api_gateway.tables import metadata
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.pool import StaticPool
+
+# Этот файл проверяет CRUD справочников/порогов, а не лицензионные лимиты, поэтому
+# работает под безлимитной лицензией (иначе демо-лимит 1/1/1 блокировал бы второй
+# room/node ещё до проверки дубликата). Лимиты покрыты в test_licensing.py.
+_PRIV = Ed25519PrivateKey.generate()
+_PUB_HEX = (
+    _PRIV.public_key()
+    .public_bytes(encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw)
+    .hex()
+)
+_PAYLOAD = json.dumps(
+    {"tier": "pro", "max_rooms": None, "max_cameras": None, "max_nodes": None},
+    separators=(",", ":"),
+).encode("utf-8")
+_LICENSE = (
+    f"{base64.urlsafe_b64encode(_PAYLOAD).rstrip(b'=').decode()}."
+    f"{base64.urlsafe_b64encode(_PRIV.sign(_PAYLOAD)).rstrip(b'=').decode()}"
+)
 
 _SETTINGS = Settings(
     log_service_url="http://log-service:8000",
     api_key=None,
     aura_integration_enabled=False,
+    license_key=_LICENSE,
 )
+
+
+@pytest.fixture(autouse=True)
+def _unlimited_license(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Подменить зашитый публичный ключ на тестовый — безлимитная лицензия выше валидна."""
+    monkeypatch.setattr(lic, "EMBEDDED_PUBLIC_KEY_HEX", _PUB_HEX)
 
 
 def _engine() -> Engine:

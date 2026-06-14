@@ -40,6 +40,8 @@ services/api-gateway/api_gateway/static/vendor/
 db/seeds/object.yaml
 # Реальный конфиг медиа-шлюза: RTSP-URL камер содержат логин/пароль; в репо — только пример.
 media-gateway/go2rtc.yaml
+# Приватные ключи лицензий вендора (#335) — секрет, в репозиторий не попадают.
+licenses/
 
 # IDE и ОС
 .idea/
