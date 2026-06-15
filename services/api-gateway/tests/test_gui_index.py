@@ -54,6 +54,13 @@ def test_license_banner_present() -> None:
         assert f'id="{el}"' in text, f"Нет элемента баннера лицензии {el}"
 
 
+def test_aura_toggle_present() -> None:
+    """Тумблер интеграции с АУРА во вкладке «Объект» (#352)."""
+    text = _index()
+    for el in ("aura-panel", "aura_enabled", "aura_state"):
+        assert f'id="{el}"' in text, f"Нет элемента тумблера АУРА {el}"
+
+
 def test_all_sections_preserved() -> None:
     """Редизайн не потерял ни одной секции и интерактивных элементов."""
     text = _index()

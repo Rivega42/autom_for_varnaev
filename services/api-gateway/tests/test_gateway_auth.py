@@ -7,7 +7,10 @@ from uuid import UUID
 
 from api_gateway.app import create_app
 from api_gateway.config import Settings
+from api_gateway.tables import metadata
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.pool import StaticPool
 
 _KEY = "secret-key"
 
@@ -26,13 +29,24 @@ class _FakeEventsClient:
         return False
 
 
+def _engine() -> Engine:
+    eng = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    metadata.create_all(eng)
+    return eng
+
+
 def _client(enabled_aura: bool = False) -> TestClient:
     settings = Settings(
         log_service_url="http://log-service:8000",
         api_key=_KEY,
         aura_integration_enabled=enabled_aura,
     )
-    return TestClient(create_app(settings=settings, events_client=_FakeEventsClient()))
+    # engine нужен: режим интеграции с АУРА читается из app_config (#352).
+    return TestClient(
+        create_app(settings=settings, events_client=_FakeEventsClient(), engine=_engine())
+    )
 
 
 def test_health_open_without_key() -> None:

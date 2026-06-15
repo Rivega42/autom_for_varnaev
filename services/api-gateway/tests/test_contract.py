@@ -13,7 +13,10 @@ from uuid import UUID, uuid4
 import pytest
 from api_gateway.app import create_app
 from api_gateway.config import Settings
+from api_gateway.tables import metadata
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.pool import StaticPool
 
 from monitoring_shared import Envelope
 
@@ -42,8 +45,19 @@ class _FakeEventsClient:
         return False
 
 
+def _engine() -> Engine:
+    eng = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    metadata.create_all(eng)
+    return eng
+
+
 def _client() -> TestClient:
-    return TestClient(create_app(settings=_SETTINGS, events_client=_FakeEventsClient()))
+    # engine нужен: режим интеграции с АУРА читается из app_config (#352).
+    return TestClient(
+        create_app(settings=_SETTINGS, events_client=_FakeEventsClient(), engine=_engine())
+    )
 
 
 def test_success_envelope_conforms() -> None:

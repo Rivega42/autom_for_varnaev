@@ -118,6 +118,36 @@ async function applyLicenseKey(key) {
   }
 }
 
+// ── Интеграция с АУРА: тумблер режима (#352) ──
+// Выкл — контур автономен (разъёмы /integration/* → 501); вкл — открыты для АУРА.
+// Состояние хранится на сервере (app_config), переключается без перезапуска.
+function renderAura(enabled) {
+  $("aura_enabled").checked = enabled;
+  $("aura_state").textContent = enabled ? "включена" : "выключена (автономный режим)";
+}
+
+async function loadAuraStatus() {
+  try {
+    renderAura((await api("/aura/status")).enabled);
+  } catch (_) {
+    /* некритично (например, ключ API ещё не введён) */
+  }
+}
+
+async function toggleAura() {
+  try {
+    const d = await api("/aura/status", {
+      method: "PUT",
+      body: JSON.stringify({ enabled: $("aura_enabled").checked }),
+    });
+    renderAura(d.enabled);
+    msg(d.enabled ? "Интеграция с АУРА включена" : "Интеграция с АУРА выключена");
+  } catch (e) {
+    msg("Ошибка переключения интеграции: " + e.message, false);
+    loadAuraStatus(); // откатить чекбокс к фактическому состоянию
+  }
+}
+
 // ── Камеры ──
 
 async function loadCameras() {
@@ -969,6 +999,7 @@ async function createNode() {
 
 function loadAll() {
   loadLicense();
+  loadAuraStatus();
   loadRooms();
   loadNodes();
   loadCameras();
@@ -986,6 +1017,7 @@ $("lickeyBtn").onclick = () => {
 };
 $("lickeySave").onclick = () => applyLicenseKey($("lickey").value.trim());
 $("lickeyClear").onclick = () => applyLicenseKey("");
+$("aura_enabled").onchange = toggleAura;
 $("rm_add").onclick = createRoom;
 $("nd_add").onclick = createNode;
 $("nc_save").onclick = createCamera;
