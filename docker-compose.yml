@@ -499,6 +499,33 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  esphome:
+    # Инструмент прошивки/обслуживания узлов датчиков (ESPHome Dashboard).
+    # НЕ часть рабочего контура — поднимается ПО ТРЕБОВАНИЮ под профилем "tools",
+    # в дефолтный стек не входит. Из веб-интерфейса http://localhost:6052 правят
+    # YAML узлов, собирают и шьют прошивку (первый раз по USB, далее OTA по Wi-Fi).
+    # Пошагово — docs/15_SENSOR_QUICKSTART.md.
+    #   docker compose --profile tools up -d esphome
+    profiles: ["tools"]
+    image: ghcr.io/esphome/esphome:${ESPHOME_VERSION:-latest}
+    environment:
+      # На Windows/Mac корректнее показывает статус узлов «онлайн/офлайн».
+      ESPHOME_DASHBOARD_USE_PING: "true"
+    volumes:
+      # Конфиги и secrets.yaml узлов лежат в репозитории; собранные прошивки
+      # ESPHome пишет сюда же (.esphome/), на хосте.
+      - ./firmware/esphome:/config
+    ports:
+      - "6052:6052"
+    # Сеть edge: нужен LAN объекта (OTA узлов по Wi-Fi) и публикация порта 6052.
+    networks:
+      - edge
+    # Первая прошивка по USB на Linux-сервере требует доступа к устройству платы —
+    # раскомментируйте и укажите порт (например /dev/ttyACM0 или /dev/ttyUSB0):
+    # devices:
+    #   - /dev/ttyACM0:/dev/ttyACM0
+    restart: unless-stopped
+
 networks:
   # internal: true — реальная изоляция (docs/02_NETWORK.md): из этой сети нет
   # выхода наружу и published-порты сервисов, висящих ТОЛЬКО в ней, не работают.
