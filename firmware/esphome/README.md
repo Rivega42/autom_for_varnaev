@@ -21,7 +21,9 @@ MLX90614 на I²C. Узлы сами публикуют показания по
 
 ## Как прошить узел
 
-1. Установить ESPHome (одноразово): `pip install esphome`.
+1. Поднять ESPHome Dashboard (он включён в сборку, профиль `tools`):
+   `docker compose --profile tools up -d esphome` → http://localhost:6052
+   (альтернатива — CLI: `pip install esphome`).
 2. Создать секреты из примера и заполнить их:
    ```bash
    cd firmware/esphome

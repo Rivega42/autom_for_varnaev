@@ -113,20 +113,30 @@ ESPHome превращает короткий YAML-файл (текстовый 
 
 ### Способ 1 (рекомендуемый): ESPHome Dashboard через Docker
 
-В Проводнике зайдите в папку `firmware\esphome` проекта, в адресной строке
-наберите `powershell`, Enter — откроется PowerShell в этой папке. Запустите:
+ESPHome уже включён в сборку как сервис `esphome` (профиль `tools`) — отдельно
+ничего ставить не нужно. Из корня проекта:
 
 ```powershell
-docker run --rm -p 6052:6052 -e ESPHOME_DASHBOARD_USE_PING=true -v "${PWD}:/config" -it ghcr.io/esphome/esphome
+docker compose --profile tools up -d esphome
 ```
 
-- `-p 6052:6052` — пробрасывает веб-интерфейс на порт 6052.
-- `-v "${PWD}:/config"` — «прокидывает» текущую папку внутрь контейнера, чтобы
-  ESPHome видел ваши `*.yaml` и `secrets.yaml`.
-- `ghcr.io/esphome/esphome` — официальный образ (скачается при первом запуске).
+Сервис поднимет ESPHome Dashboard и «прокинет» в него папку `firmware/esphome`
+(там ваши `*.yaml` и `secrets.yaml`). Версию образа можно закрепить переменной
+`ESPHOME_VERSION` в `.env` (по умолчанию `latest`). Остановить: `docker compose
+--profile tools down`.
 
 Откройте в браузере **http://localhost:6052** — это ESPHome Dashboard: правка
 конфигов, кнопка **Install** (сборка и заливка) и обновление по воздуху (OTA).
+
+> Альтернатива без compose (разовый запуск): зайдите в папку `firmware\esphome`
+> и выполните
+> `docker run --rm -p 6052:6052 -e ESPHOME_DASHBOARD_USE_PING=true -v "${PWD}:/config" -it ghcr.io/esphome/esphome`.
+
+> Первая прошивка по USB из контейнера на Windows часто недоступна (проброс
+> COM-порта ограничен) — для неё используйте ESPHome Web (способ 3); дальше
+> обновления идут по Wi-Fi (OTA), и сервиса `esphome` достаточно. На Linux-сервере
+> объекта для USB-прошивки раскомментируйте `devices:` у сервиса `esphome` в
+> `docker-compose.yml` и укажите порт платы (`/dev/ttyACM0`).
 
 ### Способ 2: ESPHome CLI через Python
 
