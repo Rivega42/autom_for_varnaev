@@ -7,9 +7,13 @@ MLX90614 на I²C. Узлы сами публикуют показания по
 
 > **Спецификация железа, схемы расключения (с картинками) и подробная
 > пошаговая прошивка/модификация — в [`docs/11_HARDWARE.md`](../../docs/11_HARDWARE.md).**
+> **Новичку на Windows, «с нуля и по шагам» — [`docs/15_SENSOR_QUICKSTART.md`](../../docs/15_SENSOR_QUICKSTART.md).**
 > Здесь — краткая выжимка по файлам и команде прошивки.
 
-- `node.example.yaml` — эталонный узел помещения (Wi-Fi, OTA, I²C, 60с).
+- `node.example.yaml` — эталонный узел помещения (Wi-Fi, OTA, I²C, 60с): SHT4x +
+  MLX90614 + УФ (LTR390, GUVC-S10GD).
+- `node_sht30.example.yaml` — узел под комплект из 2 датчиков: GY-SHT30-D (SHT30,
+  `sht3xd`) + GY-906/MLX90614, без УФ (см. `docs/15_SENSOR_QUICKSTART.md`).
 - `cold_chamber.example.yaml` — вариант для холодильной камеры (E2.12).
 
 **Секреты** (Wi-Fi/MQTT/OTA) — в `secrets.yaml` рядом через `!secret`; в репозиторий

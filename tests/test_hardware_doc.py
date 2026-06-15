@@ -12,7 +12,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _DOC = REPO_ROOT / "docs" / "11_HARDWARE.md"
+_QUICKSTART = REPO_ROOT / "docs" / "15_SENSOR_QUICKSTART.md"
 _NODE_YAML = REPO_ROOT / "firmware" / "esphome" / "node.example.yaml"
+_KIT_YAML = REPO_ROOT / "firmware" / "esphome" / "node_sht30.example.yaml"
+_SVG_FLOW = REPO_ROOT / "docs" / "diagrams" / "11_flashing_flow.svg"
 _SVG_NODE = REPO_ROOT / "docs" / "diagrams" / "08_node_wiring.svg"
 _SVG_COLD = REPO_ROOT / "docs" / "diagrams" / "09_cold_chamber_wiring.svg"
 _SVG_PINOUT = REPO_ROOT / "docs" / "diagrams" / "10_esp32c3_pinout.svg"
@@ -59,3 +62,32 @@ def test_doc_covers_all_v1_metrics() -> None:
     doc = _DOC.read_text(encoding="utf-8")
     for metric in ("air_temp", "humidity", "surface_ir", "uv_index", "uv_c"):
         assert metric in doc, f"В разделе «Железо» не описана метрика {metric}"
+
+
+# ── Пошаговое руководство (docs/15) и готовый конфиг под комплект из 2 датчиков ──
+
+
+def test_kit_config_is_sht30_two_sensors_no_uv() -> None:
+    """node_sht30.example.yaml — под GY-SHT30-D + MLX90614: sht3xd, без УФ, те же I²C-пины."""
+    cfg = _KIT_YAML.read_text(encoding="utf-8")
+    assert "platform: sht3xd" in cfg, "Комплектный конфиг должен использовать sht3xd (SHT30)"
+    assert "platform: mlx90614" in cfg, "Нет MLX90614 (ИК-температура поверхности)"
+    # УФ-датчиков в комплекте нет — их платформ не должно быть в конфиге
+    # (упоминание в комментарии «убраны ltr390 и adc» допустимо, проверяем platform:).
+    assert "platform: ltr390" not in cfg and "platform: adc" not in cfg, (
+        "В комплектном конфиге не должно быть УФ-датчиков"
+    )
+    # Пины I²C совпадают с эталоном (источник истины — node.example.yaml).
+    pins = _firmware_pins()
+    assert f"sda: {pins['sda']}" in cfg and f"scl: {pins['scl']}" in cfg
+
+
+def test_quickstart_exists_and_links_kit() -> None:
+    """Руководство docs/15 существует, ссылается на комплектный конфиг и схему прошивки."""
+    assert _QUICKSTART.is_file(), "Нет пошагового руководства docs/15_SENSOR_QUICKSTART.md"
+    assert _SVG_FLOW.is_file(), "Нет схемы процесса прошивки 11_flashing_flow.svg"
+    guide = _QUICKSTART.read_text(encoding="utf-8")
+    assert "node_sht30.example.yaml" in guide, "Руководство не ссылается на комплектный конфиг"
+    assert "diagrams/11_flashing_flow.svg" in guide, "Руководство не встраивает схему прошивки"
+    # Документ 11 направляет новичка в руководство 15.
+    assert "15_SENSOR_QUICKSTART.md" in _DOC.read_text(encoding="utf-8")
