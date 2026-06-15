@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 700" font-family="'Segoe UI', 'PT Sans', Arial, sans-serif">
+  <defs>
+    <style>
+      .t{fill:#1f2a36;}
+      .muted{fill:#5b6b7a;}
+      .step{fill:#e8eef9;stroke:#3d5266;stroke-width:1.6;}
+      .check{fill:#e8f5ee;stroke:#54a777;stroke-width:1.6;}
+      .warn{fill:#fff6e6;stroke:#d8a23a;stroke-width:1.6;}
+      .num{fill:#3367d6;}
+      .numt{fill:#fff;font-size:15px;font-weight:700;}
+      .h{font-size:15px;font-weight:700;}
+      .lbl{font-size:13px;}
+      .lbl-s{font-size:11px;}
+      .arrow{stroke:#7c8a99;stroke-width:2.2;fill:none;}
+    </style>
+    <marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#7c8a99"/>
+    </marker>
+  </defs>
+
+  <text x="24" y="34" class="t h" font-size="18">11 · Прошивка узла датчиков с нуля (Windows)</text>
+  <text x="24" y="55" class="muted lbl">ESP32-C3 SuperMini + GY-SHT30-D + GY-906/MLX90614. Подробно: docs/15_SENSOR_QUICKSTART.md</text>
+
+  <!-- Steps column -->
+  <!-- 1 -->
+  <g>
+    <rect x="60" y="80" width="520" height="62" rx="10" class="step"/>
+    <circle cx="92" cy="111" r="16" class="num"/><text x="92" y="116" class="numt" text-anchor="middle">1</text>
+    <text x="122" y="106" class="t h">Завести узел в справочнике</text>
+    <text x="122" y="127" class="muted lbl-s">GUI «Узлы датчиков» или сид object.yaml → node-01 (id = sensor_nodes.id)</text>
+  </g>
+  <path class="arrow" d="M320,142 L320,162" marker-end="url(#ah)"/>
+  <!-- 2 -->
+  <g>
+    <rect x="60" y="164" width="520" height="62" rx="10" class="step"/>
+    <circle cx="92" cy="195" r="16" class="num"/><text x="92" y="200" class="numt" text-anchor="middle">2</text>
+    <text x="122" y="190" class="t h">Установить ESPHome</text>
+    <text x="122" y="211" class="muted lbl-s">Docker Dashboard: docker run … ghcr.io/esphome/esphome → http://localhost:6052</text>
+  </g>
+  <path class="arrow" d="M320,226 L320,246" marker-end="url(#ah)"/>
+  <!-- 3 -->
+  <g>
+    <rect x="60" y="248" width="520" height="62" rx="10" class="step"/>
+    <circle cx="92" cy="279" r="16" class="num"/><text x="92" y="284" class="numt" text-anchor="middle">3</text>
+    <text x="122" y="274" class="t h">Заполнить secrets.yaml</text>
+    <text x="122" y="295" class="muted lbl-s">wifi_ssid, wifi_password, ota_password, mqtt_broker = IP сервера объекта</text>
+  </g>
+  <path class="arrow" d="M320,310 L320,330" marker-end="url(#ah)"/>
+  <!-- 4 -->
+  <g>
+    <rect x="60" y="332" width="520" height="62" rx="10" class="step"/>
+    <circle cx="92" cy="363" r="16" class="num"/><text x="92" y="368" class="numt" text-anchor="middle">4</text>
+    <text x="122" y="358" class="t h">Сделать node-01.yaml</text>
+    <text x="122" y="379" class="muted lbl-s">из node_sht30.example.yaml; вписать node_id и topic_base (node-01)</text>
+  </g>
+  <path class="arrow" d="M320,394 L320,414" marker-end="url(#ah)"/>
+  <!-- 5 -->
+  <g>
+    <rect x="60" y="416" width="520" height="62" rx="10" class="step"/>
+    <circle cx="92" cy="447" r="16" class="num"/><text x="92" y="452" class="numt" text-anchor="middle">5</text>
+    <text x="122" y="442" class="t h">Первая прошивка — по USB</text>
+    <text x="122" y="463" class="muted lbl-s">кабель с данными; Install → Plug into this computer; выбрать COM-порт</text>
+  </g>
+  <path class="arrow" d="M320,478 L320,498" marker-end="url(#ah)"/>
+  <!-- 6 -->
+  <g>
+    <rect x="60" y="500" width="520" height="62" rx="10" class="step"/>
+    <circle cx="92" cy="531" r="16" class="num"/><text x="92" y="536" class="numt" text-anchor="middle">6</text>
+    <text x="122" y="526" class="t h">Дальше — OTA по Wi-Fi</text>
+    <text x="122" y="547" class="muted lbl-s">обновления «по воздуху», провод больше не нужен</text>
+  </g>
+  <path class="arrow" d="M320,562 L320,582" marker-end="url(#ah)"/>
+  <!-- 7 check -->
+  <g>
+    <rect x="60" y="584" width="520" height="74" rx="10" class="check"/>
+    <circle cx="92" cy="621" r="16" fill="#2e9b6b"/><text x="92" y="626" class="numt" text-anchor="middle">7</text>
+    <text x="122" y="612" class="t h">Проверка приёмки</text>
+    <text x="122" y="632" class="muted lbl-s">mosquitto_sub -t 'monitoring/#' -v → строки monitoring/node-01/...</text>
+    <text x="122" y="649" class="muted lbl-s">и/или ряды в Grafana по помещению room-01</text>
+  </g>
+
+  <!-- Side note: node_id -->
+  <g>
+    <rect x="620" y="164" width="296" height="146" rx="10" class="warn"/>
+    <text x="636" y="190" class="t h" font-size="14">⚠ Связка node_id</text>
+    <text x="636" y="214" class="muted lbl-s">node_id в прошивке (substitutions)</text>
+    <text x="636" y="232" class="muted lbl-s">обязан совпадать символ-в-символ</text>
+    <text x="636" y="250" class="muted lbl-s">с sensor_nodes.id в справочнике.</text>
+    <text x="636" y="274" class="muted lbl-s">Иначе ingest-sensors молча</text>
+    <text x="636" y="292" class="muted lbl-s">отбрасывает показания → в Grafana пусто.</text>
+  </g>
+
+  <!-- Side note: I2C scan -->
+  <g>
+    <rect x="620" y="332" width="296" height="146" rx="10" class="check"/>
+    <text x="636" y="358" class="t h" font-size="14">✓ Проверка датчиков</text>
+    <text x="636" y="382" class="muted lbl-s">i2c: scan: true печатает в логах</text>
+    <text x="636" y="400" class="muted lbl-s">найденные адреса. Должны быть оба:</text>
+    <text x="636" y="424" class="t lbl" font-weight="700">0x44 — SHT30 (воздух)</text>
+    <text x="636" y="446" class="t lbl" font-weight="700">0x5A — MLX90614 (поверхность)</text>
+    <text x="636" y="468" class="muted lbl-s">Нет адреса → проверь SDA/SCL и питание.</text>
+  </g>
+
+  <!-- Side note: питание -->
+  <g>
+    <rect x="620" y="500" width="296" height="158" rx="10" class="warn"/>
+    <text x="636" y="526" class="t h" font-size="14">⚠ Только 3,3 В</text>
+    <text x="636" y="550" class="muted lbl-s">Питание датчиков — строго с пина 3V3,</text>
+    <text x="636" y="568" class="muted lbl-s">не 5V/VBUS. Логика ESP32-C3 — 3.3 В.</text>
+    <text x="636" y="592" class="muted lbl-s">I²C-пины: SDA → GPIO5, SCL → GPIO6</text>
+    <text x="636" y="610" class="muted lbl-s">(а НЕ подписанные «SDA/SCL» 8/9).</text>
+    <text x="636" y="634" class="muted lbl-s">Pull-up резисторы на модулях GY уже есть.</text>
+  </g>
+</svg>

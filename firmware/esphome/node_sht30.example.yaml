@@ -1,0 +1,85 @@
+# Узел датчиков под комплект из ДВУХ датчиков (ESPHome, без кода).
+# Железо: ESP32-C3 SuperMini + GY-SHT30-D (воздух: t°/влажность, чип SHT30) +
+# GY-906/MLX90614 (бесконтактная ИК-температура поверхности) на одной шине I²C.
+# Вариант node.example.yaml БЕЗ УФ-датчиков: sht4x → sht3xd, убраны ltr390 и adc.
+# Пошаговое руководство — docs/15_SENSOR_QUICKSTART.md.
+#
+# Узел САМ публикует показания по MQTT (docs/08_MQTT_CONTRACT.md):
+#   топик   monitoring/<node_id>/<metric>
+#   payload {"value": <число>, "unit": "<C|%>"}
+#
+# Секреты (Wi-Fi, MQTT, OTA) — в secrets.yaml рядом (через !secret); в репозиторий
+# кладётся только secrets.yaml.example без реальных значений.
+
+substitutions:
+  node_id: node-01          # ОБЯЗАН совпадать с sensor_nodes.id в справочнике
+  topic_base: monitoring/node-01
+
+esphome:
+  name: ${node_id}
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+logger:
+
+# Радио v1 — Wi-Fi.
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# Обновление прошивки по воздуху.
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+mqtt:
+  broker: !secret mqtt_broker
+  port: 1883
+  # Discovery Home Assistant не используем — публикуем свои топики вручную.
+  discovery: false
+
+# Шина I²C: SHT30 (0x44) и MLX90614 (0x5A) на общих линиях.
+i2c:
+  sda: GPIO5
+  scl: GPIO6
+  scan: true
+
+sensor:
+  # Воздух: температура и влажность (GY-SHT30-D, чип SHT30, адрес 0x44).
+  - platform: sht3xd
+    address: 0x44
+    temperature:
+      id: air_temp
+      internal: true        # подавляем дефолтные топики — публикуем свой JSON ниже
+      on_value:
+        then:
+          - mqtt.publish:
+              topic: ${topic_base}/air_temp
+              payload: !lambda |-
+                return "{\"value\": " + to_string(x) + ", \"unit\": \"C\"}";
+    humidity:
+      id: humidity
+      internal: true
+      on_value:
+        then:
+          - mqtt.publish:
+              topic: ${topic_base}/humidity
+              payload: !lambda |-
+                return "{\"value\": " + to_string(x) + ", \"unit\": \"%\"}";
+    update_interval: 60s
+
+  # Поверхность: бесконтактная ИК-температура (GY-906/MLX90614, объектный канал, 0x5A).
+  - platform: mlx90614
+    object:
+      id: surface_ir
+      internal: true
+      on_value:
+        then:
+          - mqtt.publish:
+              topic: ${topic_base}/surface_ir
+              payload: !lambda |-
+                return "{\"value\": " + to_string(x) + ", \"unit\": \"C\"}";
+    update_interval: 60s

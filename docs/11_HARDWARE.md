@@ -13,6 +13,12 @@ Wi-Fi и публикует показания в MQTT-брокер сервер
 (холодильная камера). **Распиновка ниже = пины в этих файлах** (сверяется
 тестом `tests/test_hardware_doc.py`).
 
+> **Новичку, «с нуля и по шагам» на Windows** (установка ESPHome, сборка,
+> прошивка по USB и OTA, проверка) — отдельное руководство
+> [`docs/15_SENSOR_QUICKSTART.md`](15_SENSOR_QUICKSTART.md). Под комплект из
+> 2 датчиков (GY-SHT30-D + GY-906/MLX90614, без УФ) там же — готовый конфиг
+> [`firmware/esphome/node_sht30.example.yaml`](../firmware/esphome/node_sht30.example.yaml).
+
 ---
 
 ## 1. Состав узла (спецификация, BOM)
