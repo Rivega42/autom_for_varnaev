@@ -72,16 +72,18 @@
         "method": "GET",
         "header": [{ "key": "X-API-Key", "value": "{{api_key}}" }],
         "url": {
-          "raw": "{{base_url}}/integration/events?from=2026-06-08T00:00:00Z&to=2026-06-08T23:59:59Z&type=coverage_report",
+          "raw": "{{base_url}}/integration/events?from=2026-06-08T00:00:00Z&to=2026-06-08T23:59:59Z&type=coverage_report&limit=50&offset=0",
           "host": ["{{base_url}}"],
           "path": ["integration", "events"],
           "query": [
             { "key": "from", "value": "2026-06-08T00:00:00Z" },
             { "key": "to", "value": "2026-06-08T23:59:59Z" },
-            { "key": "type", "value": "coverage_report" }
+            { "key": "type", "value": "coverage_report" },
+            { "key": "limit", "value": "50", "description": "размер страницы (1..1000)" },
+            { "key": "offset", "value": "0", "description": "смещение для пагинации" }
           ]
         },
-        "description": "АУРА забирает события датчиков и аналитики (не показания и не видео). Параметры from/to/type — необязательны. v1 → 501; v2 → 200 c data.items[] и data.total."
+        "description": "АУРА забирает события датчиков и аналитики (не показания и не видео). Параметры from/to/type — необязательны. Постранично: limit (по умолчанию 50, макс 1000) и offset; за период событий может быть больше limit — полное число в data.total. v1 → 501; v2 → 200 c data.items[] и data.total."
       }
     },
     {
