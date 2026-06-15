@@ -88,6 +88,7 @@ from api_gateway.schedules_repository import (
 from api_gateway.schemas import (
     AnalysisTaskCreate,
     AnalyticsEventCreate,
+    AuraStatusUpdate,
     CameraCreate,
     CameraUpdate,
     CameraZoneCreate,
@@ -187,6 +188,14 @@ def create_app(
         """Действующий ключ: введённый в GUI (БД) приоритетнее переменной окружения."""
         return get_config(engine, _license_key_setting) or settings.license_key
 
+    # Режим интеграции с АУРА (#352): тумблер из GUI (app_config) приоритетнее env.
+    _aura_setting = "aura_integration_enabled"
+
+    def _current_aura_enabled() -> bool:
+        """Действующий режим интеграции: тумблер из GUI (БД) приоритетнее env."""
+        stored = get_config(engine, _aura_setting)
+        return settings.aura_integration_enabled if stored is None else stored == "true"
+
     def _license_payload() -> dict[str, Any]:
         """Тариф, лимиты и расход — общее тело для GET и PUT /license (баннер GUI)."""
         info = evaluate_license(_current_license_key(), datetime.now(UTC).date())
@@ -229,6 +238,18 @@ def create_app(
         else:
             clear_config(engine, _license_key_setting)
         return ok(_license_payload())
+
+    @app.get(f"{API_PREFIX}/aura/status", dependencies=[auth])
+    def get_aura_status() -> dict[str, Any]:
+        """Текущий режим интеграции с АУРА (тумблер в GUI, #352)."""
+        stored = get_config(engine, _aura_setting)
+        return ok({"enabled": _current_aura_enabled(), "source": "db" if stored else "env"})
+
+    @app.put(f"{API_PREFIX}/aura/status", dependencies=[audited_admin])
+    def put_aura_status(body: AuraStatusUpdate) -> dict[str, Any]:
+        """Включить/выключить интеграцию с АУРА из GUI (admin) — без перезапуска."""
+        set_config(engine, _aura_setting, "true" if body.enabled else "false", datetime.now(UTC))
+        return ok({"enabled": _current_aura_enabled(), "source": "db"})
 
     @app.get(f"{API_PREFIX}/events", dependencies=[auth])
     def get_events(
@@ -739,7 +760,7 @@ def create_app(
 
     # СТЫК-АУРА (v2): заглушённые разъёмы /integration/* (501 при выключенном флаге).
     # Разъёмы АУРА — уровень настройки (admin); в v1 всё равно заглушены (501).
-    register_integration_routes(app, settings, events, dependencies=[admin])
+    register_integration_routes(app, events, _current_aura_enabled, dependencies=[admin])
 
     # GUI настройки видеоаналитики (статический SPA). Сам HTML/JS — без ключа;
     # запросы к API из него несут X-API-Key. Каталог создаётся вместе с пакетом.

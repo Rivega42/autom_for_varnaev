@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import Engine, delete, insert, select, update
+from sqlalchemy.exc import IntegrityError
 
 from api_gateway.tables import app_config
 
@@ -18,16 +19,29 @@ def get_config(engine: Engine, key: str) -> str | None:
 
 
 def set_config(engine: Engine, key: str, value: str, now: datetime) -> None:
-    """Установить значение настройки по ключу (вставка или обновление)."""
-    # Портируемый UPSERT без диалект-специфичного ON CONFLICT: сперва UPDATE,
-    # если строки не было — INSERT. Работает одинаково в SQLite (тесты) и
-    # PostgreSQL (прод); запись настроек редкая, гонок здесь нет.
+    """Установить значение настройки по ключу (вставка или обновление).
+
+    Портируемый UPSERT без диалект-специфичного ON CONFLICT: сперва UPDATE, если
+    строки не было — INSERT. Работает одинаково в SQLite (тесты) и PostgreSQL
+    (прод). INSERT обёрнут в SAVEPOINT: если параллельный запрос вставил ту же
+    строку между UPDATE и INSERT, ловим IntegrityError, откатываемся к SAVEPOINT
+    (не отравляя внешнюю транзакцию) и повторяем UPDATE — гонка не даёт 500.
+    """
     with engine.begin() as conn:
         updated = conn.execute(
             update(app_config).where(app_config.c.key == key).values(value=value, updated_at=now)
         )
-        if updated.rowcount == 0:
-            conn.execute(insert(app_config).values(key=key, value=value, updated_at=now))
+        if updated.rowcount:
+            return
+        try:
+            with conn.begin_nested():  # SAVEPOINT
+                conn.execute(insert(app_config).values(key=key, value=value, updated_at=now))
+        except IntegrityError:
+            conn.execute(
+                update(app_config)
+                .where(app_config.c.key == key)
+                .values(value=value, updated_at=now)
+            )
 
 
 def clear_config(engine: Engine, key: str) -> None:

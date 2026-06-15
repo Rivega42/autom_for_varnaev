@@ -3,36 +3,18 @@
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from api_gateway.app import create_app
 from api_gateway.config import Settings
 from api_gateway.integration import require_aura_enabled
+from api_gateway.tables import metadata
+from fakes import FakeEventsClient
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-
-
-class _FakeEventsClient:
-    """Фейковый источник событий: фиксирует переданные фильтры."""
-
-    def __init__(self, event: dict[str, Any] | None = None) -> None:
-        self._event = event
-        self.last_params: dict[str, Any] | None = None
-
-    def list_events(self, params: dict[str, Any]) -> dict[str, Any]:
-        self.last_params = params
-        items = [self._event] if self._event else []
-        return {"items": items, "total": len(items)}
-
-    def get_event(self, event_id: UUID) -> dict[str, Any] | None:
-        return None
-
-    def create_event(self, event: object) -> None:
-        pass
-
-    def ack_event(self, event_id: UUID) -> bool:
-        return False
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.pool import StaticPool
 
 
 def _settings(enabled: bool) -> Settings:
@@ -43,8 +25,19 @@ def _settings(enabled: bool) -> Settings:
     )
 
 
-def _client(enabled: bool, events: _FakeEventsClient | None = None) -> TestClient:
-    return TestClient(create_app(settings=_settings(enabled), events_client=events))
+def _engine() -> Engine:
+    eng = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    metadata.create_all(eng)
+    return eng
+
+
+def _client(enabled: bool, events: FakeEventsClient | None = None) -> TestClient:
+    # engine нужен: действующий режим интеграции читается из app_config (#352).
+    return TestClient(
+        create_app(settings=_settings(enabled), events_client=events, engine=_engine())
+    )
 
 
 @pytest.mark.parametrize(
@@ -66,14 +59,14 @@ def test_integration_stub_returns_501(method: str, path: str) -> None:
 
 
 def test_guard_passes_when_enabled() -> None:
-    """При включённом флаге страж не бросает исключение."""
-    require_aura_enabled(_settings(enabled=True))  # не должно бросить
+    """При включённой интеграции страж не бросает исключение."""
+    require_aura_enabled(True)  # не должно бросить
 
 
 def test_guard_blocks_when_disabled() -> None:
-    """При выключенном флаге страж бросает 501."""
+    """При выключенной интеграции страж бросает 501."""
     with pytest.raises(HTTPException) as exc:
-        require_aura_enabled(_settings(enabled=False))
+        require_aura_enabled(False)
     assert exc.value.status_code == 501
 
 
@@ -96,7 +89,7 @@ def _event() -> dict[str, Any]:
 
 def test_integration_events_returns_data_when_enabled() -> None:
     """Флаг включён → D.3 отдаёт конверт ok с событиями и пробрасывает фильтр type."""
-    fake = _FakeEventsClient(_event())
+    fake = FakeEventsClient(_event())
     client = _client(enabled=True, events=fake)
     resp = client.get(
         "/api/v1/integration/events",
@@ -118,7 +111,7 @@ def test_integration_events_returns_data_when_enabled() -> None:
 
 def test_integration_events_pagination_passed_through() -> None:
     """D.3 пробрасывает явные limit/offset в источник событий (постраничный забор)."""
-    fake = _FakeEventsClient()
+    fake = FakeEventsClient()
     client = _client(enabled=True, events=fake)
     resp = client.get("/api/v1/integration/events", params={"limit": 200, "offset": 400})
     assert resp.status_code == 200
@@ -129,7 +122,7 @@ def test_integration_events_pagination_passed_through() -> None:
 
 def test_integration_events_invalid_date_422_when_enabled() -> None:
     """Кривая дата в D.3 → 422 ещё в шлюзе, без похода в log-service (#205)."""
-    fake = _FakeEventsClient()
+    fake = FakeEventsClient()
     client = _client(enabled=True, events=fake)
     resp = client.get("/api/v1/integration/events", params={"from": "не-дата"})
     assert resp.status_code == 422
@@ -139,9 +132,37 @@ def test_integration_events_invalid_date_422_when_enabled() -> None:
 
 def test_integration_events_disabled_still_501() -> None:
     """Флаг выключен → D.3 по-прежнему 501, источник событий не вызывается."""
-    fake = _FakeEventsClient(_event())
+    fake = FakeEventsClient(_event())
     client = _client(enabled=False, events=fake)
     resp = client.get("/api/v1/integration/events", params={"type": "coverage_report"})
     assert resp.status_code == 501
     assert resp.json()["error"]["code"] == "NOT_IMPLEMENTED"
     assert fake.last_params is None
+
+
+# ── Тумблер интеграции с АУРА из GUI (PUT /aura/status, без перезапуска, #352) ──
+
+
+def test_aura_toggle_enables_without_restart() -> None:
+    """PUT /aura/status включает интеграцию — D.3 отвечает без перезапуска; и обратно."""
+    fake = FakeEventsClient(_event())
+    client = _client(enabled=False, events=fake)  # env-флаг ВЫКЛ
+
+    # До тумблера: статус выключен и D.3 заглушён.
+    assert client.get("/api/v1/aura/status").json()["data"]["enabled"] is False
+    assert client.get("/api/v1/integration/events").status_code == 501
+
+    # Включаем тумблером (БД-настройка приоритетнее env).
+    put = client.put("/api/v1/aura/status", json={"enabled": True})
+    assert put.status_code == 200
+    assert put.json()["data"] == {"enabled": True, "source": "db"}
+
+    # Теперь D.3 отвечает данными — без перезапуска сервиса.
+    resp = client.get("/api/v1/integration/events")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["total"] == 1
+    assert client.get("/api/v1/aura/status").json()["data"]["enabled"] is True
+
+    # Выключаем обратно — снова 501.
+    client.put("/api/v1/aura/status", json={"enabled": False})
+    assert client.get("/api/v1/integration/events").status_code == 501

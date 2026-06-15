@@ -61,6 +61,16 @@ class AnalyticsEventCreate(BaseModel):
     image: str | None = None
 
 
+class AuraStatusUpdate(BaseModel):
+    """Тело PUT /aura/status: включить/выключить интеграцию с АУРА из GUI (#352).
+
+    Хранится в app_config (приоритетнее env AURA_INTEGRATION_ENABLED); применяется
+    сразу, без перезапуска сервиса.
+    """
+
+    enabled: bool
+
+
 class LicenseKeyUpdate(BaseModel):
     """Тело PUT /license: ввод лицензионного ключа оператором из GUI (#335).
 
