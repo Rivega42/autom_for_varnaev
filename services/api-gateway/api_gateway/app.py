@@ -70,6 +70,7 @@ from api_gateway.presence_rules_repository import (
 from api_gateway.presence_rules_repository import (
     update_rule as update_presence_rule,
 )
+from api_gateway.query_params import parse_query_dt
 from api_gateway.readings_repository import list_readings
 from api_gateway.reports_repository import build_report, report_to_csv
 from api_gateway.rooms_repository import (
@@ -131,23 +132,6 @@ from monitoring_shared import (
 
 # Каталог статического GUI (отдаётся под /ui).
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
-
-
-def _parse_query_dt(value: str | None) -> datetime | None:
-    """Разобрать ISO-8601 из query-параметра или вернуть 422 VALIDATION_ERROR.
-
-    Время без зоны трактуем как UTC (контракт §1): иначе naive datetime в
-    сравнении с timestamptz-колонкой роняет запрос в 500 на стороне БД.
-    """
-    if value is None:
-        return None
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError:
-        raise api_error(
-            ErrorCode.VALIDATION_ERROR, "Неверный формат даты (ожидается ISO-8601)"
-        ) from None
-    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 # Базовый префикс контракта (docs/03_API_CONTRACT.md §1).
@@ -258,8 +242,8 @@ def create_app(
         """Лента событий журнала (проксируется к log-service)."""
         # Даты валидируются ДО проксирования (#205): иначе 422 от log-service
         # превращается в 500 на raise_for_status HTTP-клиента.
-        _parse_query_dt(from_)
-        _parse_query_dt(to)
+        parse_query_dt(from_)
+        parse_query_dt(to)
         data = events.list_events(
             {
                 "from": from_,
@@ -383,8 +367,8 @@ def create_app(
         offset: int = Query(default=0, ge=0),
     ) -> dict[str, Any]:
         """Список заданий с фильтром по статусу/времени."""
-        from_ts = _parse_query_dt(from_)
-        to_ts = _parse_query_dt(to)
+        from_ts = parse_query_dt(from_)
+        to_ts = parse_query_dt(to)
         items, total = list_tasks(
             engine,
             status=status,
@@ -412,8 +396,8 @@ def create_app(
         limit: int = Query(default=500, ge=1, le=10000),
     ) -> dict[str, Any]:
         """Показания датчиков (проверочный путь; основной — Grafana)."""
-        from_ts = _parse_query_dt(from_)
-        to_ts = _parse_query_dt(to)
+        from_ts = parse_query_dt(from_)
+        to_ts = parse_query_dt(to)
         items = list_readings(
             engine,
             room=room,
@@ -437,7 +421,7 @@ def create_app(
         limit: int = Query(default=100, ge=1, le=1000),
     ) -> dict[str, Any]:
         """Журнал аудита значимых действий (только admin, #292)."""
-        items = list_audit(engine, _parse_query_dt(from_), _parse_query_dt(to), limit)
+        items = list_audit(engine, parse_query_dt(from_), parse_query_dt(to), limit)
         return ok({"items": items, "total": len(items)})
 
     # ── Справочники объекта: помещения и узлы датчиков (docs/03_API_CONTRACT.md §3.4) ──
@@ -620,8 +604,8 @@ def create_app(
         format: str = Query(default="json", pattern="^(json|csv)$"),
     ) -> Any:
         """Отчёт за период: уборки, просрочки, холодовая цепь (JSON или CSV)."""
-        from_ts = _parse_query_dt(from_)
-        to_ts = _parse_query_dt(to) or datetime.now(UTC)
+        from_ts = parse_query_dt(from_)
+        to_ts = parse_query_dt(to) or datetime.now(UTC)
         if from_ts is None:  # недостижимо при обязательном from; не assert (python -O)
             raise api_error(ErrorCode.VALIDATION_ERROR, "Параметр from обязателен")
         if from_ts >= to_ts:
@@ -755,7 +739,7 @@ def create_app(
 
     # СТЫК-АУРА (v2): заглушённые разъёмы /integration/* (501 при выключенном флаге).
     # Разъёмы АУРА — уровень настройки (admin); в v1 всё равно заглушены (501).
-    register_integration_routes(app, settings, dependencies=[admin])
+    register_integration_routes(app, settings, events, dependencies=[admin])
 
     # GUI настройки видеоаналитики (статический SPA). Сам HTML/JS — без ключа;
     # запросы к API из него несут X-API-Key. Каталог создаётся вместе с пакетом.

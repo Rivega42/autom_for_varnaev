@@ -80,6 +80,16 @@ paths:
           required: false
           schema: { type: string, example: coverage_report }
           description: фильтр по типу события (Приложение C)
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, default: 50, minimum: 1, maximum: 1000 }
+          description: размер страницы (за период событий может быть больше — см. data.total)
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, default: 0, minimum: 0 }
+          description: смещение для постраничного забора
       responses:
         "200":
           description: (v2) события за период
