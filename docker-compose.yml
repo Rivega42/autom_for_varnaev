@@ -361,8 +361,14 @@ services:
       ANALYTICS_UNIFORM_MIN_S: ${ANALYTICS_UNIFORM_MIN_S:-5}
       # Ротация артефактов: скриншоты старше N дней удаляются (0 = выключено).
       ARTIFACTS_RETENTION_DAYS: ${ARTIFACTS_RETENTION_DAYS:-30}
+      # СТЫК-АУРА D.5 (#350): уведомление о готовности задания на callback_url.
+      AURA_CALLBACK_TIMEOUT_S: ${AURA_CALLBACK_TIMEOUT_S:-5}
+      AURA_CALLBACK_RETRIES: ${AURA_CALLBACK_RETRIES:-2}
+      AURA_CALLBACK_ALLOWED_HOSTS: ${AURA_CALLBACK_ALLOWED_HOSTS:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
+      # СТЫК-АУРА (v2): чтобы воркер слал D.5-уведомления приёмнику АУРА, в v2 его
+      # добавляют в сеть integration. В v1 интеграция выключена — обмена нет.
       - internal
     volumes:
       - artifacts:/data/artifacts
