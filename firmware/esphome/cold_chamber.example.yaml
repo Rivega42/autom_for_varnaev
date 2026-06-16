@@ -35,6 +35,10 @@ logger:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  # Стабильность связи и самовосстановление (слабый сигнал/brownout на C3 SuperMini):
+  fast_connect: true        # быстрое переподключение к известной точке
+  power_save_mode: none     # стабильнее связь (чуть теплее, но не «зависает»)
+  reboot_timeout: 2min      # пропал WiFi >2 мин → ребут (не даст висеть)
 
 ota:
   - platform: esphome
@@ -50,6 +54,7 @@ i2c:
   sda: GPIO5
   scl: GPIO6
   scan: true
+  frequency: 50kHz          # медленнее шина → MLX90614 надёжнее инициализируется
   frequency: 50kHz
 
 sensor:
