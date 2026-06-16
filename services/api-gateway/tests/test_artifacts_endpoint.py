@@ -10,7 +10,6 @@ from __future__ import annotations
 import base64
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -22,6 +21,7 @@ from api_gateway.artifacts_store import (
 )
 from api_gateway.config import Settings
 from api_gateway.tables import artifacts as artifacts_table
+from fakes import FakeEventsClient
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.pool import StaticPool
@@ -32,25 +32,6 @@ _PNG_B64 = (
     "C0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 )
 _PNG_DATA_URL = "data:image/png;base64," + _PNG_B64
-
-
-class _FakeEventsClient:
-    """Сборщик событий: ловим то, что ушло в журнал."""
-
-    def __init__(self) -> None:
-        self.created: list[Any] = []
-
-    def list_events(self, params: dict[str, Any]) -> dict[str, Any]:
-        return {"items": [], "total": 0}
-
-    def get_event(self, event_id: UUID) -> dict[str, Any] | None:
-        return None
-
-    def create_event(self, event: Any) -> None:
-        self.created.append(event)
-
-    def ack_event(self, event_id: UUID) -> bool:
-        return False
 
 
 def _sqlite_engine() -> Engine:
@@ -64,7 +45,7 @@ def _sqlite_engine() -> Engine:
     return engine
 
 
-def _client(tmp_path: Path, events: _FakeEventsClient) -> TestClient:
+def _client(tmp_path: Path, events: FakeEventsClient) -> TestClient:
     settings = Settings(
         log_service_url="http://log-service:8000",
         api_key=None,
@@ -133,7 +114,7 @@ def test_build_artifact_path_scheme() -> None:
 
 def test_get_artifact_404_when_missing(tmp_path: Path) -> None:
     """Несуществующий артефакт → 404 ARTIFACT_NOT_FOUND в конверте."""
-    resp = _client(tmp_path, _FakeEventsClient()).get(f"/api/v1/artifacts/{uuid4()}")
+    resp = _client(tmp_path, FakeEventsClient()).get(f"/api/v1/artifacts/{uuid4()}")
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "ARTIFACT_NOT_FOUND"
 
@@ -141,7 +122,7 @@ def test_get_artifact_404_when_missing(tmp_path: Path) -> None:
 def test_post_analytics_event_with_image_roundtrip(tmp_path: Path) -> None:
     """POST с image: файл сохранён, событие получило artifact_id + artifact_url,
     и тот же артефакт отдаётся по GET /artifacts/{id}."""
-    events = _FakeEventsClient()
+    events = FakeEventsClient()
     client = _client(tmp_path, events)
     cam = uuid4()
     resp = client.post(
@@ -173,7 +154,7 @@ def test_post_analytics_event_with_image_roundtrip(tmp_path: Path) -> None:
 
 def test_post_analytics_event_bad_image_422(tmp_path: Path) -> None:
     """Битый data-URL в image → 422 VALIDATION_ERROR, событие не пишется."""
-    events = _FakeEventsClient()
+    events = FakeEventsClient()
     resp = _client(tmp_path, events).post(
         "/api/v1/analytics-events",
         json={"room": "r", "message": "x", "image": "data:image/png;base64,@@@"},
@@ -185,7 +166,7 @@ def test_post_analytics_event_bad_image_422(tmp_path: Path) -> None:
 
 def test_post_analytics_event_without_image_unchanged(tmp_path: Path) -> None:
     """Без image поведение прежнее: событие пишется, artifact_id отсутствует."""
-    events = _FakeEventsClient()
+    events = FakeEventsClient()
     resp = _client(tmp_path, events).post(
         "/api/v1/analytics-events",
         json={"room": "r", "message": "Машет рукой"},
@@ -197,7 +178,7 @@ def test_post_analytics_event_without_image_unchanged(tmp_path: Path) -> None:
 
 def test_post_analytics_event_non_uuid_camera_id_ok(tmp_path: Path) -> None:
     """Не-UUID camera_id не валит запрос: артефакт сохраняется, камера не привязана."""
-    events = _FakeEventsClient()
+    events = FakeEventsClient()
     resp = _client(tmp_path, events).post(
         "/api/v1/analytics-events",
         json={
@@ -215,7 +196,7 @@ def test_post_analytics_event_non_uuid_camera_id_ok(tmp_path: Path) -> None:
 
 def test_post_analytics_event_coverage_report(tmp_path: Path) -> None:
     """type=coverage_report принимается; событие уходит с этим типом и payload зоны."""
-    events = _FakeEventsClient()
+    events = FakeEventsClient()
     resp = _client(tmp_path, events).post(
         "/api/v1/analytics-events",
         json={
@@ -234,7 +215,7 @@ def test_post_analytics_event_coverage_report(tmp_path: Path) -> None:
 
 def test_post_analytics_event_unknown_type_422(tmp_path: Path) -> None:
     """Тип вне белого списка → 422, событие не пишется."""
-    events = _FakeEventsClient()
+    events = FakeEventsClient()
     resp = _client(tmp_path, events).post(
         "/api/v1/analytics-events",
         json={"room": "r", "message": "x", "type": "pose_event"},

@@ -4,32 +4,19 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from api_gateway.app import create_app
 from api_gateway.config import Settings
 from api_gateway.reports_repository import build_report, report_to_csv
 from api_gateway.tables import events, metadata, rooms, sensor_readings
+from fakes import FakeEventsClient
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.pool import StaticPool
 
 T0 = datetime(2026, 6, 10, 8, 0, tzinfo=UTC)
 T_END = T0 + timedelta(hours=8)
-
-
-class _FakeEventsClient:
-    def list_events(self, params: dict[str, Any]) -> dict[str, Any]:
-        return {"items": [], "total": 0}
-
-    def get_event(self, event_id: UUID) -> dict[str, Any] | None:
-        return None
-
-    def create_event(self, event: object) -> None:
-        pass
-
-    def ack_event(self, event_id: UUID) -> bool:
-        return False
 
 
 def _engine() -> Engine:
@@ -164,7 +151,7 @@ def test_report_endpoint_json_and_csv() -> None:
         log_service_url="http://log-service:8000", api_key=None, aura_integration_enabled=False
     )
     client = TestClient(
-        create_app(settings=settings, events_client=_FakeEventsClient(), engine=engine)
+        create_app(settings=settings, events_client=FakeEventsClient(), engine=engine)
     )
 
     rj = client.get(
