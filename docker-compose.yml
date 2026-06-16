@@ -518,9 +518,16 @@ services:
       # На Windows/Mac корректнее показывает статус узлов «онлайн/офлайн».
       ESPHOME_DASHBOARD_USE_PING: "true"
     volumes:
-      # Конфиги и secrets.yaml узлов лежат в репозитории; собранные прошивки
-      # ESPHome пишет сюда же (.esphome/), на хосте.
+      # Конфиги и secrets.yaml узлов лежат в репозитории; dashboard правит их тут.
       - ./firmware/esphome:/config
+      # Тулчейн PlatformIO (тысячи мелких файлов) и объектные файлы сборки —
+      # на быстрых docker-томах, а НЕ на медленном Windows-мэппинге /config (#354).
+      # ESPHome САМ детектит каталоги /cache и /build (docker_entrypoint.sh) без
+      # доп. переменных: тулчейн уходит в /cache (быстрее первая сборка), объектные
+      # файлы — в /build (заметно быстрее повторные). Dashboard по-прежнему читает
+      # YAML из ./firmware/esphome, прошивка по USB/OTA не меняется.
+      - esphome_cache:/cache
+      - esphome_build:/build
     ports:
       - "6052:6052"
     # Сеть edge: нужен LAN объекта (OTA узлов по Wi-Fi) и публикация порта 6052.
@@ -551,3 +558,5 @@ volumes:
   mqtt_data:
   grafana_data:
   backups:  # сжатые дампы БД (сервис backup, #267)
+  esphome_cache:  # тулчейн PlatformIO сервиса esphome — вне Windows-мэппинга (#354)
+  esphome_build:  # объектные файлы сборки ESPHome — вне Windows-мэппинга (#354)
