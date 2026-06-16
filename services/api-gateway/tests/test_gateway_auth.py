@@ -2,31 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
-from uuid import UUID
-
 from api_gateway.app import create_app
 from api_gateway.config import Settings
 from api_gateway.tables import metadata
+from fakes import FakeEventsClient
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.pool import StaticPool
 
 _KEY = "secret-key"
-
-
-class _FakeEventsClient:
-    def list_events(self, params: dict[str, Any]) -> dict[str, Any]:
-        return {"items": [], "total": 0}
-
-    def get_event(self, event_id: UUID) -> dict[str, Any] | None:
-        return None
-
-    def create_event(self, event: object) -> None:
-        pass
-
-    def ack_event(self, event_id: UUID) -> bool:
-        return False
 
 
 def _engine() -> Engine:
@@ -45,7 +29,7 @@ def _client(enabled_aura: bool = False) -> TestClient:
     )
     # engine нужен: режим интеграции с АУРА читается из app_config (#352).
     return TestClient(
-        create_app(settings=settings, events_client=_FakeEventsClient(), engine=_engine())
+        create_app(settings=settings, events_client=FakeEventsClient(), engine=_engine())
     )
 
 
