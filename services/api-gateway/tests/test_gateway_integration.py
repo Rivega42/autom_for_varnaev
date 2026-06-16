@@ -1,19 +1,19 @@
-"""Разъёмы АУРА /integration/*: заглушки за фичефлагом и реализованный D.3 (события)."""
+"""Разъёмы АУРА /integration/*: заглушки за фичефлагом и реализованные D.1/D.3."""
 
 from __future__ import annotations
 
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from api_gateway.app import create_app
 from api_gateway.config import Settings
 from api_gateway.integration import require_aura_enabled
-from api_gateway.tables import metadata
+from api_gateway.tables import analysis_tasks, metadata
 from fakes import FakeEventsClient
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.pool import StaticPool
 
 
@@ -166,3 +166,81 @@ def test_aura_toggle_enables_without_restart() -> None:
     # Выключаем обратно — снова 501.
     client.put("/api/v1/aura/status", json={"enabled": False})
     assert client.get("/api/v1/integration/events").status_code == 501
+
+
+# ── D.1: POST /integration/analysis-tasks — приём задания от АУРА (#348) ──
+
+_TASK_BODY = {
+    "source_type": "file",
+    "source_ref": "/data/artifacts/2026-06-05/clip-0007.mp4",
+    "room": "room-03",
+    "pipeline": "pose_v1",
+    "callback_url": "http://aura/notify",
+}
+
+
+def test_integration_post_task_creates_aura_task_when_enabled() -> None:
+    """Флаг включён → D.1 создаёт задание trigger=aura, status=queued; callback_url в БД."""
+    eng = _engine()
+    client = TestClient(
+        create_app(settings=_settings(True), events_client=FakeEventsClient(), engine=eng)
+    )
+    resp = client.post("/api/v1/integration/analysis-tasks", json=_TASK_BODY)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["trigger"] == "aura"
+    assert data["status"] == "queued"
+    assert data["source_ref"] == _TASK_BODY["source_ref"]
+    assert data["room"] == "room-03"
+    # callback_url сохранён в БД (в ответе не отдаём — input-only для D.5).
+    # Через таблицу + UUID: SQLite хранит sa.Uuid как hex без дефисов.
+    with eng.connect() as conn:
+        row = (
+            conn.execute(
+                select(analysis_tasks.c.callback_url, analysis_tasks.c.trigger).where(
+                    analysis_tasks.c.id == UUID(data["id"])
+                )
+            )
+            .mappings()
+            .first()
+        )
+    assert row is not None
+    assert row["callback_url"] == "http://aura/notify"
+    assert row["trigger"] == "aura"
+
+
+def test_integration_post_task_disabled_501() -> None:
+    """Флаг выключен → D.1 отдаёт 501 даже с валидным телом (задание не создаётся)."""
+    client = _client(enabled=False)
+    resp = client.post("/api/v1/integration/analysis-tasks", json=_TASK_BODY)
+    assert resp.status_code == 501
+    assert resp.json()["error"]["code"] == "NOT_IMPLEMENTED"
+
+
+def test_integration_post_task_empty_body_422_when_enabled() -> None:
+    """Флаг включён, но тело пустое → 422 (а не падение)."""
+    client = _client(enabled=True)
+    resp = client.post("/api/v1/integration/analysis-tasks")
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_integration_post_task_disabled_malformed_still_501() -> None:
+    """Граница v1: выключенный разъём отдаёт 501 ДАЖЕ на кривое тело (не 422)."""
+    client = _client(enabled=False)
+    resp = client.post(
+        "/api/v1/integration/analysis-tasks",
+        content=b"{bad-json",
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status_code == 501
+    assert resp.json()["error"]["code"] == "NOT_IMPLEMENTED"
+
+
+def test_integration_post_task_invalid_callback_422_when_enabled() -> None:
+    """Флаг включён, callback_url не http(s) → 422 (лёгкая валидация формата)."""
+    client = _client(enabled=True)
+    bad = {**_TASK_BODY, "callback_url": "ftp://aura/notify"}
+    resp = client.post("/api/v1/integration/analysis-tasks", json=bad)
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_ERROR"

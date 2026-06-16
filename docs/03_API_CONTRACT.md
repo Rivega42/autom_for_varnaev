@@ -494,22 +494,27 @@ PUT /api/v1/aura/status  {"enabled": true|false}   # admin; вкл/выкл ин
 `false` → контур автономен (разъёмы `/integration/*` → 501); `true` → разъёмы
 открыты. Это не путь `/integration/*` — это наш управляющий эндпойнт.
 
-### 4.1 АУРА ставит задание на анализ файла (v2)
+### 4.1 АУРА ставит задание на анализ файла (D.1) — реализовано за фичефлагом (#348)
 ```
 POST /api/v1/integration/analysis-tasks
 X-API-Key: <ключ>
 ```
-Тело (v2):
+Тело:
 ```json
 {
   "source_type": "file",
   "source_ref": "/data/artifacts/2026-06-05/clip-0007.mp4",  // файл на общем томе
   "room": "room-03",
   "pipeline": "pose_v1",
-  "callback_url": "http://aura/notify"   // опц., webhook о готовности
+  "callback_url": "http://aura/notify"   // опц., webhook о готовности (D.5)
 }
 ```
-**v1-поведение:** `501`, тело-конверт с `error.code = "NOT_IMPLEMENTED"`.
+АУРА кладёт видеофрагмент на общий том и ставит задание; создаётся со
+`status: queued`, `trigger: aura`. `callback_url` (если задан) сохраняется и по
+завершении задания на него уйдёт уведомление (D.5). Статус задания опрашивается
+через `GET /analysis-tasks/{id}` (D.2, доступен и в v1).
+**Поведение:** при `aura_integration_enabled=false` → `501`; при `true` → `200`,
+`data` = созданное задание (§3.3). Пустое тело при включённом флаге → `422`.
 
 ### 4.2 АУРА читает события (D.3) — реализовано за фичефлагом (#347)
 ```

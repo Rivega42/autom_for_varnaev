@@ -44,9 +44,17 @@ def task_to_api(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def create_task(
-    engine: Engine, body: AnalysisTaskCreate, now: datetime | None = None
+    engine: Engine,
+    body: AnalysisTaskCreate,
+    now: datetime | None = None,
+    trigger: TaskTrigger = TaskTrigger.MANUAL,
 ) -> dict[str, Any]:
-    """Создать задание со status=queued, trigger=manual; вернуть его в форме API."""
+    """Создать задание (status=queued); вернуть его в форме API.
+
+    `trigger` — источник задания: MANUAL (по умолчанию, из GUI/REST) или AURA
+    (разъём D.1). `body.callback_url` сохраняется для уведомления о готовности
+    (D.5); для ручных заданий обычно None.
+    """
     now = now or datetime.now(UTC)
     task_id = uuid4()
     values = {
@@ -59,7 +67,8 @@ def create_task(
         "pipeline": body.pipeline,
         "params": body.params,
         "status": TaskStatus.QUEUED.value,
-        "trigger": TaskTrigger.MANUAL.value,
+        "trigger": trigger.value,
+        "callback_url": body.callback_url,
     }
     with engine.begin() as conn:
         conn.execute(analysis_tasks.insert().values(**values))
