@@ -26,10 +26,12 @@ from monitoring_shared import (
     Camera,
     CameraZone,
     SourceType,
+    TaskStatus,
     ZoneType,
 )
 from video_analytics.actions import CompositeActionAnalyzer, build_action_event
 from video_analytics.artifacts import build_artifact_path, insert_artifact, save_screenshot
+from video_analytics.aura_callback import AuraNotifier
 from video_analytics.config import Settings
 from video_analytics.coverage import BoolMask, build_coverage_event, zone_coverage_pct
 from video_analytics.detector import PoseDetector
@@ -259,6 +261,22 @@ def process_task(
     }
 
 
+def _notify_aura(
+    notifier: AuraNotifier | None, task: AnalysisTask, status: str, artifacts: list[str]
+) -> None:
+    """СТЫК-АУРА D.5: best-effort уведомление о готовности (только если задан callback_url).
+
+    Никогда не влияет на исход задания и не роняет воркер — анализ уже завершён.
+    Вызывается ВНЕ try/except обработки задания, поэтому любую ошибку гасим здесь.
+    """
+    if notifier is None or not task.callback_url:
+        return
+    try:
+        notifier.notify(task.callback_url, task.id, status, artifacts)
+    except Exception:
+        logger.exception("D.5: непредвиденная ошибка уведомления АУРА (задание %s)", task.id)
+
+
 def run_once(
     engine: Engine,
     settings: Settings,
@@ -268,11 +286,13 @@ def run_once(
     source_factory: SourceFactory,
     save_frame: Callable[[Frame, str], None] = save_screenshot,
     now_fn: Callable[[], datetime] = _now_utc,
+    notifier: AuraNotifier | None = None,
 ) -> bool:
     """Взять одно задание из очереди и обработать его.
 
     Возвращает False, если очередь пуста (заданий нет), иначе True. Ошибка
-    обработки переводит задание в `failed`, но не роняет воркер.
+    обработки переводит задание в `failed`, но не роняет воркер. По завершении
+    задания с заданным `callback_url` шлёт уведомление АУРА (D.5, best-effort).
     """
     task = claim_next_task(engine, now_fn())
     if task is None:
@@ -302,7 +322,11 @@ def run_once(
     except Exception as exc:
         logger.exception("Видеоаналитика: задание %s завершилось ошибкой", task.id)
         mark_failed(engine, task.id, now_fn(), str(exc))
+        _notify_aura(notifier, task, TaskStatus.FAILED.value, [])  # D.5
         return True
     mark_done(engine, task.id, now_fn(), result)
     logger.info("Видеоаналитика: задание %s готово: %s", task.id, result)
+    # D.5: артефакт-доказательство (если был) — в уведомление готовности.
+    artifact = result.get("artifact")
+    _notify_aura(notifier, task, TaskStatus.DONE.value, [artifact] if artifact else [])
     return True

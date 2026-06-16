@@ -28,6 +28,11 @@ class Settings:
     artifacts_retention_days: int = 30
     # Контроль спецодежды (#272): нарушение, если халата нет дольше N секунд.
     uniform_min_seconds: float = 5.0
+    # СТЫК-АУРА D.5 (#350): уведомление о готовности задания на его callback_url.
+    aura_callback_timeout_s: float = 5.0
+    aura_callback_retries: int = 2
+    # allowlist хостов callback_url (SSRF); None = любой http(s) (АУРА на объекте).
+    aura_callback_allowed_hosts: frozenset[str] | None = None
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -43,6 +48,8 @@ class Settings:
                 _DEFAULT_MAX_STREAM_FRAMES,
             )
             max_frames = _DEFAULT_MAX_STREAM_FRAMES
+        hosts_raw = os.getenv("AURA_CALLBACK_ALLOWED_HOSTS", "").strip()
+        allowed_hosts = frozenset(h.strip() for h in hosts_raw.split(",") if h.strip()) or None
         return cls(
             log_service_url=os.getenv("LOG_SERVICE_URL", "http://log-service:8000"),
             artifacts_dir=os.getenv("ARTIFACTS_DIR", "/data/artifacts"),
@@ -51,4 +58,7 @@ class Settings:
             model_path=os.getenv("ANALYTICS_MODEL_PATH", "/models/pose_landmarker.task"),
             artifacts_retention_days=int(os.getenv("ARTIFACTS_RETENTION_DAYS", "30")),
             uniform_min_seconds=float(os.getenv("ANALYTICS_UNIFORM_MIN_S", "5")),
+            aura_callback_timeout_s=float(os.getenv("AURA_CALLBACK_TIMEOUT_S", "5")),
+            aura_callback_retries=int(os.getenv("AURA_CALLBACK_RETRIES", "2")),
+            aura_callback_allowed_hosts=allowed_hosts,
         )

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+import httpx
 import numpy as np
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.pool import StaticPool
+from video_analytics.aura_callback import AuraNotifier
 from video_analytics.config import Settings
 from video_analytics.event_sink import CollectingEventSink
 from video_analytics.landmarks import Landmark, PoseLandmark, PoseResult
@@ -31,7 +34,7 @@ def _settings() -> Settings:
     return Settings(log_service_url="http://log-service:8000", artifacts_dir="/tmp", fps=5)
 
 
-def _insert_queued_task(engine: Engine) -> UUID:
+def _insert_queued_task(engine: Engine, callback_url: str | None = None) -> UUID:
     task_id = uuid4()
     with engine.begin() as conn:
         conn.execute(
@@ -43,7 +46,8 @@ def _insert_queued_task(engine: Engine) -> UUID:
                 room_id="room-01",
                 pipeline="pose_v1",
                 status=TaskStatus.QUEUED.value,
-                trigger=TaskTrigger.SCHEDULE.value,
+                trigger=TaskTrigger.AURA.value if callback_url else TaskTrigger.SCHEDULE.value,
+                callback_url=callback_url,
             )
         )
     return task_id
@@ -147,3 +151,74 @@ def test_claim_next_task_marks_running() -> None:
     assert task.id == task_id
     assert task.status is TaskStatus.RUNNING
     assert _status(engine, task_id) == TaskStatus.RUNNING.value
+
+
+# ── D.5: уведомление АУРА по завершении задания с callback_url (#350) ──
+
+
+def _recording_notifier(seen: list[dict[str, object]]) -> AuraNotifier:
+    """AuraNotifier с MockTransport, складывающим тело каждого POST в `seen`."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(200)
+
+    return AuraNotifier(client=httpx.Client(transport=httpx.MockTransport(handler)))
+
+
+def test_run_once_notifies_aura_on_done() -> None:
+    """Задание с callback_url успешно → уведомление АУРА со status=done."""
+    engine = _engine()
+    _insert_queued_task(engine, callback_url="http://aura/notify")
+    seen: list[dict[str, object]] = []
+    run_once(
+        engine,
+        _settings(),
+        detector=_FakeDetector(_pose_right_arm_up()),
+        sink=CollectingEventSink(),
+        source_factory=lambda *_: FakeFrameSource(_frames(3)),
+        save_frame=lambda *_: None,
+        now_fn=lambda: datetime(2026, 6, 6, 10, 5, tzinfo=UTC),
+        notifier=_recording_notifier(seen),
+    )
+    assert len(seen) == 1
+    assert seen[0]["status"] == TaskStatus.DONE.value
+
+
+def test_run_once_notifies_aura_on_failed() -> None:
+    """Задание с callback_url упало → уведомление АУРА со status=failed."""
+    engine = _engine()
+    _insert_queued_task(engine, callback_url="http://aura/notify")
+    seen: list[dict[str, object]] = []
+
+    def boom(*_: object) -> FrameSource:
+        raise RuntimeError("источник недоступен")
+
+    run_once(
+        engine,
+        _settings(),
+        detector=_FakeDetector(None),
+        sink=CollectingEventSink(),
+        source_factory=boom,
+        notifier=_recording_notifier(seen),
+    )
+    assert len(seen) == 1
+    assert seen[0]["status"] == TaskStatus.FAILED.value
+
+
+def test_run_once_no_notify_without_callback_url() -> None:
+    """Задание без callback_url → АУРА не уведомляем (запроса нет)."""
+    engine = _engine()
+    _insert_queued_task(engine)  # callback_url=None
+    seen: list[dict[str, object]] = []
+    run_once(
+        engine,
+        _settings(),
+        detector=_FakeDetector(_pose_right_arm_up()),
+        sink=CollectingEventSink(),
+        source_factory=lambda *_: FakeFrameSource(_frames(2)),
+        save_frame=lambda *_: None,
+        now_fn=lambda: datetime(2026, 6, 6, 10, 5, tzinfo=UTC),
+        notifier=_recording_notifier(seen),
+    )
+    assert seen == []

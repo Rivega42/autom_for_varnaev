@@ -18,6 +18,7 @@ from pathlib import Path
 from sqlalchemy import Engine
 
 from monitoring_shared import SourceType, install_stop_event
+from video_analytics.aura_callback import AuraNotifier
 from video_analytics.capture import create_frame_source
 from video_analytics.config import Settings
 from video_analytics.db import build_engine, write_heartbeat
@@ -73,6 +74,14 @@ def run_forever(
     """
     iteration = 0
     next_cleanup = now_fn()  # первая зачистка — сразу при старте
+    # D.5 (#350): отправитель уведомлений АУРА о готовности задания (best-effort,
+    # один httpx-клиент на жизнь воркера). Срабатывает только если у задания есть
+    # callback_url; иначе ничего не шлёт.
+    notifier = AuraNotifier(
+        timeout=settings.aura_callback_timeout_s,
+        retries=settings.aura_callback_retries,
+        allowed_hosts=settings.aura_callback_allowed_hosts,
+    )
     while True:
         if should_stop is not None and should_stop():
             logger.info("Видеоаналитика: получен сигнал остановки — выходим из цикла")
@@ -100,6 +109,7 @@ def run_forever(
             sink=sink,
             source_factory=source_factory,
             now_fn=now_fn,
+            notifier=notifier,
         )
         iteration += 1
         if max_iterations is not None and iteration >= max_iterations:
