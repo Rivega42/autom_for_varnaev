@@ -1,19 +1,21 @@
-"""Разъёмы АУРА (/integration/*) — заглушены за фичефлагом (docs/03_API_CONTRACT.md §4).
+"""Разъёмы АУРА (/integration/*) — за фичефлагом (docs/03_API_CONTRACT.md §4).
 
 # СТЫК-АУРА (v2): эти эндпойнты существуют, но при выключенной интеграции
 возвращают 501 NOT_IMPLEMENTED. Включение — фичефлагом `AURA_INTEGRATION_ENABLED`
 или тумблером в GUI (хранится в app_config, приоритетнее env), без дописывания
 кода (CLAUDE.md §4). Пути стабильны с v1.
 
-Реализованные разъёмы (отвечают по контракту при включённой интеграции):
+Разъёмы (отвечают по контракту при включённой интеграции):
 - D.1 `POST /integration/analysis-tasks` — АУРА ставит задание на анализ (#348).
 - D.3 `GET /integration/events` — АУРА читает события за период (#347).
-Остальные (D.4) пока заглушены до своих задач.
+- D.4 `PUT /integration/settings` — АУРА передаёт настройки; в v1 валидируются и
+  сохраняются (app_config), но к живым справочникам не применяются (#349).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI, Query, Request
@@ -21,12 +23,16 @@ from fastapi.params import Depends
 from pydantic import ValidationError
 from sqlalchemy import Engine
 
+from api_gateway.app_config_repository import set_config
 from api_gateway.errors import api_error
 from api_gateway.events_client import EventsClient
 from api_gateway.query_params import parse_query_dt
-from api_gateway.schemas import AnalysisTaskCreate
+from api_gateway.schemas import AnalysisTaskCreate, IntegrationSettings
 from api_gateway.tasks_repository import create_task
 from monitoring_shared import ErrorCode, TaskTrigger, ok
+
+# Ключ в app_config, куда сохраняются настройки от АУРА (D.4).
+_AURA_SETTINGS_KEY = "aura_settings"
 
 INTEGRATION_PREFIX = "/api/v1/integration"
 
@@ -39,12 +45,6 @@ def require_aura_enabled(enabled: bool) -> None:
     """
     if not enabled:
         raise api_error(ErrorCode.NOT_IMPLEMENTED, "Интеграция с АУРА отключена")
-
-
-def _not_implemented_in_v2() -> dict[str, Any]:
-    """Разъём включён, но его v2-логика ещё не реализована → 501."""
-    # СТЫК-АУРА (v2): здесь появится реальная обработка запроса от АУРА.
-    raise api_error(ErrorCode.NOT_IMPLEMENTED, "Разъём АУРА ещё не реализован")
 
 
 def register_integration_routes(
@@ -111,7 +111,22 @@ def register_integration_routes(
         return ok(data)
 
     @app.put(f"{INTEGRATION_PREFIX}/settings", dependencies=deps)
-    def integration_put_settings() -> dict[str, Any]:
-        """§4.3 АУРА передаёт настройки (v2). Выкл → 501."""
-        require_aura_enabled(aura_enabled())
-        return _not_implemented_in_v2()
+    async def integration_put_settings(request: Request) -> dict[str, Any]:
+        """§4.3 (D.4) АУРА передаёт настройки. Выкл → 501; вкл → 200.
+
+        Валидируем и СОХРАНЯЕМ настройки (app_config, ключ aura_settings) и
+        возвращаем применённое тело. В v1 к живым справочникам автоматически НЕ
+        применяем: связка с порогами/расписаниями/пайплайнами и сосуществование с
+        настройками оператора из GUI решается в v2 (# СТЫК-АУРА v2). Тело читаем
+        вручную ПОСЛЕ проверки флага (как D.1) — выключенный разъём → 501.
+        """
+        require_aura_enabled(aura_enabled())  # выкл → 501 ДО разбора тела
+        raw = await request.body()
+        if not raw.strip():
+            raise api_error(ErrorCode.VALIDATION_ERROR, "Тело настроек обязательно (D.4)")
+        try:
+            settings = IntegrationSettings.model_validate_json(raw)
+        except ValidationError as exc:
+            raise api_error(ErrorCode.VALIDATION_ERROR, "Некорректные настройки (D.4)") from exc
+        set_config(engine, _AURA_SETTINGS_KEY, settings.model_dump_json(), datetime.now(UTC))
+        return ok(settings.model_dump(mode="json"))

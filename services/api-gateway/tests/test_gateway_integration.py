@@ -1,12 +1,14 @@
-"""Разъёмы АУРА /integration/*: заглушки за фичефлагом и реализованные D.1/D.3."""
+"""Разъёмы АУРА /integration/*: заглушки за фичефлагом и реализованные D.1/D.3/D.4."""
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 from api_gateway.app import create_app
+from api_gateway.app_config_repository import get_config
 from api_gateway.config import Settings
 from api_gateway.integration import require_aura_enabled
 from api_gateway.tables import analysis_tasks, metadata
@@ -242,5 +244,102 @@ def test_integration_post_task_invalid_callback_422_when_enabled() -> None:
     client = _client(enabled=True)
     bad = {**_TASK_BODY, "callback_url": "ftp://aura/notify"}
     resp = client.post("/api/v1/integration/analysis-tasks", json=bad)
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+# ── D.4: PUT /integration/settings — приём настроек от АУРА (#349) ──
+
+_SETTINGS_BODY = {
+    "thresholds": [
+        {"room": "room-03", "metric": "temp_c", "min": 2.0, "max": 6.0, "silent_min": 15}
+    ],
+    "schedules": [{"camera_id": str(uuid4()), "interval_min": 30}],
+    "pipelines_enabled": ["pose_v1"],
+}
+
+
+def test_integration_put_settings_stores_and_returns_when_enabled() -> None:
+    """Флаг включён → D.4 валидирует, сохраняет в app_config и возвращает принятое."""
+    eng = _engine()
+    client = TestClient(
+        create_app(settings=_settings(True), events_client=FakeEventsClient(), engine=eng)
+    )
+    resp = client.put("/api/v1/integration/settings", json=_SETTINGS_BODY)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    # Ответ — точное эхо принятых настроек (включая UUID камеры и все поля порога).
+    assert data == _SETTINGS_BODY
+    cam_id = _SETTINGS_BODY["schedules"][0]["camera_id"]
+    assert data["schedules"][0]["camera_id"] == cam_id  # UUID → строка, без искажений
+    # Настройки сохранены в app_config под ключом aura_settings (для будущего v2)
+    # и совпадают с принятыми побайтово после round-trip (UUID, пороги).
+    stored = get_config(eng, "aura_settings")
+    assert stored is not None
+    parsed = json.loads(stored)
+    assert parsed == _SETTINGS_BODY
+    assert parsed["schedules"][0]["camera_id"] == cam_id
+
+
+def test_integration_put_settings_empty_lists_ok_when_enabled() -> None:
+    """Все списки необязательны: пустой объект {} принимается и сохраняется."""
+    eng = _engine()
+    client = TestClient(
+        create_app(settings=_settings(True), events_client=FakeEventsClient(), engine=eng)
+    )
+    resp = client.put("/api/v1/integration/settings", json={})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data == {"thresholds": [], "schedules": [], "pipelines_enabled": []}
+    assert get_config(eng, "aura_settings") is not None
+
+
+def test_integration_put_settings_disabled_501() -> None:
+    """Флаг выключен → D.4 отдаёт 501 даже с валидным телом (ничего не сохраняется)."""
+    eng = _engine()
+    client = TestClient(
+        create_app(settings=_settings(False), events_client=FakeEventsClient(), engine=eng)
+    )
+    resp = client.put("/api/v1/integration/settings", json=_SETTINGS_BODY)
+    assert resp.status_code == 501
+    assert resp.json()["error"]["code"] == "NOT_IMPLEMENTED"
+    # Разъём выключен — настройки в БД не попали.
+    assert get_config(eng, "aura_settings") is None
+
+
+def test_integration_put_settings_empty_body_422_when_enabled() -> None:
+    """Флаг включён, но тело пустое → 422 (а не падение)."""
+    client = _client(enabled=True)
+    resp = client.put("/api/v1/integration/settings")
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_integration_put_settings_invalid_422_when_enabled() -> None:
+    """Флаг включён, но настройки невалидны (interval_min=0) → 422."""
+    client = _client(enabled=True)
+    bad = {"schedules": [{"camera_id": str(uuid4()), "interval_min": 0}]}
+    resp = client.put("/api/v1/integration/settings", json=bad)
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_integration_put_settings_disabled_malformed_still_501() -> None:
+    """Граница v1: выключенный разъём отдаёт 501 ДАЖЕ на кривое тело (не 422)."""
+    client = _client(enabled=False)
+    resp = client.put(
+        "/api/v1/integration/settings",
+        content=b"{bad-json",
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status_code == 501
+    assert resp.json()["error"]["code"] == "NOT_IMPLEMENTED"
+
+
+def test_integration_put_settings_oversized_list_422_when_enabled() -> None:
+    """Защита от непомерного тела: список pipelines свыше лимита (100) → 422."""
+    client = _client(enabled=True)
+    bad = {"pipelines_enabled": [f"p{i}" for i in range(101)]}
+    resp = client.put("/api/v1/integration/settings", json=bad)
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "VALIDATION_ERROR"

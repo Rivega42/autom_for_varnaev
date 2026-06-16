@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import time
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -70,6 +70,41 @@ class AnalyticsEventCreate(BaseModel):
     # Если задан — сохраняется как артефакт-скриншот, а событие получает
     # artifact_id и payload.artifact_url (чтобы кадр был виден в Grafana).
     image: str | None = None
+
+
+class IntegrationThreshold(BaseModel):
+    """Порог в настройках АУРА (D.4): диапазон min..max по метрике помещения."""
+
+    room: str | None = Field(default=None, max_length=200)
+    metric: str = Field(min_length=1, max_length=200)
+    min: float | None = None
+    max: float | None = None
+    silent_min: int | None = None
+
+
+class IntegrationSchedule(BaseModel):
+    """Расписание анализа в настройках АУРА (D.4)."""
+
+    camera_id: UUID
+    interval_min: int = Field(gt=0)
+
+
+class IntegrationSettings(BaseModel):
+    """Тело PUT /integration/settings (D.4, #349): пороги/расписания/пайплайны от АУРА.
+
+    В v1 настройки валидируются и сохраняются (app_config), но НЕ применяются к
+    живым справочникам автоматически — связка с порогами/расписаниями/пайплайнами
+    и сосуществование с настройками оператора из GUI решается в v2 (# СТЫК-АУРА).
+
+    Списки ограничены по длине: это приёмный разъём (в v2 — внешний клиент АУРА),
+    верхняя граница защищает от непомерного тела (DoS) и раздувания app_config.
+    """
+
+    thresholds: list[IntegrationThreshold] = Field(default_factory=list, max_length=1000)
+    schedules: list[IntegrationSchedule] = Field(default_factory=list, max_length=1000)
+    pipelines_enabled: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(
+        default_factory=list, max_length=100
+    )
 
 
 class AuraStatusUpdate(BaseModel):
