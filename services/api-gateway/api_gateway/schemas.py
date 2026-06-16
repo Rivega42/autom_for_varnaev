@@ -25,6 +25,17 @@ class AnalysisTaskCreate(BaseModel):
     camera_id: UUID | None = None
     pipeline: str = Field(min_length=1)
     params: dict[str, Any] | None = None
+    # СТЫК-АУРА (D.5): куда наш контур шлёт уведомление о готовности задания.
+    # Для заданий, поставленных АУРА (D.1); для остальных — None.
+    callback_url: str | None = None
+
+    @field_validator("callback_url")
+    @classmethod
+    def _callback_is_http_url(cls, v: str | None) -> str | None:
+        """Лёгкая проверка формата: только http(s)-URL. SSRF/allowlist — в D.5."""
+        if v is not None and not v.startswith(("http://", "https://")):
+            raise ValueError("callback_url должен быть http(s)-URL")
+        return v
 
 
 def _validate_polygon(polygon: list[list[float]]) -> list[list[float]]:

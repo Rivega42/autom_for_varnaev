@@ -760,7 +760,7 @@ def create_app(
 
     # СТЫК-АУРА (v2): заглушённые разъёмы /integration/* (501 при выключенном флаге).
     # Разъёмы АУРА — уровень настройки (admin); в v1 всё равно заглушены (501).
-    register_integration_routes(app, events, _current_aura_enabled, dependencies=[admin])
+    register_integration_routes(app, engine, events, _current_aura_enabled, dependencies=[admin])
 
     # GUI настройки видеоаналитики (статический SPA). Сам HTML/JS — без ключа;
     # запросы к API из него несут X-API-Key. Каталог создаётся вместе с пакетом.
