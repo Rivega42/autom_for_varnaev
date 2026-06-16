@@ -381,7 +381,9 @@ services:
       migrate:
         condition: service_completed_successfully
       log-service:
-        condition: service_started
+        # healthy, а не started: иначе первые события воркера тихо теряются,
+        # пока uvicorn log-service ещё не принимает соединения.
+        condition: service_healthy
       media-gateway:
         condition: service_started
     restart: unless-stopped

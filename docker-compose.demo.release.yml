@@ -1,0 +1,61 @@
+# Демо-оверлей для РЕЛИЗНОГО/офлайн-стека: populated-дашборды «как у вендора»,
+# на синтетических данных, без реального железа. Образы берутся из загруженного
+# офлайн-тара (docker load) — сборка не нужна.
+#
+#   docker compose -f docker-compose.release.yml -f docker-compose.demo.release.yml up -d
+#
+# demo-seed заводит демо-справочники/пороги (db/seeds/demo.yaml, запечён в образ
+# varnaev-seed) ДО старта ingest-sensors; demo-sensors публикует синтетические
+# показания в MQTT → ingest пишет их в БД, пороги дают события → всё видно в
+# Grafana и /overview. Чтобы вернуться к «чистому» стеку — подними без этого
+# оверлея (демо-данные останутся в БД; для полного сброса — docker compose down -v).
+services:
+  demo-seed:
+    image: ${REGISTRY:-ghcr.io/rivega42}/varnaev-seed:${IMAGE_TAG:-v1.0.0}
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-monitoring}
+      POSTGRES_USER: ${POSTGRES_USER:-monitoring}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD должен быть задан в .env}
+    networks:
+      - internal
+    entrypoint: ["python", "/app/scripts/seed.py", "/app/db/seeds/demo.yaml", "--apply"]
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  ingest-sensors:
+    # В демо ждём demo-seed: узлы должны быть в справочнике ДО старта воркера.
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      mqtt-broker:
+        condition: service_started
+      demo-seed:
+        condition: service_completed_successfully
+
+  demo-sensors:
+    image: ${REGISTRY:-ghcr.io/rivega42}/varnaev-demo-sensors:${IMAGE_TAG:-v1.0.0}
+    environment:
+      MQTT_HOST: ${MQTT_HOST:-mqtt-broker}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-monitoring}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      DEMO_INTERVAL_S: ${DEMO_INTERVAL_S:-5}
+      DEMO_SPIKE_EVERY: ${DEMO_SPIKE_EVERY:-12}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks:
+      - internal
+    depends_on:
+      mqtt-broker:
+        condition: service_started
+      ingest-sensors:
+        condition: service_started
+    restart: unless-stopped

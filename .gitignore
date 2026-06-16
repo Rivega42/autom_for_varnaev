@@ -54,3 +54,7 @@ Thumbs.db
 !docs/customer/build/
 !docs/customer/build/*.pdf
 !docs/customer/build/*.html
+
+# Офлайн-бандл поставки заказчику (docker save + конфиги): большой артефакт,
+# собирается scripts/build_offline_bundle.* в эту папку, в репозиторий не кладём.
+/delivery/
