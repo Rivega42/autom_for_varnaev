@@ -15,6 +15,10 @@
 #
 # Переменные REGISTRY и IMAGE_TAG задаются в .env (см. .env.example).
 
+# Фиксируем имя проекта: тома называются varnaev_* независимо от имени папки.
+# Важно для восстановления снимка БД (db_snapshot/restore_db.* → том varnaev_db_data).
+name: varnaev
+
 services:
   db:
     image: timescale/timescaledb:2.17.2-pg16
