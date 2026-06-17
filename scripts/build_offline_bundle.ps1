@@ -99,6 +99,7 @@ if (Test-Path firmware/esphome/secrets.yaml.example) { Copy-Item firmware/esphom
 if (Test-Path firmware/esphome/README.md) { Copy-Item firmware/esphome/README.md "$out/firmware/esphome/" }
 if (Test-Path firmware/esphome/.gitignore) { Copy-Item firmware/esphome/.gitignore "$out/firmware/esphome/" }
 Copy-Item docs/DEPLOY_CUSTOMER.md "$out/docs/"
+if (Test-Path scripts/smoke_test_release.sh) { Copy-Item scripts/smoke_test_release.sh "$out/" }
 
 Write-Host "== генерирую START_HERE.md и install-скрипты в бандле =="
 $startHere = @'
