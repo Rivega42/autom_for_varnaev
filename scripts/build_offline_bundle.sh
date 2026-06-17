@@ -105,6 +105,8 @@ cp firmware/esphome/*.example.yaml "$OUT/firmware/esphome/" 2>/dev/null || true
 [ -f firmware/esphome/.gitignore ] && cp firmware/esphome/.gitignore "$OUT/firmware/esphome/"
 # доки
 cp docs/DEPLOY_CUSTOMER.md "$OUT/docs/"
+# smoke-тест финального бандла (поднять стек + проверить эндпойнты)
+[ -f scripts/smoke_test_release.sh ] && cp scripts/smoke_test_release.sh "$OUT/"
 
 echo "== генерирую START_HERE.md и install-скрипты в бандле =="
 cat > "$OUT/START_HERE.md" <<'DOC'
