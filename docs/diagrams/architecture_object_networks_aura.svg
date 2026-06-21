@@ -1,0 +1,107 @@
+<svg viewBox="0 0 1200 980" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,'Segoe UI',sans-serif">
+  <title>Архитектура контура мониторинга на объекте: периферия, сеть, сервер с Docker-сетями и стык с АУРА</title>
+  <desc>Датчики и камеры через сетевое оборудование подключаются к серверу с нашим контейнерным стеком; наружу к продукту АУРА данные идут только через api-gateway по сети integration, в v1 заглушено.</desc>
+  <style>
+    :root{
+      --bg:#ffffff; --panel:#f5f6f8; --ink:#1b2430; --muted:#67707e; --line:#c4cbd6;
+      --acc:#2563eb; --acc-bg:#e8f0fe; --aura:#8b5cf6; --aura-bg:#f1ebfd; --ok:#0e9f6e;
+    }
+    @media (prefers-color-scheme:dark){
+      :root{
+        --bg:#0f1218; --panel:#181d26; --ink:#e7ebf1; --muted:#98a2b3; --line:#363f4c;
+        --acc:#6ea0ff; --acc-bg:#16233c; --aura:#b794f6; --aura-bg:#241a3a; --ok:#34d399;
+      }
+    }
+    .box{fill:var(--panel);stroke:var(--line);stroke-width:1.5;}
+    .t{fill:var(--ink);font-size:13.5px;font-weight:600;}
+    .s{fill:var(--muted);font-size:10.5px;}
+    .zone{fill:var(--muted);font-size:11px;font-weight:700;letter-spacing:.4px;}
+    .edge{stroke:var(--muted);stroke-width:1.4;fill:none;}
+    .lbl{fill:var(--muted);font-size:10px;}
+    .lblb{fill:var(--ink);font-size:10px;font-weight:600;}
+  </style>
+  <rect x="0" y="0" width="1200" height="980" fill="var(--bg)"/>
+  <defs>
+    <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--muted)"/></marker>
+    <marker id="ap" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--aura)"/></marker>
+  </defs>
+
+  <text x="24" y="30" class="t" font-size="17">Архитектура контура на объекте — сети и стык с АУРА</text>
+
+  <text x="24" y="60" class="zone">ПЕРИФЕРИЯ</text>
+  <g>
+    <rect class="box" x="24" y="70" width="196" height="56" rx="8"/><text x="122" y="94" text-anchor="middle" class="t">Камеры IP</text><text x="122" y="112" text-anchor="middle" class="s">RTSP/ONVIF · PoE</text>
+    <rect class="box" x="236" y="70" width="196" height="56" rx="8"/><text x="334" y="94" text-anchor="middle" class="t">Zigbee-датчики</text><text x="334" y="112" text-anchor="middle" class="s">батарея CR2477</text>
+    <rect class="box" x="448" y="70" width="196" height="56" rx="8"/><text x="546" y="94" text-anchor="middle" class="t">Wi-Fi-датчики</text><text x="546" y="112" text-anchor="middle" class="s">ESP32 · ESPHome</text>
+    <rect class="box" x="660" y="70" width="196" height="56" rx="8"/><text x="758" y="94" text-anchor="middle" class="t">BLE-датчики</text><text x="758" y="112" text-anchor="middle" class="s">опционально</text>
+  </g>
+  <rect class="box" x="980" y="70" width="196" height="56" rx="8" stroke="var(--acc)"/><text x="1078" y="94" text-anchor="middle" class="t">Оператор</text><text x="1078" y="112" text-anchor="middle" class="s">браузер</text>
+
+  <text x="24" y="170" class="zone">СЕТЬ ОБЪЕКТА (наш комплект)</text>
+  <rect class="box" x="24" y="180" width="196" height="56" rx="8"/><text x="122" y="204" text-anchor="middle" class="t">PoE-коммутатор</text><text x="122" y="222" text-anchor="middle" class="s">питание+линк камер</text>
+  <rect class="box" x="236" y="180" width="196" height="56" rx="8"/><text x="334" y="201" text-anchor="middle" class="t">Zigbee-координатор</text><text x="334" y="216" text-anchor="middle" class="s">SLZB-06P7 (не хаб)</text><text x="334" y="230" text-anchor="middle" class="s">мозги — Zigbee2MQTT</text>
+  <rect class="box" x="448" y="180" width="196" height="56" rx="8" stroke="var(--acc)"/><text x="546" y="204" text-anchor="middle" class="t">Роутер (наш)</text><text x="546" y="222" text-anchor="middle" class="s">Wi-Fi + LAN / подсеть</text>
+  <rect class="box" x="660" y="180" width="196" height="56" rx="8"/><text x="758" y="204" text-anchor="middle" class="t">BLE-шлюз</text><text x="758" y="222" text-anchor="middle" class="s">опц. · BLE→MQTT</text>
+
+  <path class="edge" marker-end="url(#a)" d="M122,126 L122,180"/><text x="128" y="156" class="lbl">PoE</text>
+  <path class="edge" marker-end="url(#a)" d="M334,126 L334,180"/><text x="340" y="156" class="lbl">Zigbee</text>
+  <path class="edge" marker-end="url(#a)" d="M546,126 L546,180"/><text x="552" y="156" class="lbl">Wi-Fi</text>
+  <path class="edge" marker-end="url(#a)" d="M758,126 L758,180"/><text x="764" y="156" class="lbl">BLE</text>
+
+  <path class="edge" marker-end="url(#a)" d="M220,208 L448,208"/><text x="300" y="202" class="lbl">LAN</text>
+  <path class="edge" marker-end="url(#a)" d="M432,214 L448,214"/>
+  <path class="edge" marker-end="url(#a)" d="M660,214 L644,214"/><text x="678" y="208" class="lbl">LAN</text>
+
+  <path class="edge" marker-end="url(#a)" d="M546,236 L546,300" stroke-width="2"/><text x="554" y="270" class="lblb">LAN: RTSP · MQTT · Zigbee(eth)</text>
+  <path class="edge" marker-end="url(#a)" stroke="var(--acc)" d="M1078,126 C1078,300 760,300 622,360"/><text x="900" y="150" class="lblb" fill="var(--acc)">HTTPS · X-API-Key</text>
+
+  <rect x="24" y="300" width="864" height="612" rx="12" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/>
+  <text x="40" y="326" class="t" font-size="15">СЕРВЕР (1 физический на объекте) · Docker</text>
+
+  <rect x="40" y="340" width="832" height="104" rx="9" fill="var(--acc-bg)" stroke="var(--acc)" stroke-dasharray="4 3" opacity="0.95"/>
+  <text x="52" y="357" class="lblb" fill="var(--acc)">сеть edge — мост в LAN (наружу: 8000 / 3000 / 1883)</text>
+  <rect class="box" x="52" y="364" width="150" height="64" rx="7"/><text x="127" y="390" text-anchor="middle" class="t" font-size="12.5">media-gateway</text><text x="127" y="408" text-anchor="middle" class="s">go2rtc · RTSP→кадры</text>
+  <rect class="box" x="216" y="364" width="150" height="64" rx="7"/><text x="291" y="390" text-anchor="middle" class="t" font-size="12.5">mqtt-broker</text><text x="291" y="408" text-anchor="middle" class="s">Mosquitto :1883</text>
+  <rect class="box" x="380" y="364" width="186" height="64" rx="7" stroke="var(--acc)"/><text x="473" y="388" text-anchor="middle" class="t" font-size="12.5">api-gateway :8000</text><text x="473" y="405" text-anchor="middle" class="s">REST + GUI/overview</text><text x="473" y="419" text-anchor="middle" class="s">единственный вход</text>
+  <rect class="box" x="580" y="364" width="150" height="64" rx="7"/><text x="655" y="390" text-anchor="middle" class="t" font-size="12.5">grafana :3000</text><text x="655" y="408" text-anchor="middle" class="s">дашборды</text>
+
+  <rect x="40" y="456" width="832" height="214" rx="9" fill="var(--panel)" stroke="var(--line)"/>
+  <text x="52" y="473" class="lblb">сеть internal — изолирована, наружу НЕ видна</text>
+  <rect class="box" x="52" y="482" width="170" height="58" rx="7"/><text x="137" y="506" text-anchor="middle" class="t" font-size="12">zigbee2mqtt + адаптер</text><text x="137" y="523" text-anchor="middle" class="s">→ monitoring/&lt;id&gt;</text>
+  <rect class="box" x="236" y="482" width="150" height="58" rx="7"/><text x="311" y="506" text-anchor="middle" class="t" font-size="12">ingest-sensors</text><text x="311" y="523" text-anchor="middle" class="s">MQTT→БД</text>
+  <rect class="box" x="400" y="482" width="156" height="58" rx="7"/><text x="478" y="506" text-anchor="middle" class="t" font-size="12">video-analytics</text><text x="478" y="523" text-anchor="middle" class="s">поза/халат/зоны</text>
+  <rect class="box" x="570" y="482" width="150" height="58" rx="7"/><text x="645" y="506" text-anchor="middle" class="t" font-size="12">log-service</text><text x="645" y="523" text-anchor="middle" class="s">журнал событий</text>
+  <rect class="box" x="52" y="556" width="150" height="58" rx="7"/><text x="127" y="580" text-anchor="middle" class="t" font-size="12">scheduler</text><text x="127" y="597" text-anchor="middle" class="s">расписания</text>
+  <rect class="box" x="236" y="556" width="170" height="58" rx="7"/><text x="321" y="580" text-anchor="middle" class="t" font-size="12">db · TimescaleDB</text><text x="321" y="597" text-anchor="middle" class="s">показания/события</text>
+  <rect class="box" x="420" y="556" width="136" height="58" rx="7"/><text x="488" y="584" text-anchor="middle" class="t" font-size="12">backup</text>
+
+  <path class="edge" marker-end="url(#a)" d="M127,428 L127,482"/><text x="132" y="452" class="lbl">кадры</text>
+  <path class="edge" marker-end="url(#a)" d="M137,540 L300,560"/><text x="150" y="556" class="lbl">MQTT</text>
+  <path class="edge" marker-end="url(#a)" d="M291,428 L311,482"/><text x="296" y="452" class="lbl">MQTT</text>
+  <path class="edge" marker-end="url(#a)" d="M311,540 L321,556"/>
+  <path class="edge" marker-end="url(#a)" d="M645,540 L400,556"/><text x="520" y="556" class="lbl">события→БД</text>
+  <path class="edge" marker-end="url(#a)" d="M473,428 L473,440 L406,556"/><text x="430" y="452" class="lbl">читает БД</text>
+
+  <rect x="40" y="684" width="832" height="92" rx="9" fill="var(--aura-bg)" stroke="var(--aura)" stroke-dasharray="6 4"/>
+  <text x="52" y="703" class="lblb" fill="var(--aura)">сеть integration — к АУРА (создаётся, но в v1 обмена нет)</text>
+  <text x="52" y="726" class="s" font-size="12">api-gateway · /api/v1/integration/* — приём заданий (D.1) / настроек (D.4), отдача СОБЫТИЙ (D.3)</text>
+  <text x="52" y="746" class="s" font-size="12">video-analytics → callback готовности задания (D.5)</text>
+  <text x="52" y="766" class="s" font-weight="600" fill="var(--aura)">v1: разъёмы заглушены (501). Наружу — только события, не сырьё.</text>
+
+  <path class="edge" stroke="var(--aura)" marker-end="url(#ap)" d="M473,428 L473,684" stroke-dasharray="5 4"/>
+
+  <rect class="box" x="920" y="684" width="256" height="150" rx="10" stroke="var(--aura)" stroke-width="2"/>
+  <text x="1048" y="716" text-anchor="middle" class="t">АУРА</text>
+  <text x="1048" y="736" text-anchor="middle" class="s">продукт заказчика</text>
+  <text x="1048" y="752" text-anchor="middle" class="s">свои контейнеры на том же сервере</text>
+  <text x="1048" y="778" text-anchor="middle" class="s">контроль производства · видеозапись</text>
+  <text x="1048" y="794" text-anchor="middle" class="s">тех. карты · ППК</text>
+
+  <path class="edge" stroke="var(--aura)" marker-end="url(#ap)" marker-start="url(#ap)" d="M872,724 L920,724" stroke-dasharray="6 4"/>
+  <text x="896" y="716" text-anchor="middle" class="lblb" fill="var(--aura)">REST</text>
+
+  <text x="24" y="876" class="zone">СЕТИ Docker (изоляция, docs/02)</text>
+  <rect x="24" y="888" width="22" height="14" rx="3" fill="var(--acc-bg)" stroke="var(--acc)"/><text x="54" y="900" class="s" font-size="11">edge — мост в LAN (8000/3000/1883 наружу)</text>
+  <rect x="360" y="888" width="22" height="14" rx="3" fill="var(--panel)" stroke="var(--line)"/><text x="390" y="900" class="s" font-size="11">internal — изолирована (БД/брокер/аналитика)</text>
+  <rect x="720" y="888" width="22" height="14" rx="3" fill="var(--aura-bg)" stroke="var(--aura)" stroke-dasharray="4 3"/><text x="750" y="900" class="s" font-size="11">integration — к АУРА (v1: 501)</text>
+</svg>
