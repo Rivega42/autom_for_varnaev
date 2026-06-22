@@ -46,7 +46,12 @@ def _resolve_role(settings: Settings, *candidates: str | None) -> str | None:
         if candidate is None:
             continue
         for key, role in principals.items():
-            if secrets.compare_digest(candidate, key):
+            # Сравниваем в БАЙТАХ, а не в str. `hmac.compare_digest` на str требует
+            # ASCII и бросает «comparing strings with non-ASCII characters is not
+            # supported»; под Nuitka это срабатывает даже на ASCII-ключах (C-проверка
+            # PyUnicode_IS_ASCII не признаёт скомпилированную строку компактно-ASCII).
+            # На bytes такого ограничения нет, сравнение остаётся постоянным по времени.
+            if secrets.compare_digest(candidate.encode("utf-8"), key.encode("utf-8")):
                 return role
     return None
 
