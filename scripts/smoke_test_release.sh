@@ -39,6 +39,11 @@ check() {  # url описание [доп. curl-аргументы]
 
 echo "== проверки эндпойнтов =="
 check "http://${HOST}:8000/api/v1/health"        "REST /api/v1/health"            -H "X-API-Key: ${API_KEY}"
+# АВТОРИЗОВАННЫЙ data-эндпойнт: проверяет проверку ключа (compare_digest) и отдачу
+# русских данных. /health публичный и не ловит баги auth/сериализации — поэтому
+# обязательно дёргаем /rooms (была регрессия: Nuitka ронял compare_digest → 500).
+check "http://${HOST}:8000/api/v1/rooms"         "REST /api/v1/rooms (авториз.)"  -H "X-API-Key: ${API_KEY}"
+check "http://${HOST}:8000/api/v1/overview"      "REST /api/v1/overview (данные)" -H "X-API-Key: ${API_KEY}"
 check "http://${HOST}:8000/ui/"                  "GUI /ui/ (static)"              -H "X-API-Key: ${API_KEY}"
 check "http://${HOST}:8000/ui/overview.html"     "Экран дежурного /ui/overview"   -H "X-API-Key: ${API_KEY}"
 check "http://${HOST}:3000/api/health"           "Grafana /api/health"
