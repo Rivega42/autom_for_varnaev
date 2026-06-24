@@ -69,29 +69,65 @@ def reading_payload(metric: Metric, value: float) -> bytes:
 
 
 def default_nodes() -> list[NodeProfile]:
-    """Демо-топология: кухня (room-01/node-01) и холодильная камера (room-02/node-02).
+    """Демо-топология объекта: 6 помещений, 6 узлов (совпадают с db/seeds/demo.yaml).
 
-    Узлы и помещения совпадают с db/seeds/demo.yaml. Всплески подобраны под
-    демо-пороги (db/seeds/demo.yaml): влажность node-01 → 82% (> 70%),
-    темп. воздуха node-02 → 12 °C (> 8 °C в холодильной камере).
+    Всплески подобраны под демо-пороги (db/seeds/demo.yaml), чтобы в журнале
+    периодически появлялись РАЗНЫЕ события по разным помещениям:
+    - влажность node-kitchen → 82% и node-wash → 80% (> 70%);
+    - темп. воздуха node-fridge → 10 °C (> 8 °C в холодильной камере);
+    - темп. воздуха node-freezer → -12 °C (> -15 °C в морозильной — разморозка);
+    - ИК-поверхность node-kitchen → 38 °C (> 35 °C — горячая поверхность).
     """
     return [
+        # Кухня (room-01): полный узел — воздух, ИК-поверхность, УФ-лампа.
         NodeProfile(
-            "node-01",
+            "node-kitchen",
             [
                 MetricProfile(Metric.AIR_TEMP, base=22.0, jitter=1.5),
-                MetricProfile(Metric.HUMIDITY, base=45.0, jitter=6.0, spike=82.0),
-                MetricProfile(Metric.SURFACE_IR, base=20.0, jitter=1.0),
-                # УФ: общий индекс (низкий в помещении) и бактерицидный УФ-C лампы.
+                MetricProfile(Metric.HUMIDITY, base=46.0, jitter=6.0, spike=82.0),
+                MetricProfile(Metric.SURFACE_IR, base=22.0, jitter=3.0, spike=38.0),
                 MetricProfile(Metric.UV_INDEX, base=1.0, jitter=0.6),
-                MetricProfile(Metric.UV_C, base=2.0, jitter=0.5),
+                MetricProfile(Metric.UV_C, base=2.2, jitter=0.5),
             ],
         ),
+        # Холодильная камера +2..+8 (room-02): зонд воздуха + влажность.
         NodeProfile(
-            "node-02",
+            "node-fridge",
             [
-                MetricProfile(Metric.AIR_TEMP, base=4.0, jitter=1.0, spike=12.0),
+                MetricProfile(Metric.AIR_TEMP, base=4.0, jitter=1.0, spike=10.0),
                 MetricProfile(Metric.HUMIDITY, base=60.0, jitter=5.0),
+            ],
+        ),
+        # Морозильная камера -18..-25 (room-03): зонд воздуха.
+        NodeProfile(
+            "node-freezer",
+            [
+                MetricProfile(Metric.AIR_TEMP, base=-20.0, jitter=1.5, spike=-12.0),
+                MetricProfile(Metric.HUMIDITY, base=55.0, jitter=5.0),
+            ],
+        ),
+        # Моечная (room-04): влажная зона — влажность периодически выше нормы.
+        NodeProfile(
+            "node-wash",
+            [
+                MetricProfile(Metric.AIR_TEMP, base=24.0, jitter=1.5),
+                MetricProfile(Metric.HUMIDITY, base=66.0, jitter=8.0, spike=80.0),
+            ],
+        ),
+        # Зона фасовки (room-05): воздух.
+        NodeProfile(
+            "node-packing",
+            [
+                MetricProfile(Metric.AIR_TEMP, base=18.0, jitter=1.2),
+                MetricProfile(Metric.HUMIDITY, base=50.0, jitter=5.0),
+            ],
+        ),
+        # Склад сухих продуктов (room-06): воздух.
+        NodeProfile(
+            "node-storage",
+            [
+                MetricProfile(Metric.AIR_TEMP, base=20.0, jitter=1.5),
+                MetricProfile(Metric.HUMIDITY, base=48.0, jitter=5.0),
             ],
         ),
     ]

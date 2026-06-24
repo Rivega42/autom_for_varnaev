@@ -64,7 +64,7 @@ class AnalyticsEventCreate(BaseModel):
     room: str | None = None
     message: str = Field(min_length=1)
     severity: Severity = Severity.INFO
-    type: Literal["action_detected", "coverage_report"] = "action_detected"
+    type: Literal["action_detected", "coverage_report", "uniform_violation"] = "action_detected"
     payload: dict[str, Any] = Field(default_factory=dict)
     # Необязательный стоп-кадр события (data-URL `data:image/jpeg;base64,…`).
     # Если задан — сохраняется как артефакт-скриншот, а событие получает

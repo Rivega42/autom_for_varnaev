@@ -30,7 +30,12 @@ _EXPECTED_OPERATIONS: set[tuple[str, str]] = {
     ("get", "/api/v1/events/{event_id}"),
     ("post", "/api/v1/events/{event_id}/ack"),
     ("post", "/api/v1/analytics-events"),
+    ("get", "/api/v1/artifacts"),
     ("get", "/api/v1/artifacts/{artifact_id}"),
+    # Демо-«стена роликов» (#wall): ролики как камеры, загрузка/удаление.
+    ("get", "/api/v1/clips"),
+    ("post", "/api/v1/clips/upload"),
+    ("delete", "/api/v1/clips/{filename}"),
     ("post", "/api/v1/analysis-tasks"),
     ("get", "/api/v1/analysis-tasks"),
     ("get", "/api/v1/analysis-tasks/{task_id}"),

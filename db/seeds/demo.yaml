@@ -9,29 +9,71 @@ rooms:
   - id: room-02
     name: "Холодильная камера"
     is_cold: true
+  - id: room-03
+    name: "Морозильная камера"
+    is_cold: true
+  - id: room-04
+    name: "Моечная"
+    is_cold: false
+  - id: room-05
+    name: "Зона фасовки"
+    is_cold: false
+  - id: room-06
+    name: "Склад сухих продуктов"
+    is_cold: false
 
 sensor_nodes:
-  - id: node-01
+  - id: node-kitchen
     room_id: room-01
-    placement: "внутри (I2C)"
+    placement: "над разделочным столом (I2C: воздух+ИК+УФ)"
     power: mains
-  - id: node-02
+  - id: node-fridge
     room_id: room-02
-    placement: "внутри камеры (I2C-шлейф)"
+    placement: "зонд внутри холодильной камеры"
+    power: battery
+  - id: node-freezer
+    room_id: room-03
+    placement: "зонд внутри морозильной камеры"
+    power: battery
+  - id: node-wash
+    room_id: room-04
+    placement: "у моечной ванны"
     power: mains
+  - id: node-packing
+    room_id: room-05
+    placement: "над линией фасовки"
+    power: mains
+  - id: node-storage
+    room_id: room-06
+    placement: "на стеллаже склада"
+    power: battery
 
 # Камер в демо нет: видеоаналитика в демо-режиме не запускается (нет модели).
 cameras: []
 
 # Демо-пороги: подобраны под «всплески» генератора demo-sensors, чтобы в журнале
-# периодически появлялись события (влажность > 70%, темп. в холодильной > 8 °C).
+# периодически появлялись РАЗНЫЕ события по разным помещениям.
 thresholds:
+  # Влажность > 70% в любом помещении (бьёт кухня → 82%, моечная → 80%).
   - metric: humidity
     op: ">"
     value: 70.0
     severity: warning
+  # Холодильная камера теплеет выше +8 °C (node-fridge → 10 °C).
   - room: room-02
     metric: air_temp
     op: ">"
     value: 8.0
     severity: critical
+  # Морозильная камера теплеет выше -15 °C — разморозка (node-freezer → -12 °C).
+  - room: room-03
+    metric: air_temp
+    op: ">"
+    value: -15.0
+    severity: critical
+  # Горячая поверхность на кухне > 35 °C (node-kitchen surface_ir → 38 °C).
+  - room: room-01
+    metric: surface_ir
+    op: ">"
+    value: 35.0
+    severity: warning

@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Engine
 
 from api_gateway.app_config_repository import clear_config, get_config, set_config
-from api_gateway.artifacts_repository import get_artifact, insert_artifact
+from api_gateway.artifacts_repository import get_artifact, insert_artifact, list_artifacts
 from api_gateway.artifacts_store import (
     build_artifact_path,
     decode_data_url,
@@ -47,6 +47,7 @@ from api_gateway.cleaning_rules_repository import (
 from api_gateway.cleaning_rules_repository import (
     update_rule as update_cleaning_rule,
 )
+from api_gateway.clips import clips_dir, register_clip_routes
 from api_gateway.config import Settings
 from api_gateway.db import build_engine
 from api_gateway.errors import api_error, register_error_handlers
@@ -357,6 +358,21 @@ def create_app(
         )
         events.create_event(event)
         return ok({"id": str(event.id), "artifact_id": str(artifact_id) if artifact_id else None})
+
+    @app.get(f"{API_PREFIX}/artifacts", dependencies=[auth])
+    def get_artifacts(
+        limit: int = Query(default=50, ge=1, le=500),
+        camera_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        """Список недавних артефактов-доказательств (кадры-улики) для ленты дашборда.
+
+        Возвращает метаданные + ссылку на файл (`url`). Лента «стены роликов»
+        мешает их с событиями по времени, давая «полосу событий и скриншотов».
+        """
+        items = list_artifacts(engine, limit=limit, camera_id=camera_id)
+        for it in items:
+            it["url"] = f"{API_PREFIX}/artifacts/{it['id']}"
+        return ok({"artifacts": items})
 
     @app.get(f"{API_PREFIX}/artifacts/{{artifact_id}}", dependencies=[media_auth])
     def get_artifact_file(artifact_id: UUID) -> Response:
@@ -762,10 +778,19 @@ def create_app(
     # Разъёмы АУРА — уровень настройки (admin); в v1 всё равно заглушены (501).
     register_integration_routes(app, engine, events, _current_aura_enabled, dependencies=[admin])
 
+    # Демо-«стена роликов»: список роликов-«камер» (operator+), загрузка/удаление (admin).
+    register_clip_routes(app, engine, dependencies=[auth], admin_dependencies=[admin])
+
     # GUI настройки видеоаналитики (статический SPA). Сам HTML/JS — без ключа;
     # запросы к API из него несут X-API-Key. Каталог создаётся вместе с пакетом.
     if _STATIC_DIR.is_dir():
         app.mount("/ui", StaticFiles(directory=str(_STATIC_DIR), html=True), name="ui")
+
+    # Видеофайлы для «стены роликов» (CLIPS_DIR). Отдаются без ключа (как /ui):
+    # тег <video> в браузере не шлёт заголовков. Каталог монтируется только в демо.
+    _clips = clips_dir()
+    if _clips.is_dir():
+        app.mount("/clips", StaticFiles(directory=str(_clips)), name="clips")
 
     return app
 

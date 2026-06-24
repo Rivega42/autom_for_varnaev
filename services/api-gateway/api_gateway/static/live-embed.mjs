@@ -51,17 +51,28 @@ function makeSmoother() {
 
 /* Смонтировать живой анализ в container. Возвращает { stop() }. */
 export function mountLiveAnalysis(container, opts) {
-  const { streamUrl, zones = [], room = null, cameraId = null, apiKey = "" } = opts;
+  const { streamUrl, clipUrl, zones = [], room = null, cameraId = null, apiKey = "",
+    features = {} } = opts;
+  // Источник: MJPEG-поток камеры (<img>) ИЛИ видеоролик/файл (<video>) — режим
+  // «стены роликов» (#wall). Распознавание то же, отличается только хост-элемент.
+  const isVideo = !!clipUrl;
+  // Тумблеры «что распознаём» (по умолчанию всё включено). Читаются НА ЛЕТУ —
+  // объект features можно мутировать снаружи (карточка стены), эффект сразу.
+  const feat = (k) => features[k] !== false;
   container.innerHTML = "";
   container.classList.add("live-embed");
 
-  // DOM: видео (MJPEG как <img>), оверлей-скелет, heat-заливка, слой разметки
-  // зон, журнал, статус.
+  // DOM: видео (MJPEG как <img> или ролик как <video>), оверлей-скелет,
+  // heat-заливка, слой разметки зон, журнал, статус.
   const stage = document.createElement("div");
   stage.style.cssText = "position:relative;background:#060807;border:1px solid var(--bd,#444);border-radius:8px;overflow:hidden";
-  const img = document.createElement("img");
+  const img = isVideo ? document.createElement("video") : document.createElement("img");
   img.crossOrigin = "anonymous";
   img.style.cssText = "display:block;width:100%";
+  if (isVideo) { img.controls = true; img.loop = true; img.muted = true; img.playsInline = true; img.autoplay = true; }
+  // Размеры медиа: у <video> — videoWidth/Height, у <img> — naturalWidth/Height.
+  const mediaW = () => (isVideo ? img.videoWidth : img.naturalWidth);
+  const mediaH = () => (isVideo ? img.videoHeight : img.naturalHeight);
   const heat = document.createElement("canvas");
   const skel = document.createElement("canvas");
   const edit = document.createElement("canvas"); // разметка ROI-зон (#256)
@@ -73,8 +84,10 @@ export function mountLiveAnalysis(container, opts) {
   const stopBtn = document.createElement("button");
   stopBtn.textContent = "Остановить анализ";
   const zonesBtn = document.createElement("button");
-  zonesBtn.textContent = "Зоны ✎";
-  zonesBtn.className = "sec";
+  // В режиме роликов (#wall) разметка зоны стола — ключевой шаг (иначе протирание
+  // считается по всему кадру и ложит), поэтому кнопка заметнее и подписана явно.
+  zonesBtn.textContent = isVideo ? "✎ Обвести стол (ROI)" : "Зоны ✎";
+  if (!isVideo) zonesBtn.className = "sec";
   // Инструменты разметки (видны только в режиме редактирования зон).
   const tools = document.createElement("span");
   tools.style.cssText = "display:none;gap:6px;align-items:center";
@@ -136,13 +149,15 @@ export function mountLiveAnalysis(container, opts) {
   }
 
   /* отчёт о покрытии («протёрто на N%») → журнал/Grafana тем же контрактом,
-     что у серверного воркера: type=coverage_report, payload {zone,zone_id,coverage_pct} */
-  function postCoverage(e) {
+     что у серверного воркера: type=coverage_report, payload {zone,zone_id,coverage_pct}.
+     Прикладываем стоп-кадр (imgData) — чтобы в ленте был скриншот протёртого стола. */
+  function postCoverage(e, imgData) {
     if (!cameraId) return;
     fetch("/api/v1/analytics-events", {
       method: "POST", headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
       body: JSON.stringify({
         room, message: e.text, type: "coverage_report",
+        image: imgData || undefined,
         payload: {
           origin: "browser", camera_id: cameraId, zone: e.coverage.zoneType,
           zone_id: e.coverage.zoneId == null ? null : e.coverage.zoneId,
@@ -152,10 +167,63 @@ export function mountLiveAnalysis(container, opts) {
     }).catch(() => {});
   }
 
+  /* Эвристика «белого халата» (порт uniform.py): по торсу (плечи 11/12, бёдра
+     23/24) считаем яркость+насыщенность кадра; белый халат = ярко и неярко-цветно.
+     Это индикатор, а не строгий контроль (путается на белой стене/пересвете). */
+  const uCanvas = document.createElement("canvas");
+  const uCtx = uCanvas.getContext("2d", { willReadFrequently: true });
+  let uSince = -1, uFired = false; // трекер нарушения (как UniformViolationDetector)
+  let uniformOkFired = false, uniformLostMs = 0; // трекер положительного «халат распознан»
+  function uniformCheck(lm) {
+    const idx = [11, 12, 24, 23];
+    if (idx.some((i) => !lm[i] || (lm[i].visibility ?? 1) < 0.5)) return null;
+    const xs = idx.map((i) => lm[i].x), ys = idx.map((i) => lm[i].y);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const mw = mediaW(), mh = mediaH();
+    if (!mw || x1 <= x0 || y1 <= y0) return null;
+    uCanvas.width = 64; uCanvas.height = 64;
+    try {
+      uCtx.drawImage(img, x0 * mw, y0 * mh, (x1 - x0) * mw, (y1 - y0) * mh, 0, 0, 64, 64);
+      const d = uCtx.getImageData(0, 0, 64, 64).data;
+      let bSum = 0, sSum = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]);
+        bSum += mx / 255; sSum += mx > 0 ? (mx - mn) / mx : 0; n++;
+      }
+      if (!n) return null;
+      const brightness = bSum / n, saturation = sSum / n;
+      // Пороги под реальное освещение объекта (замеры: халат 0.57–0.68 / 0.02–0.26).
+      return { brightness, saturation, white: brightness >= 0.5 && saturation <= 0.35 };
+    } catch { return null; }
+  }
+  function uniformTrack(white, nowMs) {
+    if (white) { uSince = -1; uFired = false; return null; }
+    if (uSince < 0) { uSince = nowMs; return null; }
+    if (uFired) return null;
+    const elapsed = (nowMs - uSince) / 1000;
+    if (elapsed >= 5) { uFired = true; return elapsed; }
+    return null;
+  }
+  function postUniform(message, imgData, u) {
+    if (!cameraId) return;
+    fetch("/api/v1/analytics-events", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+      body: JSON.stringify({
+        room, message, type: "uniform_violation", severity: "warning",
+        image: imgData || undefined,
+        payload: {
+          origin: "browser", camera_id: cameraId, flag: "no_uniform",
+          brightness: Math.round(u.brightness * 100) / 100,
+          saturation: Math.round(u.saturation * 100) / 100,
+        },
+      }),
+    }).catch(() => {});
+  }
+
   const snapCanvas = document.createElement("canvas");
   function snapshot() {
     const W = skel.width, H = skel.height;
-    if (!W || !H || !img.naturalWidth) return null;
+    if (!W || !H || !mediaW()) return null;
     const maxW = 720, sc = W > maxW ? maxW / W : 1, cw = Math.round(W * sc), ch = Math.round(H * sc);
     snapCanvas.width = cw; snapCanvas.height = ch;
     const x = snapCanvas.getContext("2d");
@@ -367,6 +435,20 @@ export function mountLiveAnalysis(container, opts) {
     handPrev[15] = handPrev[16] = undefined;
   }
 
+  // Плавное затухание заливки протирания (фидбэк: закрашивание «висело» и не
+  // сбрасывалось). Каждый кадр гасим heat-канвас на ~4%; во время уборки
+  // paintHands дорисовывает быстрее, поэтому след виден, а после остановки за
+  // ~2–3 c исчезает. lastWipeMs — когда уборка была активна в последний раз.
+  let lastWipeMs = 0;
+  let lastCovReportMs = 0; // когда последний раз слали периодический отчёт о покрытии
+  function fadeHeat() {
+    heatCtx.save();
+    heatCtx.globalCompositeOperation = "destination-out";
+    heatCtx.fillStyle = "rgba(0,0,0,0.04)";
+    heatCtx.fillRect(0, 0, heat.width, heat.height);
+    heatCtx.restore();
+  }
+
   /* путь обрезки по полигонам зоны (немного расширен) — заливка не вылезает за зону */
   function heatClipPath(polys) {
     const W = heat.width, H = heat.height;
@@ -450,7 +532,7 @@ export function mountLiveAnalysis(container, opts) {
   let covT = 0;
   function loop() {
     if (!running) return;
-    const w = img.naturalWidth, h = img.naturalHeight;
+    const w = mediaW(), h = mediaH();
     if (w > 0 && performance.now() - lastT >= 30) {
       lastT = performance.now();
       setSizes(w, h);
@@ -463,25 +545,88 @@ export function mountLiveAnalysis(container, opts) {
           draw(lm);
           const evs = engine.analyze(lm, world, performance.now());
           let resetHeat = false;
+          // ВАЖНО: протирание распознаём ТОЛЬКО при явно заданной зоне стола.
+          // Без зоны (engine.rois пуст) уборку не детектим вовсе (фидбэк: без зоны
+          // махи руками ложно засчитывались как протирание).
+          const hasZone = engine.rois.length > 0;
           for (const e of evs) {
-            const shot = e.snapshot ? snapshot() : null;
+            const clean = ["wipe", "mop", "sweep", "window"].includes(e.action);
+            // Уборка/покрытие — по тумблеру «wipe» И только при заданной зоне.
+            if ((e.coverage || (e.isAct && clean)) && (!feat("wipe") || !hasZone)) continue;
+            if (e.isAct && !clean && !feat("actions")) continue;
+            if (!e.isAct && !e.coverage && !feat("poses")) continue;
+            // Для уборки всегда делаем стоп-кадр — и на НАЧАЛО, и на конец.
+            const shot = (e.snapshot || clean) ? snapshot() : null;
             log(e.text, e.color, e.isAct, shot);
             if (e.isAct) postEvent(e.text, shot);   // действие (+стоп-кадр) → журнал/Grafana
-            if (e.coverage) postCoverage(e);        // «протёрто на N%» → журнал/Grafana
-            // сброс заливки/% — только после ЗАВЕРШЕНИЯ уборки; стоп-кадр
-            // падения/SOS посреди уборки покрытие не трогает
-            if (e.snapshot && ["wipe", "mop", "sweep", "window"].includes(e.action)) resetHeat = true;
+            if (e.coverage) postCoverage(e, snapshot()); // «протёрто на N%» (+кадр) → журнал
+            // после КОНЦА уборки сбрасываем заливку и % (стоп-кадр конца уже снят).
+            if (e.snapshot && clean) resetHeat = true;
           }
           if (resetHeat) clearHeat();
-          const cleanActive = engine.actState.wipe || engine.actState.mop || engine.actState.sweep || engine.actState.window;
+          const cleanActive = hasZone && (engine.actState.wipe || engine.actState.mop
+            || engine.actState.sweep || engine.actState.window);
           if (cleanActive && !prevCleanActive) backfillHeat(); // дорисовать след начала уборки
           prevCleanActive = cleanActive;
-          if (cleanActive) paintHands(lm);
+          if (cleanActive && feat("wipe")) { paintHands(lm); lastWipeMs = performance.now(); }
+          // Периодический стоп-кадр покрытия во время уборки (раз в ~4 c): отчёт с %
+          // и закрашенной зоной появляется, даже если уборка непрерывная (конца нет).
+          if (cleanActive && feat("wipe") && hasZone) {
+            if (!lastCovReportMs || performance.now() - lastCovReportMs > 4000) {
+              lastCovReportMs = performance.now();
+              const covShot = snapshot();
+              engine.rois.forEach((r) => {
+                const pct = Math.round(engine.heat.coverage(r.pts) || 0);
+                if (pct <= 0) return;
+                const name = r.name || r.type;
+                const txt = `${name}: протёрто ${pct}%`;
+                log(txt, "#46d160", false, covShot);
+                postCoverage({ text: txt, coverage: { zoneType: r.type, zoneId: r.zoneId, pct } }, covShot);
+              });
+            }
+          } else { lastCovReportMs = 0; }
           pushTrail(lm);
+          // Эвристика «белого халата» — только при включённом тумблере «Халат».
+          if (feat("uniform")) {
+            const u = uniformCheck(lm);
+            if (u) {
+              ctx.save();
+              ctx.font = `${Math.max(13, skel.width * 0.02)}px system-ui`;
+              ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.6)";
+              const badge = u.white ? "халат: ✓" : "халат: ✗";
+              ctx.strokeText(badge, 10, 26); ctx.fillStyle = u.white ? "#3ef0a0" : "#e0b400";
+              ctx.fillText(badge, 10, 26); ctx.restore();
+              // Положительное событие «Халат распознан» (раз за эпизод) + стоп-кадр.
+              if (u.white) {
+                if (!uniformOkFired) {
+                  uniformOkFired = true;
+                  const okShot = snapshot();
+                  log("Халат распознан (спецодежда в норме)", "#3ef0a0", true, okShot);
+                  postEvent("Халат распознан (спецодежда в норме)", okShot);
+                }
+                uniformLostMs = 0;
+              } else {
+                if (!uniformLostMs) uniformLostMs = performance.now();
+                if (performance.now() - uniformLostMs > 2000) uniformOkFired = false;
+              }
+              const dur = uniformTrack(u.white, performance.now());
+              if (dur != null) {
+                const shot = snapshot();
+                const msg = `Человек без спецодежды (белого халата) дольше ${Math.round(dur)} с`;
+                log(msg, "#e0b400", true, shot); postUniform(msg, shot, u);
+              }
+            }
+          }
         } else {
           status.textContent = "не вижу человека"; ctx.clearRect(0, 0, skel.width, skel.height);
         }
       } catch { status.textContent = "кадр недоступен (CORS?)"; }
+      // Гасим заливку ТОЛЬКО спустя ~1.3 c после остановки уборки: стоп-кадр КОНЦА
+      // протирания формируется через ~0.6 c после рук — он должен застать зону
+      // полностью закрашенной, а не выцветшей.
+      if (lastWipeMs && performance.now() - lastWipeMs > 1300) fadeHeat();
+      // Через ~3.5 c простоя — полный сброс (и заливки, и % покрытия).
+      if (lastWipeMs && performance.now() - lastWipeMs > 3500) { clearHeat(); lastWipeMs = 0; }
       if (performance.now() - covT >= 1000) { covT = performance.now(); updateCov(); }
     }
     requestAnimationFrame(loop);
@@ -489,16 +634,24 @@ export function mountLiveAnalysis(container, opts) {
 
   function stop() {
     if (!running) return;
-    running = false; img.src = "";
+    running = false;
+    if (isVideo) { try { img.pause(); } catch { /* уже не играет */ } }
+    img.src = "";
     log("Сессия остановлена", "#ffffff", true);
   }
   stopBtn.onclick = stop;
 
   status.textContent = "загрузка модели…";
   initModel().then(() => {
-    status.textContent = "подключение к потоку…";
-    img.onload = () => { setSizes(img.naturalWidth, img.naturalHeight); };
-    img.src = streamUrl;
+    if (isVideo) {
+      status.textContent = "загрузка ролика…";
+      img.addEventListener("loadeddata", () => setSizes(mediaW(), mediaH()));
+      img.src = clipUrl;
+    } else {
+      status.textContent = "подключение к потоку…";
+      img.onload = () => { setSizes(img.naturalWidth, img.naturalHeight); };
+      img.src = streamUrl;
+    }
     log("Сессия начата", "#ffffff", true);
     loop();
   }).catch((e) => { status.textContent = "ошибка: " + e.message; });
