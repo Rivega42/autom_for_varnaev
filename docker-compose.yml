@@ -60,6 +60,28 @@ services:
     # Одноразовая задача: после успешного завершения не перезапускаем.
     restart: "no"
 
+  artifacts-init:
+    # Выравнивание прав общего тома артефактов (#380). Named-volume `artifacts`
+    # Docker инициализирует как root:root, а прикладные сервисы (video-analytics,
+    # api-gateway) работают под appuser (uid 10001) и не могут создавать в нём
+    # подкаталоги по дате (/data/artifacts/<YYYY-MM-DD>) — кадры-улики не пишутся
+    # (PermissionError). Этот one-shot сервис (как migrate) выставляет владельца
+    # тома 10001:10001 ДО старта сервисов: декларативно, переживает пересоздание
+    # тома и попадает в поставку. Прикладные контейнеры остаются непривилегиро-
+    # ванными — root нужен только здесь, на время chown.
+    image: busybox:1.36
+    user: "0:0"  # root: только для chown смонтированного тома
+    # network_mode none: сеть не нужна, задача — локальный chown тома.
+    network_mode: "none"
+    command:
+      - sh
+      - -c
+      - mkdir -p /data/artifacts && chown -R 10001:10001 /data/artifacts && chmod -R u+rwX /data/artifacts
+    volumes:
+      - artifacts:/data/artifacts
+    # Одноразовая задача: после успешного завершения не перезапускаем.
+    restart: "no"
+
   seed:
     # Массовый сидинг справочников из YAML (one-shot, ТОЛЬКО под профилем "seed").
     # Не входит в дефолтный стек. Запускается явно ВНУТРИ сети контура (БД наружу
@@ -261,6 +283,8 @@ services:
         condition: service_completed_successfully
       log-service:
         condition: service_healthy
+      artifacts-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 15s
@@ -386,6 +410,8 @@ services:
         condition: service_healthy
       media-gateway:
         condition: service_started
+      artifacts-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   video-analytics-node:
@@ -468,6 +494,8 @@ services:
         condition: service_completed_successfully
       log-service:
         condition: service_healthy
+      artifacts-init:
+        condition: service_completed_successfully
     # healthcheck не задаём: distroless-образ без python и шелла.
     restart: unless-stopped
 
@@ -505,6 +533,8 @@ services:
         condition: service_healthy
       media-gateway:
         condition: service_started
+      artifacts-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   esphome:

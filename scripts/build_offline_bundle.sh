@@ -43,6 +43,7 @@ THIRD_PARTY=(
   "eclipse-mosquitto:2"
   "alexxit/go2rtc:latest"
   "grafana/grafana:11.3.0"
+  "busybox:1.36"  # сервис artifacts-init: chown общего тома артефактов (#380)
 )
 
 OUR_REFS=()

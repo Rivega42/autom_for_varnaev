@@ -25,18 +25,38 @@ def build_artifact_path(artifacts_dir: str, ts: datetime, artifact_id: UUID, ext
     return f"{artifacts_dir}/{ts:%Y-%m-%d}/{artifact_id}.{ext}"
 
 
+def ensure_artifact_dir(path: str) -> None:
+    """Создать родительский каталог артефакта; при отказе в правах — понятная ошибка.
+
+    Общий том /data/artifacts Docker инициализирует владельцем root, а воркер
+    работает под непривилегированным пользователем (uid 10001). Владельца тома
+    выставляет one-shot сервис `artifacts-init` (docker-compose) ДО старта воркера.
+    Если каталог всё же недоступен на запись (нестандартный запуск или том
+    пересоздан без artifacts-init) — даём оператору внятную причину с подсказкой,
+    а не «голый» PermissionError. См. docs/01 §6.
+    """
+    parent = Path(path).parent
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+    except PermissionError as exc:
+        raise PermissionError(
+            f"Нет прав на запись каталога артефактов {parent}: общий том должен "
+            "принадлежать пользователю uid 10001 (в docker-compose это делает сервис "
+            "artifacts-init на старте; см. docs/01 §6)."
+        ) from exc
+
+
 def save_keypoints_json(path: str, payload: dict[str, Any]) -> None:
     """Сохранить keypoints/coverage в JSON (UTF-8, без ASCII-эскейпа)."""
-    target = Path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    ensure_artifact_dir(path)
+    Path(path).write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
 def save_screenshot(frame: Frame, path: str) -> None:
     """Сохранить кадр-скриншот (кодирование через OpenCV — runtime)."""
     import cv2
 
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    ensure_artifact_dir(path)
     cv2.imwrite(path, frame)
 
 
