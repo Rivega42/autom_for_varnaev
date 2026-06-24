@@ -1,0 +1,26 @@
+# Оверлей «стены роликов» (демо ручного видеоанализа, дашборд /ui/wall.html).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.clips.yml up -d --build \
+#       api-gateway video-analytics
+#
+# Монтирует локальный каталог ./samples с видеороликами в два сервиса под /clips:
+#   - api-gateway отдаёт ролики браузеру (/clips/<файл>) и строит список /api/v1/clips;
+#   - video-analytics читает тот же файл для file-задания анализа (полный пайплайн:
+#     позы/действия/покрытие/халат).
+# Путь /clips одинаков в обоих контейнерах — поэтому rtsp_url камеры-ролика и
+# source_ref задания совпадают (см. api_gateway/clips.py).
+#
+# В боевую поставку НЕ включается: это демонстрационный оверлей для стенда.
+services:
+  api-gateway:
+    environment:
+      CLIPS_DIR: /clips
+    volumes:
+      # rw: api-gateway загружает/удаляет ролики через /clips/upload и DELETE /clips/{file}.
+      - ./samples:/clips
+
+  video-analytics:
+    environment:
+      CLIPS_DIR: /clips
+    volumes:
+      - ./samples:/clips:ro

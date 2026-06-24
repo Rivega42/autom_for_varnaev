@@ -49,9 +49,15 @@ def mean_brightness_saturation(
 
 
 def is_white_coat(
-    brightness: float, saturation: float, bright_thr: float = 0.7, sat_thr: float = 0.25
+    brightness: float, saturation: float, bright_thr: float = 0.5, sat_thr: float = 0.35
 ) -> bool:
-    """Белый халат: высокая яркость и низкая насыщенность."""
+    """Белый халат: высокая яркость и низкая насыщенность.
+
+    Пороги подобраны по замерам на реальных роликах объекта (тёплое внутреннее
+    освещение): халат давал яркость 0.57–0.68 и насыщенность 0.02–0.26, поэтому
+    исходные 0.7/0.25 давали ложные «без халата». Это эвристика, не строгий
+    контроль СИЗ (docs/07 §2.4, обучаемый детектор — issue #105).
+    """
     return brightness >= bright_thr and saturation <= sat_thr
 
 
