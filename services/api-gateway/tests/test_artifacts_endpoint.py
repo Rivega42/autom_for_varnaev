@@ -17,6 +17,7 @@ from api_gateway.app import create_app
 from api_gateway.artifacts_store import (
     build_artifact_path,
     decode_data_url,
+    ensure_artifact_dir,
     read_artifact_bytes,
 )
 from api_gateway.config import Settings
@@ -98,6 +99,19 @@ def test_read_artifact_bytes_blocks_traversal(tmp_path: Path) -> None:
     outside = tmp_path.parent / "secret.txt"
     outside.write_text("секрет")
     assert read_artifact_bytes(str(tmp_path / "art"), str(outside)) is None
+
+
+def test_ensure_artifact_dir_permission_error_is_actionable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Отказ в правах (root-owned том, #380) → внятная ошибка с подсказкой про uid 10001."""
+
+    def _deny(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "mkdir", _deny)
+    with pytest.raises(PermissionError, match="uid 10001"):
+        ensure_artifact_dir(str(tmp_path / "2026-06-24" / "x.png"))
 
 
 def test_build_artifact_path_scheme() -> None:

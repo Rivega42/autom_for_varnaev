@@ -38,7 +38,8 @@ $thirdParty = @(
   "timescale/timescaledb:2.17.2-pg16",
   "eclipse-mosquitto:2",
   "alexxit/go2rtc:latest",
-  "grafana/grafana:11.3.0"
+  "grafana/grafana:11.3.0",
+  "busybox:1.36"  # сервис artifacts-init: chown общего тома артефактов (#380)
 )
 
 $ourRefs = @()

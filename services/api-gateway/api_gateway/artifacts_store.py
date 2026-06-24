@@ -64,11 +64,31 @@ def ext_for_mime(mime: str) -> str:
     return _IMAGE_EXT.get(mime, "jpg")
 
 
+def ensure_artifact_dir(path: str) -> None:
+    """Создать родительский каталог артефакта; при отказе в правах — понятная ошибка.
+
+    Общий том /data/artifacts Docker инициализирует владельцем root, а api-gateway
+    работает под непривилегированным пользователем (uid 10001). Владельца тома
+    выставляет one-shot сервис `artifacts-init` (docker-compose) ДО старта сервиса.
+    Если каталог недоступен на запись (нестандартный запуск или том пересоздан без
+    artifacts-init) — даём оператору внятную причину, а не «голый» PermissionError.
+    См. docs/01 §6.
+    """
+    parent = Path(path).parent
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+    except PermissionError as exc:
+        raise PermissionError(
+            f"Нет прав на запись каталога артефактов {parent}: общий том должен "
+            "принадлежать пользователю uid 10001 (в docker-compose это делает сервис "
+            "artifacts-init на старте; см. docs/01 §6)."
+        ) from exc
+
+
 def save_bytes(path: str, data: bytes) -> None:
     """Записать байты артефакта, создав подкаталог по дате при необходимости."""
-    target = Path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(data)
+    ensure_artifact_dir(path)
+    Path(path).write_bytes(data)
 
 
 def read_artifact_bytes(artifacts_dir: str, path: str) -> bytes | None:

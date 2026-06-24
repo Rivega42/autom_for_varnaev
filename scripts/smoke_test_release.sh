@@ -48,6 +48,24 @@ check "http://${HOST}:8000/ui/"                  "GUI /ui/ (static)"            
 check "http://${HOST}:8000/ui/overview.html"     "Экран дежурного /ui/overview"   -H "X-API-Key: ${API_KEY}"
 check "http://${HOST}:3000/api/health"           "Grafana /api/health"
 
+# Запись/отдача артефакта на ОБЩИЙ ТОМ (#380): POST стоп-кадра (1×1 PNG) →
+# api-gateway сохраняет файл на /data/artifacts под appuser (uid 10001) и пишет
+# строку в artifacts; затем дёргаем GET /artifacts/{id}. Если права тома не
+# выровнены (нет сервиса artifacts-init), save падает и artifact_id не вернётся —
+# это ловит регрессию прав, которую /health и /rooms не видят.
+echo "== проверка записи/отдачи артефакта-улики (общий том) =="
+PNG_B64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+art_resp="$(curl -s -X POST "http://${HOST}:8000/api/v1/analytics-events" \
+  -H "X-API-Key: ${API_KEY}" -H "Content-Type: application/json" \
+  -d "{\"room\":\"smoke\",\"message\":\"smoke-артефакт #380\",\"image\":\"data:image/png;base64,${PNG_B64}\"}" 2>/dev/null)"
+art_id="$(printf '%s' "$art_resp" | grep -oE '"artifact_id"[: ]*"[0-9a-fA-F-]{36}"' | grep -oE '[0-9a-fA-F-]{36}' | head -1)"
+if [ -n "$art_id" ]; then
+  check "http://${HOST}:8000/api/v1/artifacts/${art_id}" "Артефакт-улика сохранён и отдан (GET /artifacts/{id})" -H "X-API-Key: ${API_KEY}"
+else
+  echo "  ✗ POST /analytics-events не вернул artifact_id — запись на общий том не прошла"
+  echo "    ответ: ${art_resp}"; fail=1
+fi
+
 echo "== docker compose ps =="
 "${COMPOSE[@]}" ps
 
