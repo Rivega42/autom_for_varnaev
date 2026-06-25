@@ -1,0 +1,36 @@
+# Конфиг Frigate (NVR) для PoC. Эпик docs/17_NVR_FRIGATE.md.
+# Одна тест-камера = зацикленный демо-ролик; запись включена. На боевом — здесь
+# перечисляются реальные RTSP-камеры (до 20, 720p), запись по движению, ретеншен
+# 60–90 дней. Объектную детекцию (Coral/GPU) включаем при «записи по человеку».
+
+mqtt:
+  enabled: false
+
+# Встроенный go2rtc Frigate: тест-источник — зацикленный ролик как RTSP-поток.
+go2rtc:
+  streams:
+    test_kitchen:
+      - "ffmpeg:/media/clips/20260521_115854.mp4#video=h264#loop"
+
+cameras:
+  test_kitchen:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/test_kitchen
+          roles: [record, detect]
+    detect:
+      enabled: false       # PoC: пишем по движению, без объектной детекции
+      width: 1280
+      height: 720
+    record:
+      enabled: true
+      retain:
+        days: 7            # PoC; на проде — 60–90
+        mode: all          # PoC: пишем всё; на проде — motion
+    motion:
+      threshold: 25
+
+record:
+  enabled: true
+
+version: "0.14"
