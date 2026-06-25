@@ -29,7 +29,7 @@ RUN apt-get update \
 WORKDIR /build
 COPY shared/ ./shared/
 COPY services/api-gateway/ ./api-gateway/
-RUN pip install --no-cache-dir ./shared ./api-gateway nuitka
+RUN pip install --no-cache-dir --timeout 120 --retries 10 ./shared ./api-gateway nuitka
 RUN python -m nuitka \
     --standalone \
     --assume-yes-for-downloads \

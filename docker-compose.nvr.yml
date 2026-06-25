@@ -1,0 +1,25 @@
+# Оверлей NVR: Frigate пишет таймлайн камер (видеозапись). Эпик docs/17_NVR_FRIGATE.md.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.nvr.yml up -d frigate
+#
+# Запись делает Frigate; НАША аналитика не меняется и берёт лишь вырезанные
+# фрагменты (scripts/nvr_connector.py). В боевую поставку включается отдельно
+# (нужен диск под записи; для 20×720p/60–90 дней — ~12–16 ТБ, RAID).
+services:
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:stable
+    restart: unless-stopped
+    shm_size: "256mb"
+    volumes:
+      - ./frigate/config.yml:/config/config.yml:ro
+      - ./samples:/media/clips:ro          # PoC: ролики играют роль «камер»
+      - frigate_recordings:/media/frigate  # сами записи (том)
+    ports:
+      - "5000:5000"   # веб-UI + REST API (плейбек, экспорт клипа за интервал)
+      - "8554:8554"   # RTSP (встроенный go2rtc)
+    networks:
+      - internal
+      - edge
+
+volumes:
+  frigate_recordings:
