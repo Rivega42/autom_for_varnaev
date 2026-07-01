@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Спецификация оборудования объекта</title>
+<style>
+  body{font:15px/1.55 'Segoe UI',system-ui,Arial,sans-serif;color:#1a1a1a;max-width:900px;margin:0 auto;padding:32px 28px}
+  h1{font-size:23px;font-weight:600;margin:0 0 4px}
+  h2{font-size:18px;font-weight:600;margin:30px 0 10px;padding-bottom:5px;border-bottom:2px solid #e2e2df}
+  h3{font-size:15px;font-weight:600;margin:18px 0 6px}
+  p.sub{color:#555;margin:0 0 18px}
+  .fig{border:1px solid #e2e2df;border-radius:10px;padding:14px;margin:14px 0 6px;text-align:center}
+  table{width:100%;border-collapse:collapse;margin:8px 0 6px;font-size:14px;page-break-inside:avoid}
+  th,td{border:1px solid #d6d6d0;padding:7px 9px;text-align:left;vertical-align:top}
+  th{background:#f3f2ec;font-weight:600}
+  td.n{white-space:nowrap;text-align:center;width:64px}
+  .note{background:#f7f6f0;border-left:3px solid #b4b2a9;padding:8px 12px;margin:10px 0;font-size:13.5px;border-radius:0 6px 6px 0}
+  .muted{color:#666;font-size:13px}
+  @media print{body{padding:0}h2{page-break-after:avoid}}
+</style>
+</head>
+<body>
+
+<h1>Спецификация оборудования объекта</h1>
+<p class="sub">Система мониторинга помещений: видеонаблюдение с распознаванием и видеозаписью + Zigbee-датчики среды. Схема подключения и перечень оборудования (BOM). Количества — под типовой объект (до 20 камер; ~6 сухих помещений; 2 холодильные камеры + 1 морозильник), уточняются по факту.</p>
+
+<h2>Схема подключения</h2>
+<div class="fig">
+<svg viewBox="0 0 680 652" xmlns="http://www.w3.org/2000/svg" width="100%" style="max-width:680px">
+<style>
+ .th{font:600 13.5px 'Segoe UI',system-ui,Arial,sans-serif}
+ .ts{font:400 11.5px 'Segoe UI',system-ui,Arial,sans-serif}
+ .cb{fill:#0C447C}.cp{fill:#26215C}.ct{fill:#085041}.cg{fill:#444441}
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5F5E5A"/></marker></defs>
+
+<rect x="22" y="18" width="112" height="46" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="1.5"/><text class="th cg" x="78" y="47" text-anchor="middle">Интернет</text>
+<rect x="244" y="14" width="150" height="54" rx="8" fill="#E6F1FB" stroke="#378ADD" stroke-width="1.5"/><text class="th cb" x="319" y="37" text-anchor="middle">Роутер</text><text class="ts cb" x="319" y="56" text-anchor="middle">шлюз · DHCP · файрвол</text>
+<rect x="40" y="126" width="190" height="54" rx="8" fill="#E6F1FB" stroke="#378ADD" stroke-width="1.5"/><text class="th cb" x="135" y="149" text-anchor="middle">PoE-коммутатор</text><text class="ts cb" x="135" y="168" text-anchor="middle">PoE+ · управляемый</text>
+<rect x="40" y="222" width="184" height="62" rx="8" fill="#E6F1FB" stroke="#378ADD" stroke-width="1.5"/><text class="th cb" x="132" y="249" text-anchor="middle">IP-камеры · до 20</text><text class="ts cb" x="132" y="269" text-anchor="middle">RTSP/ONVIF · 720p+ · PoE</text>
+
+<rect x="372" y="104" width="286" height="252" rx="10" fill="#EEEDFE" stroke="#7F77DD" stroke-width="1.5"/><text class="th cp" x="388" y="132">Сервер — наша система</text><text class="ts cp" x="388" y="151">Docker · Linux · 24/7</text><line x1="388" y1="162" x2="642" y2="162" stroke="#7F77DD" stroke-width="1" opacity="0.5"/><text class="ts cp" x="390" y="188">• Распознавание (видеоаналитика)</text><text class="ts cp" x="390" y="212">• Видеозапись (NVR)</text><text class="ts cp" x="390" y="236">• Журнал + дашборд оператора</text><text class="ts cp" x="390" y="260">• БД TimescaleDB · MQTT · адаптер</text>
+<rect x="388" y="288" width="256" height="54" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="1.5"/><text class="th cg" x="400" y="312">Диск-массив NVR</text><text class="ts cg" x="400" y="331">RAID · 12–16 ТБ · 60–90 дней</text>
+
+<rect x="270" y="452" width="232" height="80" rx="10" fill="#E1F5EE" stroke="#1D9E75" stroke-width="1.5"/><text class="th ct" x="284" y="478">Zigbee-координатор</text><text class="ts ct" x="284" y="500">A · SLZB-06P7 — сеть/PoE</text><text class="ts ct" x="284" y="520">B · ZBDongle-P — USB</text>
+<rect x="22" y="556" width="204" height="54" rx="8" fill="#E1F5EE" stroke="#1D9E75" stroke-width="1.5"/><text class="th ct" x="34" y="580">SNZB-02P · ×6</text><text class="ts ct" x="34" y="599">воздух T/RH</text>
+<rect x="238" y="556" width="200" height="54" rx="8" fill="#E1F5EE" stroke="#1D9E75" stroke-width="1.5"/><text class="th ct" x="250" y="580">SNZB-02LD · ×3</text><text class="ts ct" x="250" y="599">зонды камер</text>
+<rect x="450" y="556" width="204" height="54" rx="8" fill="#E1F5EE" stroke="#1D9E75" stroke-width="1.5"/><text class="th ct" x="462" y="580">Ретрансляторы · ×3</text><text class="ts ct" x="462" y="599">розетки (mesh)</text>
+
+<line x1="134" y1="41" x2="240" y2="42" stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#a)"/><text class="ts cg" x="187" y="34" text-anchor="middle">WAN</text>
+<line x1="278" y1="68" x2="152" y2="124" stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#a)"/><text class="ts cg" x="186" y="88">LAN</text>
+<line x1="374" y1="66" x2="432" y2="102" stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#a)"/><text class="ts cg" x="430" y="86">LAN</text>
+<line x1="135" y1="180" x2="135" y2="220" stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#a)"/><text class="ts cg" x="200" y="205">RTSP · PoE</text>
+
+<path d="M300 452 C 292 360, 252 250, 214 182" fill="none" stroke="#888780" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a)"/><text class="ts cg" x="314" y="330">A: сеть/PoE</text>
+<path d="M468 452 L516 358" fill="none" stroke="#888780" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a)"/><text class="ts cg" x="486" y="410">B: USB (экран. кабель)</text>
+
+<line x1="150" y1="556" x2="330" y2="532" stroke="#0F6E56" stroke-width="1.5" stroke-dasharray="2 4"/>
+<line x1="338" y1="556" x2="386" y2="532" stroke="#0F6E56" stroke-width="1.5" stroke-dasharray="2 4"/>
+<line x1="540" y1="556" x2="440" y2="532" stroke="#0F6E56" stroke-width="1.5" stroke-dasharray="2 4"/>
+<text class="ts ct" x="250" y="548">Zigbee mesh</text>
+
+<rect x="22" y="626" width="12" height="12" rx="2" fill="#378ADD"/><text class="ts cg" x="40" y="636">Сеть / PoE</text>
+<rect x="132" y="626" width="12" height="12" rx="2" fill="#7F77DD"/><text class="ts cg" x="150" y="636">Сервер / наше ПО</text>
+<rect x="288" y="626" width="12" height="12" rx="2" fill="#1D9E75"/><text class="ts cg" x="306" y="636">Zigbee-контур</text>
+<text class="ts cg" x="392" y="636">— провод/PoE · – – аплинк A/B · ··· Zigbee</text>
+</svg>
+</div>
+<p class="muted">Сервер подключён <b>напрямую к роутеру</b>. PoE-коммутатор питает и коммутирует только камеры (и, в варианте A, Zigbee-координатор). Zigbee-датчики образуют mesh и приходят на сервер через координатор — вариант <b>A</b> (по сети/PoE) либо <b>B</b> (по USB).</p>
+
+<h2>1. Сеть и питание</h2>
+<table>
+<tr><th>Позиция</th><th>Требования / характеристики</th><th class="n">Кол-во</th></tr>
+<tr><td>Роутер (шлюз)</td><td>Гигабитный, работа 24/7; желательно управляемый с VLAN (изолировать камеры / датчики / управление), DHCP-резервирование, файрвол. Всё оборудование системы — проводное; Wi-Fi опционален (для обслуживания).</td><td class="n">1</td></tr>
+<tr><td>PoE-коммутатор</td><td>Управляемый, гигабит, PoE+ (802.3at, 30 Вт/порт). Портов ≥ (кол-во камер + 2 запас) → для 20 камер 24-портовый. Суммарный PoE-бюджет ≥ Σ мощности камер × 1.3 (~250–370 Вт). Металлический корпус, 24/7.</td><td class="n">1</td></tr>
+<tr><td>ИБП online (для сервера)</td><td>Двойное преобразование (чистая синусоида), ~1000 ВА / 800 Вт, USB для демона корректного выключения (NUT/apcupsd). Держит сервер на «грязной» сети.</td><td class="n">1</td></tr>
+<tr><td>ИБП линейно-интерактивный (для сети)</td><td>На роутер + коммутатор, чтобы камеры/датчики не отваливались при просадках 230 В.</td><td class="n">1</td></tr>
+</table>
+
+<h2>2. Сервер (наша система в Docker)</h2>
+<table>
+<tr><th>Компонент</th><th>Требование (на «до 20 камер 720p + запись по движению + выборочная аналитика»)</th></tr>
+<tr><td>CPU</td><td>x86-64, ≥ 8 физических ядер (запись 20 потоков + перекодирование по необходимости + аналитика фрагментов).</td></tr>
+<tr><td>RAM</td><td>≥ 32 ГБ.</td></tr>
+<tr><td>Системный диск</td><td>SSD NVMe ≥ 256 ГБ (ОС, контейнеры, БД событий/датчиков).</td></tr>
+<tr><td>Диск под видеозапись (NVR)</td><td>HDD surveillance-класса (WD Purple / Seagate SkyHawk); полезно 12–16 ТБ, RAID1/RAID5 (сырых дисков в 1.5–2×); отдельно от системного SSD.</td></tr>
+<tr><td>Ускоритель детекции (опц.)</td><td>Coral TPU или GPU — только если нужна запись «по человеку» (объектная детекция). Для записи по движению не нужен.</td></tr>
+<tr><td>Сеть / ОС</td><td>1–2 гигабитных порта; Linux (Ubuntu LTS) + Docker; 24/7; стойка/tower.</td></tr>
+</table>
+
+<h2>3. Камеры</h2>
+<table>
+<tr><th>Позиция</th><th>Требования / характеристики</th><th class="n">Кол-во</th></tr>
+<tr><td>IP-камеры</td><td>RTSP/ONVIF обязательно. Разрешение 720p и выше (1080p — больше диска). Кодек H.264 (H.265 экономит диск — проверить декодирование). PoE (802.3af/at). Постоянный FPS; ИК-подсветка для тёмных зон; класс защиты по месту (IP66 для улицы/влажных). Желателен единый вендор / ONVIF-профиль.</td><td class="n">до 20</td></tr>
+</table>
+
+<h2>4. Zigbee-координатор — берётся ОДИН из двух</h2>
+<table>
+<tr><th>&nbsp;</th><th>A. Желательный — SMLIGHT SLZB-06P7</th><th>B. Доступная замена — Sonoff ZBDongle-P</th></tr>
+<tr><td>Тип / чип</td><td>Сетевой (Ethernet/PoE), CC2652P7 / Z-Stack</td><td>USB-донгл, CC2652P / Z-Stack</td></tr>
+<tr><td>Плюсы</td><td>Выносится по витой паре в зону датчиков (PoE), усилитель +20 дБ, стабильнее 24/7, дальше от USB3-помех сервера</td><td>Всегда в наличии, дёшево, тот же обкатанный драйвер Z-Stack</td></tr>
+<tr><td>Минусы</td><td>Дефицит на рынке</td><td>Не PoE (радио идёт от сервера, нельзя вынести по сети); нужен экранированный USB-удлинитель с ферритом; сильнее нужны mains-ретрансляторы (mesh стартует от сервера)</td></tr>
+<tr><td class="n">Кол-во</td><td>1 (+1 ЗИП)</td><td>1 (+1 ЗИП)</td></tr>
+</table>
+<div class="note">Оба варианта работают с одним и тем же набором датчиков и с ПО на сервере (Zigbee2MQTT + адаптер). Выбор — по бюджету/доступности и радиообстановке на объекте.</div>
+
+<h2>5. Zigbee-датчики и mesh</h2>
+<table>
+<tr><th>Позиция</th><th>Назначение</th><th class="n">Кол-во</th></tr>
+<tr><td>SONOFF SNZB-02P</td><td>Воздух T/RH (SHT40 ±0,2 °C), батарея CR2477 — сухие помещения.</td><td class="n">6</td></tr>
+<tr><td>SONOFF SNZB-02LD</td><td>Зонд холодильных/морозильных камер (−40…+115 °C, зонд 1,5 м, блок снаружи), CR2477.</td><td class="n">3</td></tr>
+<tr><td>Ретрансляторы (Zigbee-розетки / ZBMINI-L2)</td><td>Держат mesh — обязательны для батарейных датчиков и прохода через металл камер.</td><td class="n">3</td></tr>
+<tr><td>Батареи CR2477 (ЗИП на год)</td><td>Замена; на холоде — только литий.</td><td class="n">10</td></tr>
+</table>
+<div class="note">Варианты датчика воздуха под задачу: SNZB-02D (+LCD на месте), SNZB-02WD (IP65 для прохладных/влажных не-моечных зон).</div>
+
+<h2>6. Сопутствующее и монтаж</h2>
+<table>
+<tr><th>Позиция</th><th>Назначение</th><th class="n">Кол-во</th></tr>
+<tr><td>Экранированный USB-удлинитель с ферритом</td><td>Для варианта B (ZBDongle-P) — обязателен против USB3-помех.</td><td class="n">1</td></tr>
+<tr><td>Патч-корд / PoE-инжектор</td><td>Для варианта A (SLZB-06P7), если нет свободного PoE-порта.</td><td class="n">—</td></tr>
+<tr><td>Корпуса IP65 + гермовводы + БП 5 В</td><td>Для DIY-узлов (ИК / спец-зонды), если берутся.</td><td class="n">по числу</td></tr>
+<tr><td>Принтер этикеток + ленты</td><td>Маркировка узлов/кабелей идентификатором node_id.</td><td class="n">1</td></tr>
+<tr><td>Крепёж, стяжки, матовая лента</td><td>Монтаж без сверления; коррекция эмиссивности для ИК.</td><td class="n">компл.</td></tr>
+</table>
+
+<h2>7. Опционально (по потребности)</h2>
+<table>
+<tr><th>Позиция</th><th>Когда нужно</th><th class="n">Кол-во</th></tr>
+<tr><td>DIY ESP32-C3 + MLX90614</td><td>Бесконтактная ИК-температура поверхности — готового Zigbee/WiFi-устройства нет, только это решение.</td><td class="n">по точкам</td></tr>
+<tr><td>PT100 + RS-485→MQTT шлюз / Релсиб EClerk</td><td>Глубокая заморозка −30…−40 °C или поверяемый учёт холодовой цепи.</td><td class="n">по камерам</td></tr>
+<tr><td>Coral TPU</td><td>Запись «по человеку» (объектная детекция).</td><td class="n">1</td></tr>
+</table>
+
+<h2>Примечания для заказчика</h2>
+<ul>
+<li>Каждый датчик заводится в системе (идентификатор node_id) <b>до подачи питания</b>, иначе показания не принимаются.</li>
+<li>ПО Zigbee-контура (Zigbee2MQTT + адаптер топиков) работает на сервере в контейнерах — отдельной закупки не требует.</li>
+<li>Итоговые количества (камеры, датчики воздуха, зонды камер) уточняются по числу помещений и камер холода на объекте.</li>
+<li>Видеозапись и распознавание работают на одном сервере: запись ведёт NVR, распознавание берёт только нужные фрагменты записи (без нагрузки 24/7).</li>
+</ul>
+
+</body>
+</html>
